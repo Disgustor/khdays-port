@@ -11,6 +11,7 @@
 #include "../../gfx/g3d.h"
 #include "../../gpu/vram_map.h"
 #include "../../ui/situation.h"
+#include "../../gfx/sequence_image.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -120,6 +121,8 @@ typedef struct KhdaysFramePackage {
     uint32_t bank_captures[4];
     uint32_t bank_plain[4];
     uint32_t bank_intact;
+    /* Transient native image commands, owned by this package, not part of version-14 recordings. */
+    KhdaysSequenceImage sequence_image;
 } KhdaysFramePackage;
 
 /* What KHDAYS_RECORD_FRAMES writes of a package (version 14): all of it but

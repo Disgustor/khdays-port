@@ -3,6 +3,7 @@
  * layer while its cells show its files' characters (runtime/core/origin.h). KHDAYS_TRACE_HUD="FRAME
  * ...": at those VBlanks, each text layer's groups of touching cells. */
 #include "hud.h"
+#include "kh2_hp_hud.h"
 #include "badges.h"
 #include "crowns.h"
 #include "autosave_notice.h"
@@ -185,9 +186,13 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
     for (int j = 0; j < h; ++j) {
         for (int i = 0; i < w; ++i) {
             const int cx = ((l->hofs >> 3) + i0 + i) % l->wt, cy = ((l->vofs >> 3) + j0 + j) % l->ht;
-            const uint32_t entry = khdays_ui_cell_taken(piece->screen, bg, cx, cy)
-                                       ? 0xffffffffu
-                                       : khdays_bg_map_entry(piece->screen, l, cx, cy);
+            uint32_t entry = khdays_ui_cell_taken(piece->screen, bg, cx, cy)
+                                 ? 0xffffffffu
+                                 : khdays_bg_map_entry(piece->screen, l, cx, cy);
+            if (entry != 0xffffffffu && khdays_ui_kh2_hp_cell(piece->screen, bg, l, entry)) {
+                khdays_ui_left_out_cell(KHDAYS_UI_HUD, piece->screen, bg, cx, cy);
+                entry = 0xffffffffu;
+            }
             uint8_t ch[64];
             uint32_t hd = 0u;
             memset(ch, 0, sizeof(ch));
@@ -298,8 +303,14 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
     e.w = (float)(w * 8);
     e.h = (float)(h * 8);
     e.image = sh->image;
-    khdays_ui_emit(KHDAYS_UI_HUD, &e);
-    if (sh->hd_image1 != 0) {
+    KhdaysUiElement hd_element = e;
+    hd_element.slot = KES_DIRECT | (uint32_t)bg;
+    hd_element.image = sh->hd_image1 - 1;
+    const int native_hp = bg == 3 && strcmp(piece->id, "hud.portrait") == 0 &&
+                          khdays_ui_kh2_hp_compose(&e, sh->hd_image1 ? &hd_element : NULL);
+    if (!native_hp)
+        khdays_ui_emit(KHDAYS_UI_HUD, &e);
+    if (sh->hd_image1 != 0 && !native_hp) {
         /* given later, so above the piece's own image */
         e.slot = KES_DIRECT | (uint32_t)bg;
         e.image = sh->hd_image1 - 1;
@@ -421,6 +432,10 @@ static void emit_sprites(int index)
                     changed = 1;
                 }
             }
+        }
+        if (index == 1 && khdays_ui_kh2_hp_sprite(sp->pixels, w, h)) {
+            khdays_ui_left_out_obj(KHDAYS_UI_HUD, engine, i);
+            continue;
         }
         if (sp->image < 0 || sp->image_scale != scale) {
             khdays_ui_image_put(sp->image);

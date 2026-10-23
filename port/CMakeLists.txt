@@ -292,6 +292,53 @@ add_library(khdays-gfx STATIC
     gfx/g3d_interp.c)
 target_compile_options(khdays-gfx PRIVATE /W4 /std:c17)
 
+# KH2's native 2D sequences and their reference renderer; also used by the
+# independent viewer, without the game or its generated sources.
+add_library(khdays-kh2-sequence STATIC
+    ../assets/src/kh2_bar.cpp
+    ../assets/src/kh2_sequence.cpp
+    ../assets/src/dds.cpp
+    ../assets/src/image.cpp
+    gfx/kh2_sequence.cpp
+    host/render/kh2_sequence_asset.cpp)
+target_include_directories(khdays-kh2-sequence PUBLIC ../assets/include)
+target_include_directories(khdays-kh2-sequence PRIVATE "${stb_SOURCE_DIR}")
+target_compile_options(khdays-kh2-sequence PRIVATE /W4 /std:c++20 /EHsc)
+
+add_library(khdays-kh2-gauge STATIC ui/kh2_hp_gauge.cpp ui/kh2_hp_config.cpp)
+target_link_libraries(khdays-kh2-gauge PUBLIC khdays-kh2-sequence)
+target_compile_options(khdays-kh2-gauge PRIVATE /W4 /std:c++20 /EHsc)
+
+add_executable(khdays-kh2-sequence-test tests/kh2_sequence_test.cpp)
+target_link_libraries(khdays-kh2-sequence-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-kh2-sequence-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-sequence COMMAND khdays-kh2-sequence-test)
+
+add_executable(khdays-kh2-hud-test tests/kh2_hp_hud_test.cpp ui/kh2_hp_hud.cpp)
+target_link_libraries(khdays-kh2-hud-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-kh2-hud-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-hud COMMAND khdays-kh2-hud-test)
+
+add_executable(khdays-kh2-limit-timing-test tests/kh2_limit_timing_test.c)
+target_include_directories(khdays-kh2-limit-timing-test PRIVATE "${DECOMP}/include")
+target_compile_options(khdays-kh2-limit-timing-test PRIVATE /W4 /std:c17)
+add_test(NAME khdays-kh2-limit-timing COMMAND khdays-kh2-limit-timing-test)
+
+add_executable(khdays-kh2-gpu-test tests/kh2_sequence_gpu_test.cpp host/render/kh2_sequence_gpu.c host/render/gpu_hd.c)
+target_link_libraries(khdays-kh2-gpu-test PRIVATE khdays-kh2-gauge SDL3::SDL3)
+target_compile_options(khdays-kh2-gpu-test PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
+    $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
+add_test(NAME khdays-kh2-gpu COMMAND khdays-kh2-gpu-test)
+set_tests_properties(khdays-kh2-gpu PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(khdays-kh2-sequence-viewer tools/kh2_sequence_viewer.cpp host/render/png_io.c)
+target_include_directories(khdays-kh2-sequence-viewer PRIVATE "${stb_SOURCE_DIR}")
+target_link_libraries(khdays-kh2-sequence-viewer PRIVATE khdays-kh2-gauge SDL3::SDL3)
+target_compile_options(khdays-kh2-sequence-viewer PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
+    $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
+
 # The input layer -- the control profile and its settings file, the
 # bindings, the devices, the settings menu (its FPS and ping displays in the
 # game's own font), and the runtime's pure parts of the enhancements (analog movement's
@@ -446,6 +493,7 @@ add_executable(khdays-native
     host/render/gpu_present.c
     host/render/gpu_raster3d.c
     host/render/gfx_render.c
+    host/render/kh2_sequence_gpu.c
     host/render/onescreen.c               # the one picture's situation and composition
     host/screens/layout_screen.c           # the port's screens drawn from a mod's pieces
     host/screens/save_screen.c             # the port's save list on the screen
@@ -487,6 +535,7 @@ add_executable(khdays-native
     ui/parts.c
     ui/bg.c
     ui/hud.c
+    ui/kh2_hp_hud.cpp
     ui/badges.c                    # the badges' icons on the mission panel
     ui/crowns.c                    # the crowns on the story's day list
     ui/mission_list.c              # the camp's mission list from the game's files
@@ -534,7 +583,7 @@ target_compile_options(khdays-native PRIVATE
 # ufbx, as it is: third-party, not held to the port's warnings.
 add_library(khdays-ufbx STATIC "${ufbx_SOURCE_DIR}/ufbx.c")
 target_link_libraries(khdays-native PRIVATE khdays-ufbx)
-target_link_libraries(khdays-native PRIVATE khdays-lua)
+target_link_libraries(khdays-native PRIVATE khdays-lua khdays-kh2-gauge)
 target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3 dbghelp winmm delayimp
                       mfplat mfreadwrite mfuuid ole32 ws2_32 iphlpapi advapi32 winhttp)
 # The DS's own addresses are held, inaccessible, first thing in main

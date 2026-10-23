@@ -524,6 +524,80 @@ static void model_window(const KhdaysFramePackage *p, int columns, KhdaysComposi
     composition->button_count = 0;
 }
 
+static void picture_images(const KhdaysFramePackage *p, KhdaysComposition *composition)
+{
+    static KhdaysShape *placed;
+    static size_t capacity;
+    size_t count = 0;
+    for (int e = 0; e < 2; ++e)
+        count += p->elements[e].count;
+    if (count + (size_t)composition->shape_count > capacity) {
+        const size_t need = count + (size_t)composition->shape_count;
+        KhdaysShape *grown = realloc(placed, need * sizeof(*placed));
+        if (!grown)
+            return;
+        placed = grown;
+        capacity = need;
+    }
+    count = 0;
+    for (int e = 0; e < 2; ++e) {
+        for (uint32_t i = 0; i < p->elements[e].count; ++i) {
+            const uint32_t *r = p->elements[e].records + i * KE_WORDS;
+            float x, y, w, h;
+            if (!(r[KE_SLOT] & KES_PICTURE))
+                continue;
+            memcpy(&x, r + KE_X, 4);
+            memcpy(&y, r + KE_Y, 4);
+            memcpy(&w, r + KE_W, 4);
+            memcpy(&h, r + KE_H, 4);
+            /* The image can extend past its screen; find its composition anchor inside that screen. */
+            const float anchor_x = (x + w < 256 ? x + w : 256) - 2;
+            const float anchor_y = (y + h < 192 ? y + h : 192) - 2;
+            const uint32_t lower = e != p->upper ? KOF_LOWER : 0;
+            for (int s = 0; s < composition->shape_count; ++s) {
+                const uint32_t *src = composition->shapes[s].words;
+                float sx, sy, sw, sh, dx, dy, scale_x, scale_y;
+                if ((src[KO_FLAGS] & (KOF_LOWER | KOF_3D)) != lower)
+                    continue;
+                memcpy(&sx, src + KO_SRC_X, 4);
+                memcpy(&sy, src + KO_SRC_Y, 4);
+                memcpy(&sw, src + KO_SRC_W, 4);
+                memcpy(&sh, src + KO_SRC_H, 4);
+                if (anchor_x < sx || anchor_x >= sx + sw || anchor_y < sy || anchor_y >= sy + sh)
+                    continue;
+                memcpy(&dx, src + KO_DST_X1, 4);
+                memcpy(&dy, src + KO_DST_Y1, 4);
+                memcpy(&scale_x, src + KO_SCALE_X, 4);
+                memcpy(&scale_y, src + KO_SCALE_Y, 4);
+                dx += (x - sx) * scale_x;
+                dy += (y - sy) * scale_y;
+                const float dw = w * scale_x, dh = h * scale_y;
+                uint32_t *dst = placed[count++].words;
+                memset(dst, 0, KO_WORDS * sizeof(*dst));
+                dst[KO_FLAGS] = KOF_IMAGE | lower;
+                dst[KO_KEYS] = r[KE_IMAGE];
+                float values[4] = {0, 0, (float)r[KE_IW], (float)r[KE_IH]};
+                memcpy(dst + KO_SRC_X, values, sizeof(values));
+                values[0] = dx;
+                values[1] = dy;
+                values[2] = dx + dw;
+                values[3] = dy + dh;
+                memcpy(dst + KO_DST_X1, values, sizeof(values));
+                scale_x = dw / (float)r[KE_IW];
+                scale_y = dh / (float)r[KE_IH];
+                memcpy(dst + KO_SCALE_X, &scale_x, 4);
+                memcpy(dst + KO_SCALE_Y, &scale_y, 4);
+                break;
+            }
+        }
+    }
+    if (count) {
+        memcpy(placed + count, composition->shapes, (size_t)composition->shape_count * sizeof(*placed));
+        composition->shape_count += (int)count;
+        composition->shapes = placed;
+    }
+}
+
 void khdays_onescreen_prepare(const KhdaysFramePackage *p, int columns, KhdaysComposition *composition,
                               KhdaysOneScreenDraw *draw)
 {
@@ -573,6 +647,7 @@ void khdays_onescreen_prepare(const KhdaysFramePackage *p, int columns, KhdaysCo
     settings_prompt();
     khdays_composition_for(&situation, columns, composition);
     model_window(p, columns, composition);
+    picture_images(p, composition);
     if (traced_frame(p->frame) && pixels.p == p &&
         (composition->screens == KHDAYS_SCREENS_UPPER || composition->screens == KHDAYS_SCREENS_LOWER)) {
         tell_left_out(p, composition);

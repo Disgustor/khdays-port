@@ -19,6 +19,7 @@
 #define KOF_SEE_THROUGH 0x2000u /* KO_SEE_THROUGH: the texels of one colour drawn at an opacity */
 #define KOF_DIM 0x4000u         /* `dim`: its colours times KO_OPACITY's factor, toward black (not a weight) */
 #define KOF_3D 0x8000u          /* `3d`: the 3D at the texel (the backdrop where none is), not its source */
+#define KOF_IMAGE 0x10000u      /* an independent RGBA image; KO_KEYS holds its replacement id */
 
 #define KO_SRC_X 1 /* float: the source rectangle, DS dots of its screen */
 #define KO_SRC_Y 2
@@ -57,6 +58,9 @@
  * `uint`, `int` and `float` (docs/RENDERING.md). */
 #if defined(KO_STEPS) && !defined(KHDAYS_GFX_ONESCREEN_STEPS)
 #define KHDAYS_GFX_ONESCREEN_STEPS
+#ifndef KO_IMAGE
+#define KO_IMAGE(image, x, y) 0u
+#endif
 
 KO_FN uint ko_channel(uint c, uint n)
 {
@@ -143,6 +147,8 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
     uint i;
     uint under = ((x3d >> 24) & 1u) != 0u ? x3d & 0xffffffu : backdrop;
     uint result = under;
+    float image_r = 0.0f, image_g = 0.0f, image_b = 0.0f, through = 1.0f;
+    int image_from = -1;
     int from = -1; /* the screen whose brightness the texel takes: -1 the 3D's or the backdrop's */
     for (i = 0u; i < shape_count; ++i) {
         const uint flags = KO_SHAPE(i, KO_FLAGS);
@@ -167,6 +173,17 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
         }
         fx = (px - x1) / sx;
         fy = (py - y1) / sy;
+        if ((flags & KOF_IMAGE) != 0u) {
+            const uint t = KO_IMAGE(KO_SHAPE(i, KO_KEYS), fx, fy);
+            const float a = (float)(t >> 24) / 255.0f;
+            image_r += through * a * (float)(t & 255u);
+            image_g += through * a * (float)((t >> 8) & 255u);
+            image_b += through * a * (float)((t >> 16) & 255u);
+            through *= 1.0f - a;
+            if (a > 0.0f && image_from < 0)
+                image_from = (flags & KOF_LOWER) != 0u ? 1 : 0;
+            continue;
+        }
         if ((flags & KOF_ROUND) != 0u) {
             /* its corners: outside the quarter circle, what is under the shape */
             const float r = ko_float(i, KO_ROUND);
@@ -259,6 +276,13 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
             result = ko_mix(result, x3d & 0xffffffu, (float)((x3d >> 26) & 31u) / 31.0f);
         }
         break;
+    }
+    if (through < 1.0f) {
+        result = (uint)(image_r + through * (float)(result & 255u) + 0.5f) |
+                 ((uint)(image_g + through * (float)((result >> 8) & 255u) + 0.5f) << 8) |
+                 ((uint)(image_b + through * (float)((result >> 16) & 255u) + 0.5f) << 16);
+        if (from < 0)
+            from = image_from;
     }
     if (rule == KOB_UPPER) {
         return ko_bright(result, upper_master);

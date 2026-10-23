@@ -1258,6 +1258,11 @@ SettingMenu sp/l2d/setting_1525.l2d
 SettingMenu uk/font/menufont.cod
 SettingMenu uk/font/menufont.tm2
 SettingMenu uk/l2d/setting_1525.l2d
+kh2_fifth field2d/fr/zz0field.2dd
+kh2_fifth field2d/gr/zz0field.2dd
+kh2_fifth field2d/it/zz0field.2dd
+kh2_fifth field2d/sp/zz0field.2dd
+kh2_fifth field2d/us/zz0field.2dd
 kh2_first menu/fm/title.2ld
 kh2_first msg/us/fontimage.bar
 kh2_first msg/us/fontinfo.bar

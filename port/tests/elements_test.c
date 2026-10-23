@@ -239,9 +239,24 @@ int main(void)
         CHECK(memcmp(out, base_out, sizeof(out)) == 0);
     }
 
-    for (int i = 0; i < 8; ++i) {
-        free(images[i]);
+    CHECK((KES_FINE & KES_PICTURE) == 0u);
+    /* Independent images are drawn separately from the one-screen source crop. */
+    scene();
+    image(1, 8, 8, 1);
+    element(r, 1 | KES_PICTURE, 40, 40, 8, 8, 1, 8, 8);
+    compose(0, r, 1, NULL, out);
+    CHECK(out[40 * W + 40] != out[0]);
+    desc[KD_FLAGS] |= KDF_SPLIT | KDF_FINE;
+    {
+        KhdaysGfxMemory m;
+        memory_of(&m, r, NULL);
+        CHECK(khdays_gfx_pixel_cpu(desc, &m, 40, 40) == 0);
+        r[KE_SLOT] &= ~KES_PICTURE;
+        r[KE_SLOT] |= KES_FINE;
+        CHECK(khdays_gfx_pixel_cpu(desc, &m, 40, 40) != 0);
     }
+    for (int i = 0; i < 8; ++i)
+        free(images[i]);
     if (failures) {
         fprintf(stderr, "%d failed\n", failures);
         return 1;

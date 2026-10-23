@@ -770,6 +770,7 @@ typedef uint32_t uint;
 static uint32_t shape_words[4][KO_WORDS];
 static uint32_t key_words[4];
 static uint32_t upper_src[192][256], lower_src[192][256]; /* as KO_SOURCE gives them */
+static uint32_t image_colour;
 
 static uint32_t source(uint32_t lower, float x, float y)
 {
@@ -792,6 +793,7 @@ static float as_float(uint32_t u)
 #define KO_FLOOR(f) floorf(f)
 #define KO_ABS(i) abs(i)
 #define KO_SOURCE(lower, x, y) source((lower), (x), (y))
+#define KO_IMAGE(image, x, y) image_colour
 #include "../gfx/onescreen.h"
 
 static void put_float(uint32_t *w, int at, float f)
@@ -927,6 +929,23 @@ static void test_steps(void)
         const uint32_t c = ko_pixel(50.5f, 50.5f, 1.0f, x3d, 0, KOB_DEFAULT, ((2u << 14) | 16u) << 16, 0, 171.0f, 1);
         CHECK(c == 0u);
     }
+}
+
+static void test_independent_image(void)
+{
+    /* Outside the screen's crop, an image still covers its own rectangle; its alpha composes
+     * against the next shape, and transparent texels leave that shape alone. */
+    memset(upper_src, 0, sizeof(upper_src));
+    upper_src[10][10] = 0x010000ffu;
+    shape(0, KOF_IMAGE, 0, 0, 128, 64, 50, 50, 1);
+    shape(1, 0, 0, 0, 32, 32, 50, 50, 1);
+    image_colour = 0x8000ff00u;
+    CHECK(ko_pixel(60.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0, 0, 128, 1) == 0x00807fu);
+    CHECK(ko_pixel(150.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0, 0, 128, 1) == 0x008000u);
+    image_colour = 0;
+    CHECK(ko_pixel(60.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0, 0, 128, 1) == 0xffu);
+    image_colour = 0xff00ff00u;
+    CHECK(ko_pixel(60.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0x8010, 0, 128, 1) == 0);
 }
 
 /* --- The upper screen's 2D apart from its 3D ------------------------------------------- */
@@ -1092,6 +1111,7 @@ int main(void)
     test_title_backdrop();
     test_title_prompt();
     test_steps();
+    test_independent_image();
     test_split();
     test_split_under_3d();
     test_swap_skips();

@@ -17,6 +17,7 @@
 #include "../../ui/elements.h"
 #include "../../ui/parts.h"
 #include "../../ui/hud.h"
+#include "../../ui/kh2_hp_hud.h"
 #include "../../ui/pause.h"
 #include "../../ui/text.h"
 #include "../../ui/situation.h"
@@ -881,7 +882,9 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
 {
     /* widescreen moves the elements to the sides like the HUD's pieces; on one screen they stay at their
      * DS places and the composition places them */
+    khdays_ui_kh2_hp_reference(reference);
     khdays_ui_collect((p->wants & KHDAYS_WANT_SITUATION) ? 0 : (int)p->desc2d[0][KD_WIDE], p->upper);
+    khdays_ui_kh2_hp_commands(&p->sequence_image);
     for (int e = 0; e < 2; ++e) {
         KhdaysFrameElements *fe = &p->elements[e];
         uint32_t n;
@@ -1095,6 +1098,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
         p->wants = 0; /* no 3D captured for it */
     }
     p->frame = frame;
+    p->sequence_image.words[KSI_COUNT] = 0;
     p->time = khdays_events_vblank_time();
     p->alike = last_drawn.alike;
     last_drawn.alike = 0;
@@ -1492,6 +1496,7 @@ void khdays_display_vblank(u32 frame)
         }
         khdays_g3d_set_widen(widen);
     }
+    khdays_ui_kh2_hp_frame(frame);
     if (!drawn(frame)) {
         gpu_input(&in);
         display_capture(&in, &window_a);

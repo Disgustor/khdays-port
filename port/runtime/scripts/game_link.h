@@ -56,6 +56,15 @@ int khdays_link_player_hp(int *hp, int *max);
  * (func_ov022_02088218: its actor moved with its child, its position +0x48c, its motion reset after the
  * move); NULL when done, else why not. */
 const char *khdays_link_set_position(const float at[3]);
+/* The game's low-HP predicate, including ability 0x42's exception. */
+int khdays_link_player_low_hp(void);
+/* The vanilla limit threshold in HP, including ability, use count and battle settings; 0 disabled. */
+int khdays_link_player_limit_hp(void);
+/* Original limit clock and entry HP, before the DS HUD rounds its position to pixels. */
+struct KhdaysLinkLimitClock {
+    int elapsed, outward, start_hp, step;
+};
+int khdays_link_player_limit_clock(struct KhdaysLinkLimitClock *clock);
 /* Through Ov022_ActorSetHp, as the game's own hits and cures do. */
 int khdays_link_set_player_hp(int hp);
 

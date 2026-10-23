@@ -32,6 +32,9 @@ extern void Ov002_PauseMissionScene(void);
 extern int GetLanguage(void);
 extern void Ov000_TickMenuLoop(void);
 extern void GameState_SetField(unsigned int field, unsigned int bits, unsigned int value);
+extern int func_ov022_020ad7b0(KhdaysRef actor);
+extern int Ov022_ComputeChipGauge(KhdaysRef block);
+extern int Ov022_GetGlobal34(void);
 int khdays_overlay_loaded(int id); /* runtime/core/overlays.c */
 
 #define TITLE_SCENE 1u
@@ -236,6 +239,34 @@ int khdays_link_set_player_hp(int hp)
         return 0;
     }
     Ov022_ActorSetHp(actor, hp);
+    return 1;
+}
+
+int khdays_link_player_low_hp(void)
+{
+    const unsigned actor = player_actor();
+    return actor != 0 && func_ov022_020ad7b0(actor);
+}
+
+int khdays_link_player_limit_hp(void)
+{
+    const unsigned actor = player_actor();
+    const unsigned block = actor + 0x22f8u; /* Ov022_UpdateSubsystems */
+    if (!actor || !khdays_game_ram(rd32(block + 0x328u)))
+        return 0;
+    return Ov022_ComputeChipGauge(block);
+}
+
+int khdays_link_player_limit_clock(struct KhdaysLinkLimitClock *clock)
+{
+    const unsigned actor = player_actor();
+    const unsigned block = actor + 0x22f8u;
+    if (!actor || !khdays_game_ram(rd32(block + 0x328u)))
+        return 0;
+    clock->elapsed = (int)rd32(block + 0x32cu);
+    clock->outward = (int)rd32(block + 0x338u);
+    clock->start_hp = *(const volatile unsigned short *)KHDAYS_W(block + 0x336u);
+    clock->step = Ov022_GetGlobal34();
     return 1;
 }
 

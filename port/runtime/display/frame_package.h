@@ -126,6 +126,7 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage portrait_images[4];
     KhdaysSequenceImage party_images[3];
     KhdaysSequenceImage label_images[5];
+    KhdaysSequenceImage enemy_image;
 } KhdaysFramePackage;
 
 /* What KHDAYS_RECORD_FRAMES writes of a package (version 14): all of it but

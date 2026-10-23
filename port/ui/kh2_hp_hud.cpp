@@ -3,6 +3,7 @@
 #include "kh2_hp_gauge.h"
 #include "kh2_hp_config.h"
 #include "kh2_party_hud.h"
+#include "hud_gauge_tiles.h"
 #include "../gfx/kh2_sequence.h"
 #include "../host/render/kh2_sequence_asset.h"
 extern "C" {
@@ -241,9 +242,28 @@ extern "C" int khdays_ui_kh2_hp_cell(int screen, int bg, const KhdaysBgLayer *la
     return address >= offsets[gauge_slot] && address < offsets[gauge_slot] + sizes[gauge_slot];
 }
 
+extern "C" void khdays_ui_kh2_hp_prepare(void)
+{
+    if (!khdays_ui_kh2_hp_ready())
+        return;
+    KhdaysBgLayer layer;
+    if (!khdays_bg_text_layer(0, 3, &layer))
+        return;
+    for (int y = 0; y < 25; ++y)
+        for (int x = 0; x < 33; ++x) {
+            const int cx = ((layer.hofs >> 3) + x) % layer.wt, cy = ((layer.vofs >> 3) + y) % layer.ht;
+            const unsigned entry = khdays_bg_map_entry(0, &layer, cx, cy);
+            if (!khdays_ui_kh2_hp_cell(0, 3, &layer, entry))
+                continue;
+            const char *origin = khdays_bg_origin(0, layer.chars + (entry & 1023u) * (layer.colors256 ? 64u : 32u));
+            if (origin && std::strstr(origin, "UI/btl/") && std::strstr(origin, "main.p2"))
+                khdays_ui_left_out_cell(KHDAYS_UI_HUD, 0, 3, cx, cy);
+        }
+}
+
 extern "C" int khdays_ui_kh2_hp_sprite(const unsigned char *pixels, int width, int height)
 {
-    if (width != 16 || height != 8)
+    if (height != 8 || width < 8 || width > 64 || (width & 7))
         return 0;
     // Match a possible OBJ copy against the live gauge's 4-bit tiles.
     const unsigned context = read_word(gauge_context);
@@ -256,18 +276,8 @@ extern "C" int khdays_ui_kh2_hp_sprite(const unsigned char *pixels, int width, i
         if (!khdays_game_ram(handle))
             continue;
         const auto *tiles = static_cast<const unsigned char *>(KHDAYS_W(handle));
-        for (unsigned first = 0; first + 64 <= sizes[slot]; first += 32) {
-            bool same = true, ink = false;
-            for (int y = 0; y < 8 && same; ++y)
-                for (int x = 0; x < 16 && same; ++x) {
-                    const unsigned char byte = tiles[first + (x / 8) * 32 + y * 4 + (x % 8) / 2];
-                    const unsigned char v = (byte >> (4 * (x & 1))) & 15;
-                    ink |= v != 0;
-                    same = v == pixels[y * width + x];
-                }
-            if (same && ink)
-                return 1;
-        }
+        if (khdays_hud_gauge_strip(tiles, sizes[slot], pixels, width, height))
+            return 1;
     }
     return 0;
 }
@@ -363,7 +373,7 @@ extern "C" int khdays_ui_kh2_hp_compose(const KhdaysUiElement *face, const Khday
             khdays_ui_image_end(image);
         }
         KhdaysUiElement e = *face;
-        e.slot = KES_DIRECT | KES_PICTURE | 3;
+        e.slot = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
         e.x = float(left);
         e.y = float(top);
         e.w = float(width);

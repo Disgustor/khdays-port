@@ -199,7 +199,7 @@ bool draw(Slot &slot, int index, const KhdaysBgLayer &layer)
         render::encode_sequence_quads(slot.program, frame.quads);
     }
     slot.element = slot.box;
-    slot.element.slot = KES_DIRECT | KES_PICTURE | 3;
+    slot.element.slot = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
     slot.element.x = parent.x + c.offset_x + left;
     slot.element.y = parent.y + c.offset_y + top;
     slot.element.w = float(slot.width);

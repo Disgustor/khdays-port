@@ -169,5 +169,30 @@
         }
       }
     }
+  },
+  "enemy": {
+    "enabled": true,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale": 0.65,
+    "frames_per_tick": 1,
+    "source_origin_x": 498,
+    "source_origin_y": 31,
+    "background": 38,
+    "preview": 42,
+    "bar_background": 39,
+    "cap": 40,
+    "damage": 41,
+    "fill": 43,
+    "tank_full": 44,
+    "tank_empty": 45,
+    "tank_damage": 46,
+    "bar_offset_x": 0,
+    "bar_offset_y": 0,
+    "tank_offset_x": 0,
+    "tank_offset_y": 0
   }
 }

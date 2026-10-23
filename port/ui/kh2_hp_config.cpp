@@ -124,7 +124,7 @@ class Reader {
                 if (next() == '{') {
                     const bool label = key == "player_icon" || key == "limit_text";
                     const bool allowed =
-                        (prefix.empty() && (key == "party" || label)) ||
+                        (prefix.empty() && (key == "party" || key == "enemy" || label)) ||
                         (prefix == "party." && (key == "slots" || label)) ||
                         (prefix == "party.slots." && (key == "1" || key == "2" || key == "3")) ||
                         ((prefix == "party.slots.1." || prefix == "party.slots.2." || prefix == "party.slots.3.") &&
@@ -169,6 +169,17 @@ double number(Object &o, const char *key, double fallback, double lo, double hi,
     if (n < lo || n > hi || (integer && n != std::floor(n)))
         throw std::runtime_error(std::string("gauge JSON: out of range ") + key);
     return n;
+}
+Object read_file(const std::filesystem::path &path)
+{
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file || file.tellg() < 0 || file.tellg() > 262144)
+        throw std::runtime_error("gauge JSON: cannot read " + path.string());
+    std::string text(static_cast<std::size_t>(file.tellg()), '\0');
+    file.seekg(0);
+    if (!file.read(text.data(), std::streamsize(text.size())))
+        throw std::runtime_error("gauge JSON: incomplete file");
+    return Reader(std::move(text)).read();
 }
 } // namespace
 
@@ -253,14 +264,7 @@ HpGaugeConfig parse_config(Object o, HpGaugeConfig c = {})
 }
 std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &path)
 {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file || file.tellg() < 0 || file.tellg() > 262144)
-        throw std::runtime_error("gauge JSON: cannot read " + path.string());
-    std::string text(static_cast<std::size_t>(file.tellg()), '\0');
-    file.seekg(0);
-    if (!file.read(text.data(), std::streamsize(text.size())))
-        throw std::runtime_error("gauge JSON: incomplete file");
-    auto all = Reader(std::move(text)).read();
+    auto all = read_file(path);
     auto extract = [&](const std::string &prefix) {
         Object result;
         for (auto it = all.begin(); it != all.end();) {
@@ -272,6 +276,7 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
         }
         return result;
     };
+    extract("enemy.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
         overrides[i] = extract("party.slots." + std::to_string(i + 1) + '.');
@@ -317,5 +322,52 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
 HpGaugeConfig load_hp_gauge_config(const std::filesystem::path &path)
 {
     return load_hp_gauge_configs(path)[0];
+}
+
+EnemyGaugeConfig load_enemy_gauge_config(const std::filesystem::path &path)
+{
+    const auto root = load_hp_gauge_config(path);
+    auto all = read_file(path);
+    Object o;
+    for (const auto &[key, value] : all)
+        if (key.starts_with("enemy."))
+            o.emplace(key.substr(6), value);
+    EnemyGaugeConfig c;
+    c.enabled = !o.empty();
+    c.archive = root.archive;
+    c.texture = root.texture;
+    c.entry = root.entry;
+    c.scale = root.scale;
+    c.enabled = get(o, "enabled", c.enabled);
+    for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
+        *field = get(o, key, *field);
+        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
+            throw std::runtime_error("gauge JSON: enemy resources must be local file names");
+    }
+    c.scale = float(number(o, "scale", c.scale, 0.05, 2));
+    c.offset_x = float(number(o, "offset_x", 0, -512, 512));
+    c.offset_y = float(number(o, "offset_y", 0, -512, 512));
+    c.frames_per_tick = float(number(o, "frames_per_tick", 1, 0.01, 8));
+    auto &s = c.style;
+    for (auto [key, field] : {std::pair{"background", &s.background},
+                              {"preview", &s.preview},
+                              {"bar_background", &s.bar_background},
+                              {"cap", &s.cap},
+                              {"damage", &s.damage},
+                              {"fill", &s.fill},
+                              {"tank_full", &s.tank_full},
+                              {"tank_empty", &s.tank_empty},
+                              {"tank_damage", &s.tank_damage}})
+        *field = std::size_t(number(o, key, double(*field), 0, 65535, true));
+    for (auto [key, field] : {std::pair{"source_origin_x", &s.source_origin_x},
+                              {"source_origin_y", &s.source_origin_y},
+                              {"bar_offset_x", &s.bar_offset_x},
+                              {"bar_offset_y", &s.bar_offset_y},
+                              {"tank_offset_x", &s.tank_offset_x},
+                              {"tank_offset_y", &s.tank_offset_y}})
+        *field = float(number(o, key, *field, -4096, 4096));
+    if (!o.empty())
+        throw std::runtime_error("gauge JSON: unknown enemy key " + o.begin()->first);
+    return c;
 }
 } // namespace khdays::ui::kh2

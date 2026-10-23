@@ -4,6 +4,7 @@
  * ...": at those VBlanks, each text layer's groups of touching cells. */
 #include "hud.h"
 #include "kh2_hp_hud.h"
+#include "kh2_enemy_hud.h"
 #include "kh2_portrait_hud.h"
 #include "kh2_party_hud.h"
 #include "kh2_hud_labels.h"
@@ -381,16 +382,36 @@ static const uint8_t *obj_memory(int engine, uint32_t address)
     return page != NULL ? page + address % KHDAYS_VRAM_PAGE : NULL;
 }
 
+static int gauge_obj_origin(int engine, uint32_t address)
+{
+    const uint8_t *at = obj_memory(engine, address);
+    if (!at)
+        return 0;
+    for (int bank = 0; bank < KHDAYS_VRAM_BANKS; ++bank) {
+        const uint8_t *base = khdays_vram_bank(bank);
+        if (base && at >= base && at < base + khdays_vram_bank_size[bank]) {
+            const char *file;
+            u32 offset, run;
+            return khdays_origin_of_bank(bank, (u32)(at - base), &file, &offset, &run) && strstr(file, "UI/btl/") &&
+                   strstr(file, "main.p2");
+        }
+    }
+    return 0;
+}
+
 /* Makes the sprites whose middle lies in a piece that is there into elements
  * in the sprites' slot of their priority (as compose.h kd_sprites draws
  * them), and leaves their entries out. Affine sprites, the sprite window's,
  * bitmaps and 8-bit ones in the extended palettes stay the game's. */
-static void emit_sprites(int index)
+static void emit_sprites(int index, int there)
 {
     static const uint8_t obj_w[3][4] = {{8, 16, 32, 64}, {16, 32, 32, 64}, {8, 8, 16, 32}};
     static const uint8_t obj_h[3][4] = {{8, 16, 32, 64}, {8, 8, 16, 32}, {16, 32, 32, 64}};
     const Piece *piece = &pieces_table[index];
-    if (piece->label)
+    const int gauge_probe = strcmp(piece->id, "hud.portrait") == 0 &&
+                            (khdays_ui_kh2_hp_ready() || khdays_ui_kh2_party_ready(1) || khdays_ui_kh2_party_ready(2) ||
+                             khdays_ui_kh2_party_ready(3) || khdays_ui_kh2_enemy_ready());
+    if (piece->label || (!there && !gauge_probe))
         return;
     const int engine = piece->screen;
     const uint8_t *oam = (const uint8_t *)KHDAYS_W(0x07000000u + (uint32_t)engine * 0x400u);
@@ -426,8 +447,14 @@ static void emit_sprites(int index)
                 ? x + w / 2 < party_box.x || x + w / 2 >= party_box.x + party_box.w || y + h / 2 < party_box.y ||
                       y + h / 2 >= party_box.y + party_box.h + 8
                 : x + w / 2 < piece->x0 || x + w / 2 >= piece->x1 || y + h / 2 < piece->y0 || y + h / 2 >= piece->y1;
-        if (outside) {
+        if (outside && (!gauge_probe || h != 8)) {
             continue;
+        }
+        if (outside) {
+            const uint32_t tile = colors256 && !(dispcnt & 0x10u) ? a2 & 0x3feu : a2 & 0x3ffu;
+            const uint32_t address = tile * ((dispcnt & 0x10u) ? 32u << ((dispcnt >> 20) & 3u) : 32u);
+            if (!gauge_obj_origin(engine, address))
+                continue;
         }
         uint8_t party_pixels[16 * 8];
         Sprite party_sprite = {0};
@@ -483,11 +510,11 @@ static void emit_sprites(int index)
             }
         }
         if ((strcmp(piece->id, "hud.portrait") == 0 || piece->party_slot) &&
-            khdays_ui_kh2_hp_sprite(sp->pixels, w, h)) {
+            (khdays_ui_kh2_hp_sprite(sp->pixels, w, h) || khdays_ui_kh2_enemy_sprite(sp->pixels, w, h))) {
             khdays_ui_left_out_obj(KHDAYS_UI_HUD, engine, i);
             continue;
         }
-        if (piece->party_slot)
+        if (piece->party_slot || outside || !there)
             continue; /* only the gauge's own OBJ copy is suppressed here */
         if (sp->image < 0 || sp->image_scale != scale) {
             khdays_ui_image_put(sp->image);
@@ -538,6 +565,8 @@ static void emit_sprites(int index)
 
 static void emit(void)
 {
+    khdays_ui_kh2_enemy_emit();
+    khdays_ui_kh2_hp_prepare();
     khdays_ui_kh2_party_prepare();
     khdays_ui_kh2_labels_prepare();
     khdays_ui_kh2_portrait_prepare();
@@ -550,8 +579,8 @@ static void emit(void)
                 there |= emit_piece(n, bg, &l);
             }
         }
-        if (there) {
-            emit_sprites(n);
+        if (there || strcmp(pieces_table[n].id, "hud.portrait") == 0) {
+            emit_sprites(n, there);
         }
         if (there && strcmp(pieces_table[n].id, "hud.mission") == 0) {
             khdays_ui_badges_emit(); /* the port's own addition to the panel, above it */

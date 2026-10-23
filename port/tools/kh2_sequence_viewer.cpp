@@ -34,6 +34,7 @@ void help()
                  "  --hp DAYS_HP --max-hp DAYS_HP   display the separate HP gauge composition\n"
                  "  --config FILE.json             inspect a player or party gauge configuration\n"
                  "  --party N                      select party slot 1-3 from that configuration\n"
+                 "  --enemy --bar-capacity N       inspect enemy gauge (Days: 250 story / 750 mission)\n"
                  "  --previous-hp DAYS_HP --damage-frame F --reaction small|medium|large\n"
                  "  --status normal|alert|dead --play --run-frames N\n"
                  "KHDAYS_KH2_ASSET_DIR can supply --root. No extraction is performed.\n"
@@ -76,9 +77,11 @@ int main(int argc, char **argv)
         float frame = 0, scale = 3, fps = 60;
         bool list = false, autoplay = false;
         std::size_t frame_limit = 0;
-        bool hp_mode = false;
+        bool hp_mode = false, enemy_mode = false;
+        int bar_capacity = 250;
         gauge::HpGaugeSample hp;
         gauge::HpGaugeStyle style;
+        gauge::EnemyGaugeStyle enemy_style;
         for (int i = 1; i < argc; ++i) {
             const std::string option = argv[i];
             if (option == "--help") {
@@ -91,6 +94,10 @@ int main(int argc, char **argv)
             }
             if (option == "--play") {
                 autoplay = true;
+                continue;
+            }
+            if (option == "--enemy") {
+                enemy_mode = hp_mode = true;
                 continue;
             }
             if (++i == argc)
@@ -118,6 +125,8 @@ int main(int argc, char **argv)
                 scale = std::stof(value);
             else if (option == "--fps")
                 fps = std::stof(value);
+            else if (option == "--bar-capacity")
+                bar_capacity = std::stoi(value);
             else if (option == "--output")
                 output = value;
             else if (option == "--run-frames")
@@ -158,13 +167,23 @@ int main(int argc, char **argv)
                 throw std::runtime_error("unknown option " + option);
         }
         if (!config_path.empty()) {
-            const auto c = gauge::load_hp_gauge_configs(config_path)[config_slot];
-            style = c.style;
-            entry = c.entry;
-            if (archive.empty())
-                archive = config_path.parent_path() / c.archive;
-            if (picture.empty())
-                picture = config_path.parent_path() / c.texture;
+            if (enemy_mode) {
+                const auto c = gauge::load_enemy_gauge_config(config_path);
+                enemy_style = c.style;
+                entry = c.entry;
+                if (archive.empty())
+                    archive = config_path.parent_path() / c.archive;
+                if (picture.empty())
+                    picture = config_path.parent_path() / c.texture;
+            } else {
+                const auto c = gauge::load_hp_gauge_configs(config_path)[config_slot];
+                style = c.style;
+                entry = c.entry;
+                if (archive.empty())
+                    archive = config_path.parent_path() / c.archive;
+                if (picture.empty())
+                    picture = config_path.parent_path() / c.texture;
+            }
             hp_mode = true;
         }
         if ((archive.empty() || picture.empty()) && root.empty()) {
@@ -201,8 +220,13 @@ int main(int argc, char **argv)
                     pixels[std::size_t(y) * 800 + std::size_t(x)] = ((x / 16 + y / 16) & 1) ? 0xff383838 : 0xff282828;
             hp.frame = player.frame();
             hp.damage_frame = std::max(0.0f, player.frame() + damage_offset);
-            const auto evaluated = hp_mode ? gauge::evaluate_hp_gauge(asset.sequence, hp, style)
-                                           : kh2::evaluate_sequence(asset.sequence, player.clip(), player.frame());
+            const auto evaluated = enemy_mode
+                                       ? gauge::evaluate_enemy_gauge(asset.sequence,
+                                                                     {int(hp.hp), int(hp.max_hp), int(hp.previous_hp),
+                                                                      bar_capacity, hp.frame, hp.damage_frame},
+                                                                     enemy_style)
+                                   : hp_mode ? gauge::evaluate_hp_gauge(asset.sequence, hp, style)
+                                             : kh2::evaluate_sequence(asset.sequence, player.clip(), player.frame());
             render::draw_sequence(evaluated.quads, asset.texture, asset.logical_size[0], asset.logical_size[1], pixels,
                                   800, 500, view);
         };

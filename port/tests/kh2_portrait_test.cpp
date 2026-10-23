@@ -612,6 +612,8 @@ void khdays_ui_left_out_cell(int, int, int, int x, int y)
 }
 void khdays_ui_emit_extended(int, const KhdaysUiElement *element, const KhdaysUiElement *)
 {
+    expect(!(element->slot & KES_PICTURE) || (element->slot & KES_HUD),
+           "portrait, party gauge, or sequence label bypasses single-screen HUD visibility");
     emitted.push_back(*element);
 }
 }

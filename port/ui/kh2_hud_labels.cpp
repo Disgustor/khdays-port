@@ -220,7 +220,7 @@ bool draw(Label &s, int index)
     }
     s.element = s.box;
     s.element.id = ids[index];
-    s.element.slot = KES_DIRECT | KES_PICTURE | 3;
+    s.element.slot = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
     s.element.image = s.image;
     const auto at = position(index, s.box);
     s.element.x = at[0] + s.box.w * 0.5f + x0;
@@ -381,6 +381,7 @@ extern "C" int khdays_ui_kh2_label_native(int index, const KhdaysUiElement *elem
         const auto at = position(index, *element);
         e.x = at[0];
         e.y = at[1];
+        e.slot |= KES_PICTURE | KES_HUD;
         s.native.push_back(e);
     }
     return 1;

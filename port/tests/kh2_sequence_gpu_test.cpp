@@ -346,6 +346,41 @@ void private_assets(const char *archive, const char *texture, const gauge::HpGau
             }
         }
 }
+
+void private_enemy(const char *archive, const char *texture)
+{
+    const auto a = render::load_sequence_asset(archive, "gaug", texture);
+    std::vector<std::uint32_t> texels(a.texture.rgba.size() / 4);
+    std::memcpy(texels.data(), a.texture.rgba.data(), a.texture.rgba.size());
+    set_image(1, a.texture.width, a.texture.height, texels);
+    images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+    for (int resolution : {1, 4, 8}) {
+        KhdaysSequenceImage p{};
+        for (int capacity : {250, 750})
+            for (int hp : {0, 1, capacity - 1, capacity, capacity + 1, capacity * 3 / 2})
+                for (float damage : {0.0f, 10.0f, 60.0f, 75.0f, 91.0f, 100.0f}) {
+                    const auto frame = gauge::evaluate_enemy_gauge(
+                        a.sequence, {hp, capacity * 3 / 2, capacity * 3 / 2, capacity, 15, damage});
+                    const render::SequenceView view{132.0f * resolution, 4.0f * resolution, 0.65f * resolution};
+                    initialize(p, 135 * resolution, 14 * resolution, a.logical_size[0], a.logical_size[1], view);
+                    p.words[KSI_FACE] = 0xffffffffu;
+                    render::encode_sequence_quads(p, frame.quads);
+                    compare(p, frame.quads, a.texture, a.logical_size[0], a.logical_size[1], view);
+                }
+        for (int i = 0; i < 3; ++i)
+            draw(p);
+        std::vector<double> timings;
+        for (int i = 0; i < 100; ++i) {
+            const auto start = std::chrono::steady_clock::now();
+            draw(p);
+            timings.push_back(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+        }
+        std::sort(timings.begin(), timings.end());
+        std::cout << "Enemy GPU/reference matched at " << resolution << "x; median " << timings[50] << " ms, p95 "
+                  << timings[95] << " ms (includes submission/wait)\n";
+    }
+}
 } // namespace
 extern "C" {
 int khdays_textures_replacements(void)
@@ -380,7 +415,9 @@ int main(int argc, char **argv)
         synthetic();
         large_atlas();
         multiple_images();
-        if (argc == 3 && std::string(argv[1]) == "--portraits")
+        if (argc == 4 && std::string(argv[1]) == "--enemy")
+            private_enemy(argv[2], argv[3]);
+        else if (argc == 3 && std::string(argv[1]) == "--portraits")
             private_portraits(argv[2]);
         else if (argc >= 3)
             private_assets(argv[1], argv[2],

@@ -395,7 +395,90 @@ with their configured offsets applied afterward. Native label images are claimed
 before gauge composition and emitted after gauges and portraits, just like their
 sequence replacements, so neither the number badges nor LIMIT text is covered.
 
+## Enemy gauge
+
+`enemy` in the same `layouts/gauge/<lang>/gauge.json` independently enables the
+enemy replacement. Its default display scale is `0.65`, with zero X/Y offsets.
+An older JSON without this section keeps the native enemy gauge. The importer
+adds the defaults when rebuilding the HD pack and preserves customized enemy
+settings. The existing archive already contains the enemy clips; no enemy sprite
+conversion or additional extraction inputs are required.
+
+Days retains its original capacity: **250 HP per bar in Story Mode and 750 in
+Mission Mode**. The adapter reads `Ov002_InitGaugeScene`'s live unit multiplier,
+not a new gameplay setting. KH2 uses 200 HP per bar; its artwork therefore draws
+`200 * remainder / days_capacity` sequence units. At exactly one full bar there
+is no extra tank. A 1.5-bar maximum shows the dim full-length preview behind the
+shorter initial bar; after rollover the main bar becomes full length. Green and
+red lengths are independently anchored at the right, as in `updateHP`.
+
+The settings select `background` (38), `preview` (42), `bar_background` (39),
+`cap` (40), `damage` (41), `fill` (43), `tank_full` (44), `tank_empty` (45), and
+`tank_damage` (46). They also expose `archive`, `texture`, `entry`, `scale`,
+`offset_x/y`, `frames_per_tick`, `source_origin_x/y` (498,31), and independent
+`bar_offset_x/y` and `tank_offset_x/y`. The original tank spacing comes from
+clip 45's extended parameter. Damage restarts the red clips; their out-of-range
+restart frame makes the faded bar and depleted tanks disappear. Healing clears
+the trail and restores green tanks. Playback pauses with Days.
+
+`port/ui/kh2_enemy_hud` reads the field gauge context at `0x0207f618`, including
+its current/maximum HP and native tween reset state. It does not write game
+memory. Only main.p2's enemy bar, HP label, and tank cells (47–59) are hidden,
+after a replacement image has been prepared successfully. Days' separate enemy
+name surface remains unchanged. Missing resources, hidden native HUD, or
+unsupported command/canvas sizes retain the native gauge.
+
+The normal path uses the existing sequence GPU pass, cached atlas, and output
+image. The canvas encloses all evaluated geometry instead of using Days' narrow
+bar rectangle. A separate native composition anchor lets the wider image and
+JSON offsets follow the top-right HUD placement without being clipped to the
+original one-screen crop. The CPU rasterizer remains a reference path.
+
+The headless viewer accepts `--enemy --bar-capacity 250 --hp 250 --max-hp 375
+--previous-hp 375 --damage-frame 30 --config PATH/gauge.json --output FILE.png`.
+Synthetic tests cover both capacities, right anchoring, partial bars, rollover,
+red disappearance, healing, target reset, pause, selective cell suppression,
+legacy/missing-resource fallback, extended canvas bounds, and image reuse without
+CPU uploads. The optional GPU test mode `--enemy ARCHIVE TEXTURE` compares the
+local HD resource with the CPU reference at 1x, 4x, and 8x and reports warm draw
+timings. In-game validation should include both modes, target changes, damage
+across multiple bars, healing, hiding the HUD, HUD-size settings, and widescreen.
+
+KH2 provenance: `GAUGE_ENEMY::create` (`0x9DD1C`), `start` (`0x9E06C`),
+`updateHP` (`0x9D890`), `damage` (`0x9E208`), and `cure` (`0x9DC64`), checked
+against the supplied PS3 debug pseudocode/disassembly and little-endian PC gaug.
+Days provenance: overlay 002's `Ov002_InitGaugeScene`, `Ov002_RestartRequestQueue`,
+`Ov002_UpdateGaugeUnits`, `Ov002_RepaintSubPanelRows`, `Ov002_TickScene`, and
+`Ov002_BuildPanelLabels` at the decompilation revision recorded by this repository's
+submodule. Target replacement is observed through native tween resets, without
+adding a gameplay hook; original KH2 transition timing still needs capture comparison.
+
 ## Boundaries
+
+In the one-screen picture, independent field HUD images carry `KES_HUD` and
+follow the situation's HUD visibility. `host/render/onescreen_images` inserts
+them immediately above their source screen shape, preserving all earlier
+foreground shapes. A tutorial's page therefore covers the HUD; exposed HUD
+receives its source shape's dimming. Dialogs, mission information, pause, game
+over, and the HUD-off setting do not promote hidden HUD images. The images keep
+their full canvas outside the native crop, and labels retain their order above
+gauges and portraits. The shared C/HLSL one-screen pass applies image dimming.
+It also reads the native layer's complementary EVA/EVB fade from the frame's
+blend registers. Images sharing that layer compose together before the fade is
+applied, so an opaque portrait does not reveal its gauge through a fade or darken
+twice. Native number/LIMIT label fallbacks join the same image group through the
+existing cached palette conversion. Two-screen composition retains its normal
+native blending path.
+
+Native gauge suppression follows tile identity outside the usual portrait or
+enemy region while the HUD transitions. Temporary 8/16/32/64-pixel OBJ strips
+are matched against the live gauge data; outside their original region the OBJ
+source must also belong to main.p2. Enemy teardown retains ownership until the
+native bar disappears, including a boss reaching zero HP. Fade coefficients do
+not require changing image pixels or uploading textures every frame. The native
+blend source is `Ov002_CommitDisplayState` and `Ov002_UpdatePanelBlend` in overlay
+002; their BG3 targets and complementary coefficients are checked by regressions
+at all 17 hardware fade levels.
 
 - `assets/kh2_bar` is the BAR reader factored from `kh2_map`, shared by both callers.
 - `assets/kh2_sequence` owns endian-safe parsing, playback, transforms, colors, and

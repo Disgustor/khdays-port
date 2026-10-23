@@ -1,5 +1,6 @@
 #pragma once
 #include "kh2_hp_gauge.h"
+#include "kh2_enemy_gauge.h"
 #include <filesystem>
 #include <string>
 
@@ -20,7 +21,14 @@ struct HpGaugeConfig final {
     HpGaugeStyle style;
     GaugeLabelConfig player_icon, limit_text;
 };
+struct EnemyGaugeConfig final {
+    bool enabled = false;
+    std::string archive = "zz0field.2dd", texture = "US_zz0field_2dd1.png", entry = "gaug";
+    float offset_x = 0, offset_y = 0, scale = 0.65f, frames_per_tick = 1;
+    EnemyGaugeStyle style;
+};
 // Player settings at the root; shared party settings and per-slot overrides below party.
 std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &path);
 HpGaugeConfig load_hp_gauge_config(const std::filesystem::path &path);
+EnemyGaugeConfig load_enemy_gauge_config(const std::filesystem::path &path);
 } // namespace khdays::ui::kh2

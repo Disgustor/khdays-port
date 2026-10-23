@@ -7,19 +7,20 @@
 
 #define KO_WORDS 20
 
-#define KO_FLAGS 0              /* KOF_* */
-#define KOF_LOWER 0x1u          /* taken from the lower screen, else the upper one's 2D apart from its 3D */
-#define KOF_MIRROR_X 0x4u       /* its source turned over left to right */
-#define KOF_MIRROR_Y 0x8u       /* top to bottom */
-#define KOF_REPEAT_X 0x40u      /* its source repeated along its rows, across every column */
-#define KOF_REPEAT_Y 0x80u      /* the same down its columns, across every row */
-#define KOF_FORCE 0x100u        /* its texels used where they are invisible too */
-#define KOF_ROUND 0x400u        /* KO_ROUND: its corners rounded */
-#define KOF_WEIGHT 0x800u       /* KO_OPACITY and KO_FADE weigh it against what is under it */
-#define KOF_SEE_THROUGH 0x2000u /* KO_SEE_THROUGH: the texels of one colour drawn at an opacity */
-#define KOF_DIM 0x4000u         /* `dim`: its colours times KO_OPACITY's factor, toward black (not a weight) */
-#define KOF_3D 0x8000u          /* `3d`: the 3D at the texel (the backdrop where none is), not its source */
-#define KOF_IMAGE 0x10000u      /* an independent RGBA image; KO_KEYS holds its replacement id */
+#define KO_FLAGS 0               /* KOF_* */
+#define KOF_LOWER 0x1u           /* taken from the lower screen, else the upper one's 2D apart from its 3D */
+#define KOF_MIRROR_X 0x4u        /* its source turned over left to right */
+#define KOF_MIRROR_Y 0x8u        /* top to bottom */
+#define KOF_REPEAT_X 0x40u       /* its source repeated along its rows, across every column */
+#define KOF_REPEAT_Y 0x80u       /* the same down its columns, across every row */
+#define KOF_FORCE 0x100u         /* its texels used where they are invisible too */
+#define KOF_ROUND 0x400u         /* KO_ROUND: its corners rounded */
+#define KOF_WEIGHT 0x800u        /* KO_OPACITY and KO_FADE weigh it against what is under it */
+#define KOF_SEE_THROUGH 0x2000u  /* KO_SEE_THROUGH: the texels of one colour drawn at an opacity */
+#define KOF_DIM 0x4000u          /* `dim`: its colours times KO_OPACITY's factor, toward black (not a weight) */
+#define KOF_3D 0x8000u           /* `3d`: the 3D at the texel (the backdrop where none is), not its source */
+#define KOF_IMAGE 0x10000u       /* an independent RGBA image; KO_KEYS holds its replacement id */
+#define KOF_NATIVE_FADE 0x20000u /* image group: apply its native layer's fade after composing its images */
 
 #define KO_SRC_X 1 /* float: the source rectangle, DS dots of its screen */
 #define KO_SRC_Y 2
@@ -37,6 +38,8 @@
 #define KO_SCALE_Y 17
 #define KO_SEE_THROUGH 18 /* a colour (BGR555, bits 0-14) its texels drawn at an opacity (bits 16-23, of 255) */
 #define KO_ROUND 19       /* float: the corners' radius, source dots */
+#define KO_IMAGE_GROUP KO_KEY_COUNT /* KOF_NATIVE_FADE: engine/layer identity, not a colour-key count */
+#define KO_IMAGE_ALPHA KO_ROUND     /* KOF_NATIVE_FADE: float, the native layer's opacity */
 
 /* The pass's constants: the picture's width C in DS dots, the internal
  * resolution, the shapes' count, the frame (KOS_*), the brightness rule
@@ -148,6 +151,8 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
     uint under = ((x3d >> 24) & 1u) != 0u ? x3d & 0xffffffu : backdrop;
     uint result = under;
     float image_r = 0.0f, image_g = 0.0f, image_b = 0.0f, through = 1.0f;
+    float group_r = 0.0f, group_g = 0.0f, group_b = 0.0f, group_through = 1.0f, group_alpha = 1.0f;
+    uint group = 0xffffffffu;
     int image_from = -1;
     int from = -1; /* the screen whose brightness the texel takes: -1 the 3D's or the backdrop's */
     for (i = 0u; i < shape_count; ++i) {
@@ -174,13 +179,26 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
         fx = (px - x1) / sx;
         fy = (py - y1) / sy;
         if ((flags & KOF_IMAGE) != 0u) {
+            const uint next_group = (flags & KOF_NATIVE_FADE) != 0u ? KO_SHAPE(i, KO_IMAGE_GROUP) : 0u;
+            if (next_group != group) {
+                image_r += through * group_alpha * group_r;
+                image_g += through * group_alpha * group_g;
+                image_b += through * group_alpha * group_b;
+                through *= 1.0f - (1.0f - group_through) * group_alpha;
+                group_r = group_g = group_b = 0.0f;
+                group_through = 1.0f;
+                group = next_group;
+                group_alpha = (flags & KOF_NATIVE_FADE) != 0u ? ko_float(i, KO_IMAGE_ALPHA) : 1.0f;
+            }
             const uint t = KO_IMAGE(KO_SHAPE(i, KO_KEYS), fx, fy);
+            const uint rgb =
+                (flags & KOF_DIM) != 0u ? ko_mix(0u, t & 0xffffffu, ko_float(i, KO_OPACITY)) : t & 0xffffffu;
             const float a = (float)(t >> 24) / 255.0f;
-            image_r += through * a * (float)(t & 255u);
-            image_g += through * a * (float)((t >> 8) & 255u);
-            image_b += through * a * (float)((t >> 16) & 255u);
-            through *= 1.0f - a;
-            if (a > 0.0f && image_from < 0)
+            group_r += group_through * a * (float)(rgb & 255u);
+            group_g += group_through * a * (float)((rgb >> 8) & 255u);
+            group_b += group_through * a * (float)((rgb >> 16) & 255u);
+            group_through *= 1.0f - a;
+            if (a > 0.0f && group_alpha > 0.0f && image_from < 0)
                 image_from = (flags & KOF_LOWER) != 0u ? 1 : 0;
             continue;
         }
@@ -277,6 +295,10 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
         }
         break;
     }
+    image_r += through * group_alpha * group_r;
+    image_g += through * group_alpha * group_g;
+    image_b += through * group_alpha * group_b;
+    through *= 1.0f - (1.0f - group_through) * group_alpha;
     if (through < 1.0f) {
         result = (uint)(image_r + through * (float)(result & 255u) + 0.5f) |
                  ((uint)(image_g + through * (float)((result >> 8) & 255u) + 0.5f) << 8) |

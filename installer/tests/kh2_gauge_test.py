@@ -169,6 +169,29 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual((party["limit_circle"], party["limit_bar"], party["limit_marker"]), (-1, -1, -1))
                 self.assertEqual(party["center_normal"], 156)
                 self.assertEqual(party["cap"], 144)
+                enemy = config["enemy"]
+                self.assertTrue(enemy["enabled"])
+                self.assertEqual(enemy["scale"], 0.65)
+                self.assertEqual(enemy["texture"], f"{region.upper()}_zz0field_2dd1.png")
+                self.assertEqual((enemy["source_origin_x"], enemy["source_origin_y"]), (498, 31))
+                self.assertEqual(
+                    [
+                        enemy[key]
+                        for key in (
+                            "background",
+                            "bar_background",
+                            "cap",
+                            "damage",
+                            "preview",
+                            "fill",
+                            "tank_full",
+                            "tank_empty",
+                            "tank_damage",
+                        )
+                    ],
+                    list(range(38, 47)),
+                )
+                self.assertEqual(changed[4][38:47], old[4][38:47])
                 source = root / "source/original" / f"field2d/{region}/zz0field.2dd"
                 self.assertEqual(source.read_bytes(), original)
                 texture = root / "source/remastered" / f"field2d/{region}/zz0field.2dd" / config["texture"]
@@ -197,6 +220,7 @@ class GaugeImport(unittest.TestCase):
                 "limit_marker": -1,
                 "texture": "old.png",
                 "source_origin_x": 455,
+                "enemy": {"offset_x": -4, "scale": 0.75, "fill": 43, "enabled": False},
             }
             (previous / "gauge.json").write_text(json.dumps(custom))
             (previous / "party.json").write_text(json.dumps({"offset_y": 9, "center_override": 156, "limit_bar": 140}))
@@ -206,6 +230,8 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual(config[key], custom[key])
             self.assertEqual(config["texture"], "US_zz0field_2dd1.png")
             self.assertEqual(config["source_origin_x"], 0)
+            for key, value in custom["enemy"].items():
+                self.assertEqual(config["enemy"][key], value)
             party = config["party"]
             self.assertEqual((party["offset_y"], party["center_override"], party["limit_bar"]), (9, 156, -1))
             self.assertEqual(json.loads((previous / "gauge.json").read_text()), custom)

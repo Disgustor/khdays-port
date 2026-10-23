@@ -629,7 +629,9 @@ void khdays_ui_collect(int wide_margin, int upper)
     for (int e = 0; e < 2; ++e) {
         int moved = 0;
         for (int i = 0; i < entry_count && !moved; ++i) {
-            moved = entries[i].source == e && entries[i].e.screen != e;
+            moved =
+                entries[i].source == e &&
+                (entries[i].e.screen != e || ((entries[i].e.slot & KES_PICTURE) && !(entries[i].e.slot & KES_DIRECT)));
         }
         if (moved) {
             palettes_seen[e] = palettes_of(e);
@@ -638,9 +640,8 @@ void khdays_ui_collect(int wide_margin, int upper)
     qsort(entries, (size_t)entry_count, sizeof(Entry), above);
     for (int i = 0; i < entry_count; ++i) {
         Entry *n = &entries[i];
-        if (n->e.screen != n->source && !(n->e.slot & KES_DIRECT)) {
-            /* on the other screen: its colours from its own engine's palettes
-             * (an image of colours already needs none) */
+        if ((n->e.screen != n->source || (n->e.slot & KES_PICTURE)) && !(n->e.slot & KES_DIRECT)) {
+            /* Independent images and cross-screen elements need colours from their source palette. */
             const int direct = direct_image(n);
             if (direct < 0) {
                 continue;

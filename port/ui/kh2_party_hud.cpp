@@ -320,7 +320,7 @@ extern "C" int khdays_ui_kh2_party_compose(int slot, const KhdaysUiElement *face
             khdays_ui_image_end(s.image);
         }
         auto e = *face;
-        e.slot = KES_DIRECT | KES_PICTURE | 3;
+        e.slot = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
         e.x = float(left);
         e.y = float(top);
         e.w = float(width);

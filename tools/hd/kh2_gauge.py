@@ -60,7 +60,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         converted, party_clips = add_party_gauges(converted)
         config = deepcopy(defaults)
         config.update(archive="zz0field.2dd", texture=texture, source_origin_x=0, source_origin_y=0)
-        for name in ("player_icon", "limit_text"):
+        for name in ("player_icon", "limit_text", "enemy"):
             config[name].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config.update(limit_circle=limit[0], limit_bar=limit[1], limit_marker=marker)
         party = party_config(config, party_clips)

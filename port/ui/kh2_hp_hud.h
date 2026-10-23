@@ -11,6 +11,7 @@ extern "C" {
 #include "../gfx/sequence_image.h"
 void khdays_ui_kh2_hp_frame(unsigned frame);
 int khdays_ui_kh2_hp_ready(void);
+void khdays_ui_kh2_hp_prepare(void);
 /* Absolute animated center; other slots use their native anchor until they have a gauge. */
 int khdays_ui_kh2_hp_parent(int slot, KhdaysHudParent *parent);
 int khdays_ui_kh2_hp_cell(int screen, int bg, const KhdaysBgLayer *layer, unsigned entry);

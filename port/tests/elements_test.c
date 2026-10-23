@@ -243,7 +243,7 @@ int main(void)
     /* Independent images are drawn separately from the one-screen source crop. */
     scene();
     image(1, 8, 8, 1);
-    element(r, 1 | KES_PICTURE, 40, 40, 8, 8, 1, 8, 8);
+    element(r, 1 | KES_PICTURE | KES_HUD, 40, 40, 8, 8, 1, 8, 8);
     compose(0, r, 1, NULL, out);
     CHECK(out[40 * W + 40] != out[0]);
     desc[KD_FLAGS] |= KDF_SPLIT | KDF_FINE;

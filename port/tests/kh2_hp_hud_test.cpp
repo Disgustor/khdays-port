@@ -24,6 +24,8 @@ int limit_hp = 62;
 KhdaysLinkLimitClock limit_clock{};
 int native_w, native_h;
 int rgba_reads, uploads, test_scale = 1;
+bool gauge_origin = true;
+std::vector<std::array<int, 3>> suppressed;
 std::vector<std::uint32_t> image;
 KhdaysUiElement emitted{}, box{};
 std::filesystem::path config_path;
@@ -57,6 +59,26 @@ int khdays_mods_find(const char *name, char *out, int size)
     return 1;
 }
 unsigned char *khdays_window = memory.data();
+int khdays_bg_text_layer(int screen, int bg, KhdaysBgLayer *layer)
+{
+    if (screen || bg != 3)
+        return 0;
+    *layer = {0, 0, 32, 32, 0, 0, 0, 3};
+    return 1;
+}
+unsigned khdays_bg_map_entry(int, const KhdaysBgLayer *, int x, int y)
+{
+    return x == 2 && y == 3 ? 64 : 0;
+}
+const char *khdays_bg_origin(int, unsigned)
+{
+    return gauge_origin ? "UI/btl/main.p2#4" : "UI/unrelated";
+}
+void khdays_ui_left_out_cell(int, int screen, int bg, int x, int y)
+{
+    expect(screen == 0, "gauge suppression changed engine");
+    suppressed.push_back({bg, x, y});
+}
 int khdays_ui_kh2_party_parent(int, KhdaysHudParent *)
 {
     return 0;
@@ -235,6 +257,20 @@ int main()
                "unrelated tile removed");
         expect(!khdays_ui_kh2_hp_cell(1, 3, &layer, 64) && !khdays_ui_kh2_hp_cell(0, 2, &layer, 64),
                "unrelated layer removed");
+        khdays_ui_kh2_hp_prepare();
+        expect(suppressed == std::vector<std::array<int, 3>>{{3, 2, 3}},
+               "moved gauge tile escaped suppression outside the portrait region");
+        suppressed.clear();
+        gauge_origin = false;
+        khdays_ui_kh2_hp_prepare();
+        expect(suppressed.empty(), "gauge suppression removed an unrelated file's tile");
+        gauge_origin = true;
+        for (int width : {8, 16, 32, 64}) {
+            std::vector<unsigned char> strip(std::size_t(width) * 8u, 1);
+            expect(khdays_ui_kh2_hp_sprite(strip.data(), width, 8), "temporary gauge strip escaped suppression");
+            strip[0] = 2;
+            expect(!khdays_ui_kh2_hp_sprite(strip.data(), width, 8), "unrelated sprite strip removed");
+        }
         std::array<unsigned char, 128> pixels;
         pixels.fill(1);
         expect(khdays_ui_kh2_hp_sprite(pixels.data(), 16, 8), "live gauge OBJ copy not recognized");
@@ -247,6 +283,7 @@ int main()
         expect(box.x == face.x && box.w == face.w, "gauge changed the portrait's layout box");
         expect(emitted.x + emitted.w == 272, "circle still cropped at the portrait's right edge");
         expect((emitted.slot & KES_PICTURE) != 0, "gauge still confined to a screen crop");
+        expect((emitted.slot & KES_HUD) != 0, "gauge does not follow single-screen HUD visibility");
         paused = 1;
         changed = 0;
         khdays_ui_kh2_hp_frame(110);

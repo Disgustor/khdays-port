@@ -4,6 +4,8 @@
 #include "../gfx/describe.h"
 #include "../ui/composition.h"
 #include "../host/render/png_io.h"
+#include "../host/render/onescreen_images.h"
+#include "../runtime/display/frame_package.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -767,10 +769,12 @@ static void test_title_prompt(void)
 
 typedef uint32_t uint;
 
-static uint32_t shape_words[4][KO_WORDS];
+static uint32_t shape_words[32][KO_WORDS];
 static uint32_t key_words[4];
 static uint32_t upper_src[192][256], lower_src[192][256]; /* as KO_SOURCE gives them */
 static uint32_t image_colour;
+static uint32_t image_colours[16];
+static int use_image_colours;
 
 static uint32_t source(uint32_t lower, float x, float y)
 {
@@ -793,7 +797,7 @@ static float as_float(uint32_t u)
 #define KO_FLOOR(f) floorf(f)
 #define KO_ABS(i) abs(i)
 #define KO_SOURCE(lower, x, y) source((lower), (x), (y))
-#define KO_IMAGE(image, x, y) image_colour
+#define KO_IMAGE(image, x, y) (use_image_colours ? image_colours[(image)] : image_colour)
 #include "../gfx/onescreen.h"
 
 static void put_float(uint32_t *w, int at, float f)
@@ -946,6 +950,175 @@ static void test_independent_image(void)
     CHECK(ko_pixel(60.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0, 0, 128, 1) == 0xffu);
     image_colour = 0xff00ff00u;
     CHECK(ko_pixel(60.5f, 60.5f, 1, 0, 2, KOB_DEFAULT, 0x8010, 0, 128, 1) == 0);
+}
+
+static int image_shapes(const KhdaysComposition *comp)
+{
+    int count = 0;
+    for (int i = 0; i < comp->shape_count; ++i)
+        count += (comp->shapes[i].words[KO_FLAGS] & KOF_IMAGE) != 0;
+    return count;
+}
+
+static void test_native_hud_fade(void)
+{
+    memset(upper_src, 0, sizeof(upper_src));
+    memset(lower_src, 0, sizeof(lower_src));
+    use_image_colours = 1;
+    image_colours[1] = 0xff0000ffu; /* opaque portrait over the green gauge */
+    image_colours[2] = 0xff00ff00u;
+    for (int i = 0; i < 2; ++i) {
+        shape(i, KOF_IMAGE | KOF_NATIVE_FADE, 0, 0, 32, 32, 50, 50, 1);
+        shape_words[i][KO_KEYS] = (uint32_t)i + 1u;
+        shape_words[i][KO_IMAGE_GROUP] = 4;
+    }
+    for (int level = 0; level <= 16; ++level) {
+        const float alpha = (float)level / 16;
+        put_float(shape_words[0], KO_IMAGE_ALPHA, alpha);
+        put_float(shape_words[1], KO_IMAGE_ALPHA, alpha);
+        const uint32_t expected = (uint32_t)(255 * alpha + 0.5f) | ((uint32_t)(255 * (1 - alpha) + 0.5f) << 16);
+        CHECK(ko_pixel(60.5f, 60.5f, 1, 0x01ff0000u, 2, KOB_DEFAULT, 0, 0, 128, 1) == expected);
+    }
+    put_float(shape_words[0], KO_IMAGE_ALPHA, 0.5f);
+    put_float(shape_words[1], KO_IMAGE_ALPHA, 0.5f);
+    image_colours[1] = 0x800000ffu;
+    const uint32_t mixed = ko_pixel(60.5f, 60.5f, 1, 0x01ff0000u, 2, KOB_DEFAULT, 0, 0, 128, 1);
+    CHECK(abs((int)(mixed & 255u) - 64) <= 1 && abs((int)((mixed >> 8) & 255u) - 64) <= 1 &&
+          ((mixed >> 16) & 255u) == 128u);
+    /* An independent foreground image does not inherit the HUD group's fade. */
+    memcpy(shape_words[2], shape_words[1], sizeof(shape_words[2]));
+    shape_words[1][KO_KEYS] = 1;
+    shape_words[0][KO_FLAGS] = KOF_IMAGE;
+    shape_words[0][KO_KEYS] = 3;
+    image_colours[3] = 0xffffffffu;
+    CHECK(ko_pixel(60.5f, 60.5f, 1, 0x01ff0000u, 3, KOB_DEFAULT, 0, 0, 128, 1) == 0xffffffu);
+    use_image_colours = 0;
+}
+
+static void test_hud_image_layers(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    uint32_t records[6][KE_WORDS] = {0};
+    /* Number label, portrait, player gauge, party gauge, LIMIT, enemy gauge. */
+    const float rects[6][4] = {{180, 180, 16, 8},  {200, 130, 54, 62}, {90, 120, 166, 72},
+                               {200, 100, 54, 32}, {146, 174, 40, 8},  {120, 40, 136, 16}};
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    p->elements[0].records = records[0];
+    p->elements[0].count = 6;
+    for (int i = 0; i < 6; ++i) {
+        records[i][KE_SLOT] = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
+        records[i][KE_IMAGE] = (uint32_t)i + 1u;
+        for (int a = 0; a < 4; ++a)
+            put_float(records[i], KE_X + a, rects[i][a]);
+        records[i][KE_IW] = (uint32_t)rects[i][2] * 4u;
+        records[i][KE_IH] = (uint32_t)rects[i][3] * 4u;
+    }
+    p->enemy_image.words[KSI_OUTPUT] = 6;
+    p->enemy_image.words[KSI_ANCHORED] = 1;
+    put_float(p->enemy_image.words, KSI_ANCHOR_X, 254);
+    put_float(p->enemy_image.words, KSI_ANCHOR_Y, 12);
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    for (int width = 256; width <= 512; width += 128) {
+        for (int size = 1; size <= 8; size += size == 1 ? 3 : 4) {
+            KhdaysComposition comp;
+            KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+            khdays_composition_set_hud_size(size);
+            khdays_composition_for(&s, width, &comp);
+            const int original = comp.shape_count;
+            khdays_onescreen_images(p, &s, &comp);
+            CHECK(image_shapes(&comp) == 6 && comp.shape_count == original + 6);
+            for (int i = 0, last = 0; i < comp.shape_count; ++i) {
+                const uint32_t *w = comp.shapes[i].words;
+                if ((w[KO_FLAGS] & KOF_IMAGE) && w[KO_KEYS] <= 5) {
+                    CHECK((int)w[KO_KEYS] > last); /* keep labels above their gauges */
+                    last = (int)w[KO_KEYS];
+                    if (w[KO_KEYS] == 3) {
+                        const float scale = word_float(w, KO_SCALE_X);
+                        CHECK(word_float(w, KO_DST_X2) - word_float(w, KO_DST_X1) > 128 * 4 * scale);
+                    }
+                }
+            }
+        }
+    }
+    khdays_composition_set_hud_size(4);
+    for (int level = 0; level <= 16; ++level) {
+        KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+        KhdaysComposition comp;
+        p->desc2d[0][KD_BLEND] = 8u | (0x21u << 8) | (1u << 16);
+        p->desc2d[0][KD_COEF] = (uint32_t)level | ((uint32_t)(16 - level) << 8);
+        khdays_composition_for(&s, 342, &comp);
+        khdays_onescreen_images(p, &s, &comp);
+        CHECK(image_shapes(&comp) == 6);
+        for (int i = 0; i < comp.shape_count; ++i) {
+            const uint32_t *w = comp.shapes[i].words;
+            if (w[KO_FLAGS] & KOF_IMAGE) {
+                CHECK(w[KO_FLAGS] & KOF_NATIVE_FADE);
+                CHECK(w[KO_IMAGE_GROUP] == 4);
+                CHECK(word_float(w, KO_IMAGE_ALPHA) == (float)level / 16);
+            }
+        }
+    }
+    {
+        KhdaysSituation s = {KHDAYS_SIT_TUTORIAL, 1u << KHDAYS_ST_HUD};
+        KhdaysComposition comp;
+        khdays_composition_for(&s, 342, &comp);
+        khdays_onescreen_images(p, &s, &comp);
+        CHECK(image_shapes(&comp) == 6 && comp.shape_count == 9);
+        CHECK(comp.shapes[0].words[KO_FLAGS] == KOF_LOWER); /* tutorial page stays above every HUD image */
+        for (int i = 1; i <= 6; ++i) {
+            const uint32_t *w = comp.shapes[i].words;
+            CHECK((w[KO_FLAGS] & (KOF_IMAGE | KOF_DIM)) == (KOF_IMAGE | KOF_DIM));
+            CHECK(fabsf(word_float(w, KO_OPACITY) - 0.35f) < 0.001f);
+        }
+        CHECK(comp.shape_count <= 32);
+        memcpy(shape_words, comp.shapes, (size_t)comp.shape_count * sizeof(*comp.shapes));
+        memset(upper_src, 0, sizeof(upper_src));
+        for (int y = 0; y < 192; ++y)
+            for (int x = 0; x < 256; ++x)
+                lower_src[y][x] = 0x010000ffu;
+        image_colour = 0xff00ff00u;
+        const uint32_t *gauge = comp.shapes[3].words;
+        const float px = floorf((word_float(gauge, KO_DST_X1) + word_float(gauge, KO_DST_X2)) * 0.5f) + 0.5f;
+        const float py = floorf((word_float(gauge, KO_DST_Y1) + word_float(gauge, KO_DST_Y2)) * 0.5f) + 0.5f;
+        CHECK(ko_pixel(px, py, 1, 0, (uint32_t)comp.shape_count, KOB_OWN, 0, 0, 171, 1) == 0xffu);
+        const int x = (int)(px - word_float(comp.shapes[0].words, KO_DST_X1));
+        const int y = (int)(py - word_float(comp.shapes[0].words, KO_DST_Y1));
+        CHECK(x >= 0 && x < 256 && y >= 0 && y < 192);
+        if (x >= 0 && x < 256 && y >= 0 && y < 192)
+            lower_src[y][x] = 0;
+        CHECK(ko_pixel(px, py, 1, 0, (uint32_t)comp.shape_count, KOB_OWN, 0, 0, 171, 1) == 0x5900u);
+    }
+    {
+        const KhdaysSituation hidden[] = {{KHDAYS_SIT_PAUSE, 0},
+                                          {KHDAYS_SIT_GAME_OVER, 0},
+                                          {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_DIALOG},
+                                          {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_INFO_UPPER},
+                                          {KHDAYS_SIT_FIELD, 0},
+                                          {KHDAYS_SIT_TUTORIAL, 0}};
+        for (size_t i = 0; i < sizeof(hidden) / sizeof(hidden[0]); ++i) {
+            KhdaysComposition comp;
+            khdays_composition_for(&hidden[i], 342, &comp);
+            const int original = comp.shape_count;
+            khdays_onescreen_images(p, &hidden[i], &comp);
+            CHECK(image_shapes(&comp) == 0 && comp.shape_count == original);
+        }
+    }
+    /* HUD visibility does not suppress independent images belonging to a menu. */
+    {
+        KhdaysSituation s = {KHDAYS_SIT_PAUSE, 0};
+        KhdaysComposition comp;
+        p->elements[0].count = 1;
+        records[0][KE_SLOT] &= ~KES_HUD;
+        put_float(records[0], KE_X, 100);
+        put_float(records[0], KE_Y, 80);
+        khdays_composition_for(&s, 342, &comp);
+        khdays_onescreen_images(p, &s, &comp);
+        CHECK(image_shapes(&comp) == 1);
+    }
+    free(p);
 }
 
 /* --- The upper screen's 2D apart from its 3D ------------------------------------------- */
@@ -1112,6 +1285,8 @@ int main(void)
     test_title_prompt();
     test_steps();
     test_independent_image();
+    test_native_hud_fade();
+    test_hud_image_layers();
     test_split();
     test_split_under_3d();
     test_swap_skips();

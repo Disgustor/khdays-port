@@ -305,7 +305,7 @@ target_include_directories(khdays-kh2-sequence PUBLIC ../assets/include)
 target_include_directories(khdays-kh2-sequence PRIVATE "${stb_SOURCE_DIR}")
 target_compile_options(khdays-kh2-sequence PRIVATE /W4 /std:c++20 /EHsc)
 
-add_library(khdays-kh2-gauge STATIC ui/kh2_hp_gauge.cpp ui/kh2_hp_config.cpp)
+add_library(khdays-kh2-gauge STATIC ui/kh2_hp_gauge.cpp ui/kh2_hp_config.cpp ui/kh2_enemy_gauge.cpp)
 target_link_libraries(khdays-kh2-gauge PUBLIC khdays-kh2-sequence)
 target_compile_options(khdays-kh2-gauge PRIVATE /W4 /std:c++20 /EHsc)
 
@@ -327,6 +327,14 @@ add_executable(khdays-kh2-hud-test tests/kh2_hp_hud_test.cpp ui/kh2_hp_hud.cpp)
 target_link_libraries(khdays-kh2-hud-test PRIVATE khdays-kh2-gauge)
 target_compile_options(khdays-kh2-hud-test PRIVATE /W4 /std:c++20 /EHsc)
 add_test(NAME khdays-kh2-hud COMMAND khdays-kh2-hud-test)
+
+add_executable(khdays-kh2-enemy-test tests/kh2_enemy_test.cpp ui/kh2_enemy_hud.cpp)
+target_link_libraries(khdays-kh2-enemy-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-kh2-enemy-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-enemy COMMAND khdays-kh2-enemy-test)
+add_test(NAME khdays-kh2-enemy-missing COMMAND khdays-kh2-enemy-test --missing)
+add_test(NAME khdays-kh2-enemy-legacy COMMAND khdays-kh2-enemy-test --no-config)
+add_test(NAME khdays-kh2-enemy-reference COMMAND khdays-kh2-enemy-test --reference)
 
 add_executable(khdays-kh2-limit-timing-test tests/kh2_limit_timing_test.c)
 target_include_directories(khdays-kh2-limit-timing-test PRIVATE "${DECOMP}/include")
@@ -504,6 +512,7 @@ add_executable(khdays-native
     host/render/gfx_render.c
     host/render/kh2_sequence_gpu.c
     host/render/onescreen.c               # the one picture's situation and composition
+    host/render/onescreen_images.c
     host/screens/layout_screen.c           # the port's screens drawn from a mod's pieces
     host/screens/save_screen.c             # the port's save list on the screen
     host/screens/cine_screen.c             # MODO CINE's list as the HD theater's chapters
@@ -545,6 +554,7 @@ add_executable(khdays-native
     ui/bg.c
     ui/hud.c
     ui/kh2_hp_hud.cpp
+    ui/kh2_enemy_hud.cpp
     ui/kh2_party_hud.cpp
     ui/kh2_hud_labels.cpp
     ui/kh2_portrait_hud.cpp
@@ -704,7 +714,7 @@ add_test(NAME khdays-mod-polygon COMMAND khdays-mod-polygon-test)
 # The one-screen picture: the compositions' places and the port's own file, the pass's steps and the 2D
 # apart from the 3D, on the CPU.
 add_executable(khdays-onescreen-test tests/onescreen_test.c ui/composition.c ui/situation.c ui/situation_decide.c
-                                     host/render/png_io.c)
+                                     host/render/png_io.c host/render/onescreen_images.c)
 target_include_directories(khdays-onescreen-test PRIVATE "${stb_SOURCE_DIR}")
 target_link_libraries(khdays-onescreen-test PRIVATE khdays-gfx SDL3::SDL3)
 target_compile_definitions(khdays-onescreen-test PRIVATE "KHDAYS_PORT_COMPOSITIONS_FILE=\"${KHDAYS_PORT_COMPOSITIONS}\""

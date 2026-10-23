@@ -21,6 +21,7 @@
 #define KSI_FACE_Y 13u
 #define KSI_FACE_W 14u
 #define KSI_FACE_H 15u
+#define KSI_CLEAR 16u /* a valid transparent portrait frame still clears its previous image */
 #define KSI_FLAGS 20u
 #define KSI_DEPTH 21u
 #define KSI_BLEND 22u

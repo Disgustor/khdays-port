@@ -2,6 +2,7 @@
 #include "../gfx/kh2_sequence.h"
 #include "../host/render/kh2_sequence_asset.h"
 #include "../ui/kh2_hp_gauge.h"
+#include "../ui/kh2_hp_config.h"
 extern "C" {
 #include "../host/render/png_io.h"
 }
@@ -31,6 +32,8 @@ void help()
                  "  --output FILE.png              render one frame and exit\n"
                  "  --list                         print the clip table and exit\n"
                  "  --hp DAYS_HP --max-hp DAYS_HP   display the separate HP gauge composition\n"
+                 "  --config FILE.json             inspect a player or party gauge configuration\n"
+                 "  --party N                      select party slot 1-3 from that configuration\n"
                  "  --previous-hp DAYS_HP --damage-frame F --reaction small|medium|large\n"
                  "  --status normal|alert|dead --play --run-frames N\n"
                  "KHDAYS_KH2_ASSET_DIR can supply --root. No extraction is performed.\n"
@@ -64,16 +67,18 @@ int main(int argc, char **argv)
     SDL_Renderer *renderer = nullptr;
     SDL_Texture *texture = nullptr;
     try {
-        std::filesystem::path root, archive, picture, output;
+        std::filesystem::path root, archive, picture, output, config_path;
         if (const char *env = std::getenv("KHDAYS_KH2_ASSET_DIR"))
             root = env;
         std::string entry = "gaug";
         std::size_t clip = 121;
+        std::size_t config_slot = 0;
         float frame = 0, scale = 3, fps = 60;
         bool list = false, autoplay = false;
         std::size_t frame_limit = 0;
         bool hp_mode = false;
         gauge::HpGaugeSample hp;
+        gauge::HpGaugeStyle style;
         for (int i = 1; i < argc; ++i) {
             const std::string option = argv[i];
             if (option == "--help") {
@@ -99,7 +104,13 @@ int main(int argc, char **argv)
                 picture = value;
             else if (option == "--entry")
                 entry = value;
-            else if (option == "--sequence")
+            else if (option == "--config")
+                config_path = value;
+            else if (option == "--party") {
+                config_slot = std::stoull(value);
+                if (config_slot < 1 || config_slot > 3)
+                    throw std::runtime_error("party slot must be 1-3");
+            } else if (option == "--sequence")
                 clip = std::stoull(value);
             else if (option == "--frame")
                 frame = std::stof(value);
@@ -146,6 +157,16 @@ int main(int argc, char **argv)
             } else
                 throw std::runtime_error("unknown option " + option);
         }
+        if (!config_path.empty()) {
+            const auto c = gauge::load_hp_gauge_configs(config_path)[config_slot];
+            style = c.style;
+            entry = c.entry;
+            if (archive.empty())
+                archive = config_path.parent_path() / c.archive;
+            if (picture.empty())
+                picture = config_path.parent_path() / c.texture;
+            hp_mode = true;
+        }
         if ((archive.empty() || picture.empty()) && root.empty()) {
             help();
             return 1;
@@ -180,7 +201,7 @@ int main(int argc, char **argv)
                     pixels[std::size_t(y) * 800 + std::size_t(x)] = ((x / 16 + y / 16) & 1) ? 0xff383838 : 0xff282828;
             hp.frame = player.frame();
             hp.damage_frame = std::max(0.0f, player.frame() + damage_offset);
-            const auto evaluated = hp_mode ? gauge::evaluate_hp_gauge(asset.sequence, hp)
+            const auto evaluated = hp_mode ? gauge::evaluate_hp_gauge(asset.sequence, hp, style)
                                            : kh2::evaluate_sequence(asset.sequence, player.clip(), player.frame());
             render::draw_sequence(evaluated.quads, asset.texture, asset.logical_size[0], asset.logical_size[1], pixels,
                                   800, 500, view);

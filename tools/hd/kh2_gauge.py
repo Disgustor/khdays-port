@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 from PIL import Image
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "port" / "tools"))
 from kh2_add_limit_gauge import add_limit_gauge  # noqa: E402
 from kh2_add_limit_marker import add_limit_marker  # noqa: E402
+from kh2_add_party_gauges import add_party_gauges, party_config  # noqa: E402
 from kh2_center_gauge import recenter_gauge  # noqa: E402
 
 LANGUAGES = {"en": "us", "es": "sp", "fr": "fr", "de": "gr", "it": "it"}
@@ -26,6 +28,23 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
     """Convert original bytes once per language; validate every input before publishing any files."""
     defaults = json.loads((ROOT / CONFIG).read_text(encoding="utf-8"))
     prepared = []
+
+    def merge(base, custom, prefix=""):
+        schema = base
+        if prefix in ("party.slots.1", "party.slots.2", "party.slots.3"):
+            schema = defaults
+        elif prefix.endswith("player_icon") or prefix.endswith("limit_text"):
+            schema = defaults["player_icon"]
+        for key, value in custom.items():
+            if key not in schema:
+                raise ValueError(f"unsupported gauge setting: {prefix}.{key}")
+            if isinstance(schema[key], dict):
+                if not isinstance(value, dict):
+                    raise ValueError(f"expected an object for {key}")
+                merge(base.setdefault(key, {}), value, f"{prefix}.{key}".lstrip("."))
+            else:
+                base[key] = deepcopy(value)
+
     for language in languages:
         region = LANGUAGES[language]
         entry = f"field2d/{region}/zz0field.2dd"
@@ -38,15 +57,39 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
             picture.verify()
         converted, limit = add_limit_gauge(recenter_gauge(original))
         converted, marker = add_limit_marker(converted)
-        config = {**defaults, "archive": "zz0field.2dd", "texture": texture, "source_origin_x": 0, "source_origin_y": 0}
+        converted, party_clips = add_party_gauges(converted)
+        config = deepcopy(defaults)
+        config.update(archive="zz0field.2dd", texture=texture, source_origin_x=0, source_origin_y=0)
+        for name in ("player_icon", "limit_text"):
+            config[name].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config.update(limit_circle=limit[0], limit_bar=limit[1], limit_marker=marker)
+        party = party_config(config, party_clips)
+        party["slots"] = json.loads(json.dumps(defaults["party"]["slots"]))
         previous = settings / language / "gauge.json" if settings else None
+        resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))
             if not isinstance(custom, dict) or set(custom) - set(defaults):
                 raise ValueError(f"unsupported gauge settings in {previous}")
-            resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
-            config.update({key: value for key, value in custom.items() if key not in resources})
+            merge(config, {key: value for key, value in custom.items() if key not in resources | {"party"}})
+            if "party" in custom:
+                merge(party, {key: value for key, value in custom["party"].items() if key not in resources}, "party")
+        previous_party = settings / language / "party.json" if settings else None
+        if (
+            previous_party
+            and previous_party.is_file()
+            and not (previous and previous.is_file() and "party" in json.loads(previous.read_text(encoding="utf-8")))
+        ):
+            custom = json.loads(previous_party.read_text(encoding="utf-8"))
+            if not isinstance(custom, dict) or set(custom) - set(defaults):
+                raise ValueError(f"unsupported party gauge settings in {previous_party}")
+            # The old -8 test offset is now the built-in first-party placement.
+            if custom.get("offset_y") == -8:
+                custom["offset_y"] = 0
+            merge(party, {key: value for key, value in custom.items() if key not in resources}, "party")
+        # Party members never have a Days limit layer, even with a copied player configuration.
+        party.update(limit_circle=-1, limit_bar=-1, limit_marker=-1)
+        config["party"] = party
         prepared.append((language, converted, texture, image.read_bytes(), config))
     for language, archive, texture, pixels, config in prepared:
         folder = output / language
@@ -54,6 +97,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         (folder / "zz0field.2dd").write_bytes(archive)
         (folder / texture).write_bytes(pixels)
         (folder / "gauge.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        (folder / "party.json").unlink(missing_ok=True)
         print(
             f"{language}: KH2 gauge, limit clips {config['limit_circle']}/{config['limit_bar']}, divider {config['limit_marker']}"
         )

@@ -248,6 +248,36 @@ int khdays_link_player_low_hp(void)
     return actor != 0 && func_ov022_020ad7b0(actor);
 }
 
+int khdays_link_hud_portrait(int slot, int *icon, int *hp, int *maximum, int *low_hp)
+{
+    /* Ov002_OpenPanelScreen keeps the already mapped nId/nIcon pairs at +0x130.
+     * Ov002_CreateAndRestoreHud puts the local player first even in multiplayer. */
+    if (slot < 0 || slot >= 4 || !khdays_overlay_loaded(OV_FIELD) || !khdays_overlay_loaded(OV_BATTLE) ||
+        khdays_link_scene(NULL) != FIELD_SCENE || !khdays_game_ram(rd32(PLAYERS))) {
+        return 0;
+    }
+    const unsigned context = rd32(0x0207f614u);
+    if (!khdays_game_ram(context)) {
+        return 0;
+    }
+    const unsigned record = context + 0x130u + (unsigned)slot * 16u;
+    const int member = (int)rd32(record), portrait = (int)rd32(record + 4u);
+    if (member < 0 || member >= 4 || portrait < 0 || portrait >= 21) {
+        return 0;
+    }
+    const unsigned actor = (unsigned)GetEntryField20ByIndex(member);
+    if (!khdays_game_ram(actor)) {
+        return 0;
+    }
+    khdays_link_entity_hp(KHDAYS_W(actor), hp, maximum);
+    if (*maximum <= 0) {
+        return 0;
+    }
+    *icon = portrait;
+    *low_hp = func_ov022_020ad7b0(actor) != 0;
+    return 1;
+}
+
 int khdays_link_player_limit_hp(void)
 {
     const unsigned actor = player_actor();

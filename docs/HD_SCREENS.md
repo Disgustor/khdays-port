@@ -223,9 +223,10 @@ are the maintainer's choices from mock-ups.
 The native KH2 gauge is made by `kh2_gauge.py KH2_FIFTH` (default mod: `HD PACK`).
 Its input is the existing archive reader's `kh2_fifth.hed_out`, with `original/`
 and `remastered/`. The installer extracts its five localized field archives,
-creates the adjusted `.2dd` and JSON, and copies the remastered atlas into
+creates the adjusted `.2dd` and combined player/party `gauge.json`, and copies the remastered atlas into
 `layouts/gauge/<lang>/`. `--settings` names an existing gauge folder whose custom
-animation and position settings should survive rebuilding. The gauge is rendered
+animation and position settings should survive rebuilding, including migration of
+an older `party.json`. The gauges are rendered
 as native animated sequences; see [KH2 sequences](KH2_SEQUENCES.md).
 
 The theater's layouts are L2D files. Their structures are those OpenKh documents

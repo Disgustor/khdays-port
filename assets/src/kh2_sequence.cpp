@@ -167,8 +167,9 @@ SequenceData read_sequence(const std::uint8_t* data, std::size_t size) {
     b.range(0, 0x30);
     if (b.u32(0) != 0x44514553)
         fail("missing SEQD header");
-    if (b.u32(4) != 0x160)
-        fail("unsupported version (expected PC 0x160)");
+    // The supplied PC face resources use both versions with the same five table layouts.
+    if (b.u32(4) != 0x150 && b.u32(4) != 0x160)
+        fail("unsupported version (expected PC 0x150 or 0x160)");
     constexpr std::array<std::size_t, 5> strides{44, 20, 4, 144, 36};
     std::array<std::size_t, 5> counts{}, offsets{};
     for (std::size_t t = 0; t < 5; ++t) {

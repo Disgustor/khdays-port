@@ -57,6 +57,14 @@ int khdays_mods_find(const char *name, char *out, int size)
     return 1;
 }
 unsigned char *khdays_window = memory.data();
+int khdays_ui_kh2_party_parent(int, KhdaysHudParent *)
+{
+    return 0;
+}
+int khdays_ui_kh2_party_ready(int)
+{
+    return 0;
+}
 int khdays_overlay_loaded(int)
 {
     return scene == 2;
@@ -217,6 +225,10 @@ int main()
         khdays_ui_kh2_hp_frame(100);
         std::filesystem::remove(config_path);
         expect(khdays_ui_kh2_hp_ready(), "mod gauge did not auto-enable without launch variables");
+        KhdaysHudParent parent{};
+        expect(khdays_ui_kh2_hp_parent(0, &parent) && parent.x == 230 && parent.y == 160,
+               "portrait anchor does not match the normalized black center");
+        expect(!khdays_ui_kh2_hp_parent(1, &parent), "player gauge claimed a party portrait parent");
         KhdaysBgLayer layer{};
         expect(khdays_ui_kh2_hp_cell(0, 3, &layer, 64), "local HP tile not removed");
         expect(!khdays_ui_kh2_hp_cell(0, 3, &layer, 63) && !khdays_ui_kh2_hp_cell(0, 3, &layer, 74),

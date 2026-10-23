@@ -21,13 +21,35 @@ from kh2_add_limit_gauge import replace_sequence, tables  # noqa: E402
 
 def synthetic_gauge() -> bytes:
     parts = [struct.pack("<I4i2f4I", 0, 99, 60, 144, 105, 0, 0, *([0x80808080] * 4))]
+    parts *= 129
+    for index, uv in (
+        (101, (1, 109, 24, 132)),
+        (102, (223, 72, 237, 99)),
+        (103, (27, 109, 50, 132)),
+        (105, (79, 109, 102, 132)),
+    ):
+        parts[index] = struct.pack("<I4i2f4I", 0, *uv, 0, 0, *([0x80808080] * 4))
+    parts[108] = struct.pack("<I4i2f4I", 0, 99, 60, 144, 105, 0, 0, *([0x80180880] * 4))
     groups = [struct.pack("<4iI", -45, -45, 0, 0, 0)]
-    sprites = [struct.pack("<HH", 0, 1)] * 97
+    sprites = [struct.pack("<HH", 0, 1)] * 118
     animations = []
     clips = [bytes(36)] * 139
-    for index, clip in enumerate((123, 128, 129, *range(132, 139))):
+    for index, clip in enumerate((*range(121, 130), *range(132, 139))):
         animation = bytearray(144)
-        struct.pack_into("<II2i4i", animation, 0, 1, 95, 0, 20, 455, 462, 355, 349)
+        source = {121: 91, 122: 91, 123: 97, 124: 92, 125: 92, 126: 95, 127: 96, 128: 93, 129: 94}.get(clip, 117)
+        struct.pack_into(
+            "<II2i4i",
+            animation,
+            0,
+            1,
+            source,
+            0,
+            20,
+            455 if clip >= 132 else 0,
+            462 if clip >= 132 else 0,
+            355 if clip >= 132 else 0,
+            349 if clip >= 132 else 0,
+        )
         animations.append(bytes(animation))
         clips[clip] = struct.pack("<HH", index, 1) + bytes(32)
     data = bytearray(80)
@@ -53,6 +75,62 @@ def sources(folder: Path) -> bytes:
 
 
 class GaugeImport(unittest.TestCase):
+    def test_party_conversion_preserves_timing_and_centers_the_mirrored_backing(self):
+        centered = gauge.recenter_gauge(synthetic_gauge())
+        entry, old = tables(centered)
+        first = struct.unpack_from("<H", old[4][133])[0]
+        animation = bytearray(old[3][first])
+        struct.pack_into("<4f", animation, 112, 3, 1, -10, 0)
+        old[3][first] = bytes(animation)
+        centered = replace_sequence(centered, entry, old)
+        converted, mapping = gauge.add_party_gauges(centered)
+        _, new = tables(converted)
+        for table in range(5):
+            self.assertEqual(new[table][: len(old[table])], old[table])
+        for original, target in mapping.items():
+            a, n = struct.unpack_from("<HH", old[4][int(original)])
+            b, m = struct.unpack_from("<HH", new[4][target])
+            self.assertEqual(n, m)
+            self.assertEqual(old[4][int(original)][4:], new[4][target][4:])
+            for source, copy in zip(old[3][a : a + n], new[3][b : b + m]):
+                self.assertEqual(source[:4], copy[:4])
+                self.assertEqual(source[8:16], copy[8:16])
+                self.assertEqual(source[48:112], copy[48:112])
+                self.assertEqual(source[128:], copy[128:])
+                for offset in range(16, 48, 4):
+                    self.assertEqual(
+                        struct.unpack_from("<i", copy, offset)[0],
+                        round(struct.unpack_from("<i", source, offset)[0] * 23 / 45),
+                    )
+                for offset in range(112, 128, 4):
+                    self.assertAlmostEqual(
+                        struct.unpack_from("<f", copy, offset)[0],
+                        struct.unpack_from("<f", source, offset)[0] * 23 / 45,
+                        places=5,
+                    )
+        center = new[4][mapping["137"]]
+        first = struct.unpack_from("<H", center)[0]
+        sprite = struct.unpack_from("<I", new[3][first], 4)[0]
+        group, count = struct.unpack("<HH", new[2][sprite])
+        self.assertEqual(count, 2)
+        self.assertEqual(
+            [struct.unpack_from("<4i", g) for g in new[1][group : group + 2]], [(-14, -14, 0, 14), (0, -14, 14, 14)]
+        )
+        left, right = [struct.unpack_from("<I", g, 16)[0] for g in new[1][group : group + 2]]
+        self.assertEqual(struct.unpack_from("<4i", new[0][left], 4), (223, 72, 237, 99))
+        self.assertEqual(struct.unpack_from("<4i", new[0][right], 4), (237, 72, 223, 99))
+        for g in new[1][len(old[1]) :]:
+            x0, y0, x1, y1 = struct.unpack_from("<4i", g)
+            self.assertLessEqual(x0, x1)
+            self.assertLessEqual(y0, y1)
+        cap = struct.unpack_from("<H", new[4][mapping["123"]])[0]
+        sprite = struct.unpack_from("<I", new[3][cap], 4)[0]
+        group, count = struct.unpack("<HH", new[2][sprite])
+        part = struct.unpack_from("<I", new[1][group], 16)[0]
+        self.assertEqual(new[0][part][28:], bytes.fromhex("00000080") * 4)
+        u0, v0, u1, v1 = struct.unpack_from("<4i", new[0][part], 4)
+        self.assertEqual((abs(u1 - u0), abs(v1 - v0)), (23, 1))
+
     def test_installer_carries_the_converter_and_default_settings(self):
         self.assertTrue({"tools/hd/kh2_gauge.py", *setup.HD_MENU_SUPPORT}.issubset(installer.TOOLS))
 
@@ -78,13 +156,19 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual(config["center_normal"], 137)
                 _, old = tables(original)
                 _, changed = tables((folder / "zz0field.2dd").read_bytes())
-                self.assertEqual([len(r) for r in changed], [4, 4, 100, 13, 142])
-                for source, moved in zip(old[3][3:], changed[3][3:10]):
+                self.assertEqual(len(changed[4]), 158)
+                for source, moved in zip(old[3][9:], changed[3][9:16]):
                     self.assertEqual(struct.unpack_from("<4i", moved, 16), (0, 7, 0, -6))
                     self.assertEqual(moved[:16], source[:16])
                     self.assertEqual(moved[32:], source[32:])
-                self.assertEqual(changed[0][-1][28:], bytes.fromhex("FFFFFF80") * 4)
-                self.assertEqual(changed[0][-2][28:], bytes.fromhex("FFE60080") * 4)
+                self.assertEqual(changed[0][131][28:], bytes.fromhex("FFFFFF80") * 4)
+                self.assertEqual(changed[0][130][28:], bytes.fromhex("FFE60080") * 4)
+                party = config["party"]
+                self.assertEqual(party["scale"], 0.65)
+                self.assertAlmostEqual(party["geometry_scale"], 23 / 45)
+                self.assertEqual((party["limit_circle"], party["limit_bar"], party["limit_marker"]), (-1, -1, -1))
+                self.assertEqual(party["center_normal"], 156)
+                self.assertEqual(party["cap"], 144)
                 source = root / "source/original" / f"field2d/{region}/zz0field.2dd"
                 self.assertEqual(source.read_bytes(), original)
                 texture = root / "source/remastered" / f"field2d/{region}/zz0field.2dd" / config["texture"]
@@ -115,16 +199,22 @@ class GaugeImport(unittest.TestCase):
                 "source_origin_x": 455,
             }
             (previous / "gauge.json").write_text(json.dumps(custom))
+            (previous / "party.json").write_text(json.dumps({"offset_y": 9, "center_override": 156, "limit_bar": 140}))
             gauge.make_gauge(root / "source", root / "out", ["en"], root / "settings")
             config = json.loads((root / "out/en/gauge.json").read_text())
             for key in ("portrait_offset_y", "offset_x", "center_override", "limit_marker"):
                 self.assertEqual(config[key], custom[key])
             self.assertEqual(config["texture"], "US_zz0field_2dd1.png")
             self.assertEqual(config["source_origin_x"], 0)
+            party = config["party"]
+            self.assertEqual((party["offset_y"], party["center_override"], party["limit_bar"]), (9, 156, -1))
             self.assertEqual(json.loads((previous / "gauge.json").read_text()), custom)
 
     def test_support_changes_invalidate_hd_install_cache(self):
         before = setup.made_by("hd-menus")
+        template = dict(setup.HD_MENU_TOOLS)["kh2_gauge.py"]
+        gauge_before = setup.tool_made_by("kh2_gauge.py", template)
+        font_before = setup.tool_made_by("kh2_fonts.py", ["{kh2}"])
         read = Path.read_bytes
 
         def changed(path):
@@ -132,6 +222,57 @@ class GaugeImport(unittest.TestCase):
 
         with patch.object(Path, "read_bytes", changed):
             self.assertNotEqual(before, setup.made_by("hd-menus"))
+            self.assertNotEqual(gauge_before, setup.tool_made_by("kh2_gauge.py", template))
+            self.assertEqual(font_before, setup.tool_made_by("kh2_fonts.py", ["{kh2}"]))
+
+    def test_legacy_party_file_is_merged_and_test_lift_becomes_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources(root / "source")
+            settings = root / "pack/en"
+            settings.mkdir(parents=True)
+            (settings / "gauge.json").write_text(json.dumps({"portrait_offset_y": -2}))
+            (settings / "party.json").write_text(json.dumps({"offset_y": -8, "offset_x": 3}))
+            gauge.make_gauge(root / "source", root / "pack", ["en"], root / "pack")
+            config = json.loads((settings / "gauge.json").read_text())
+            self.assertFalse((settings / "party.json").exists())
+            self.assertEqual(config["portrait_offset_y"], -2)
+            self.assertEqual((config["party"]["offset_x"], config["party"]["offset_y"]), (3, 0))
+            self.assertFalse(config["player_icon"]["enabled"])
+            self.assertFalse(config["limit_text"]["enabled"])
+
+    def test_nested_slot_settings_do_not_leak_into_other_slots_or_languages(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources(root / "source")
+            settings = root / "settings/en"
+            settings.mkdir(parents=True)
+            custom = {
+                "party": {
+                    "offset_x": 2,
+                    "slots": {
+                        "2": {
+                            "offset_x": 11,
+                            "player_icon": {
+                                "enabled": True,
+                                "animation": 1,
+                                "archive": "icons.any",
+                                "texture": "icons.dds",
+                            },
+                        }
+                    },
+                }
+            }
+            (settings / "gauge.json").write_text(json.dumps(custom))
+            gauge.make_gauge(root / "source", root / "out", ["en", "fr"], root / "settings")
+            en = json.loads((root / "out/en/gauge.json").read_text())
+            fr = json.loads((root / "out/fr/gauge.json").read_text())
+            self.assertEqual(en["party"]["slots"]["2"]["player_icon"]["archive"], "icons.any")
+            self.assertFalse(en["player_icon"]["enabled"])
+            self.assertFalse(en["party"]["player_icon"]["enabled"])
+            self.assertEqual(en["party"]["slots"]["1"]["offset_x"], 0)
+            self.assertEqual(fr["party"]["slots"]["2"]["offset_x"], 0)
+            self.assertEqual(fr["player_icon"]["texture"], "FR_zz0field_2dd1.png")
 
 
 if __name__ == "__main__":

@@ -211,6 +211,67 @@ void large_atlas()
         draw(p);
     std::cout << "GPU 4096x2048 synthetic atlas checks passed\n";
 }
+
+void multiple_images()
+{
+    set_image(1, 1, 1, {0xffffffff});
+    for (int id : {0, 2, 3})
+        set_image(id, 16, 16, std::vector<std::uint32_t>(256, 0xffffffff));
+    khdays_gpu_hd_close();
+    require(khdays_gpu_hd_open(device));
+    KhdaysSequenceImage programs[3]{};
+    seq::SequenceQuad quad;
+    quad.vertices = {{{0, 0, 0, 0}, {16, 0, 1, 0}, {0, 16, 0, 1}, {16, 16, 1, 1}}};
+    for (unsigned i = 0; i < 3; ++i) {
+        auto &p = programs[i];
+        p.words[KSI_OUTPUT] = i == 0 ? 0 : i + 1;
+        p.words[KSI_ATLAS] = 1;
+        p.words[KSI_LOGICAL_W] = p.words[KSI_LOGICAL_H] = 1;
+        p.words[KSI_WIDTH] = p.words[KSI_HEIGHT] = 16;
+        p.words[KSI_CLEAR] = 1;
+        number(p, KSI_SCALE, 1);
+        for (auto &v : quad.vertices)
+            v.color = i == 0 ? 0x80000080 : 0x80008000;
+        if (i < 2)
+            render::encode_sequence_quads(p, std::span(&quad, 1));
+    }
+    auto *cmd = SDL_AcquireGPUCommandBuffer(device);
+    require(cmd && khdays_gpu_hd_sync(cmd));
+    for (const auto &p : programs)
+        require(khdays_sequence_gpu_draw(device, cmd, &p));
+    finish(cmd);
+    for (unsigned i = 0; i < 3; ++i) {
+        const unsigned target = programs[i].words[KSI_OUTPUT];
+        const unsigned first = read(target * 16, 16)[0];
+        const auto result = read(first * 4, 256 * 4);
+        const unsigned expected = i == 0 ? 0xff0000ff : i == 1 ? 0xff00ff00 : 0;
+        if (std::any_of(result.begin(), result.end(), [&](unsigned c) { return c != expected; }))
+            throw std::runtime_error("multiple sequence passes mixed their commands or retained a blank frame");
+    }
+    std::cout << "GPU multiple-image command cycling and transparent-frame clearing passed\n";
+}
+
+void private_portraits(const std::filesystem::path &folder)
+{
+    for (const auto *name : {"P_EX110.a.us", "P_EX020.a.us"}) {
+        const auto a =
+            render::load_sequence_asset(folder / name, "face", "face", folder / (std::string(name) + "_face.dds"));
+        std::vector<std::uint32_t> texels(a.texture.rgba.size() / 4);
+        std::memcpy(texels.data(), a.texture.rgba.data(), a.texture.rgba.size());
+        set_image(1, a.texture.width, a.texture.height, texels);
+        images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+        for (unsigned clip = 0; clip < 4; ++clip)
+            for (float frame : {0.0f, 15.0f, 29.0f, 30.0f, 59.0f}) {
+                const auto evaluated = seq::evaluate_sequence(a.sequence, clip, frame);
+                KhdaysSequenceImage p{};
+                const render::SequenceView view{128, 128, 2};
+                initialize(p, 256, 256, a.logical_size[0], a.logical_size[1], view);
+                render::encode_sequence_quads(p, evaluated.quads);
+                compare(p, evaluated.quads, a.texture, a.logical_size[0], a.logical_size[1], view);
+            }
+        std::cout << name << ": all four face states match the GPU/reference renderer\n";
+    }
+}
 void private_assets(const char *archive, const char *texture, const gauge::HpGaugeStyle &style = {})
 {
     auto asset = render::load_sequence_asset(archive, "gaug", texture);
@@ -318,9 +379,14 @@ int main(int argc, char **argv)
         require(khdays_gpu_hd_open(device));
         synthetic();
         large_atlas();
-        if (argc >= 3)
+        multiple_images();
+        if (argc == 3 && std::string(argv[1]) == "--portraits")
+            private_portraits(argv[2]);
+        else if (argc >= 3)
             private_assets(argv[1], argv[2],
-                           argc == 4 ? gauge::load_hp_gauge_config(argv[3]).style : gauge::HpGaugeStyle{});
+                           argc >= 4
+                               ? gauge::load_hp_gauge_configs(argv[3]).at(argc >= 5 ? std::stoul(argv[4]) : 0).style
+                               : gauge::HpGaugeStyle{});
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         result = 1;

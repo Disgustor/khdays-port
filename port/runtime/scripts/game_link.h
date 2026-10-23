@@ -58,6 +58,8 @@ int khdays_link_player_hp(int *hp, int *max);
 const char *khdays_link_set_position(const float at[3]);
 /* The game's low-HP predicate, including ability 0x42's exception. */
 int khdays_link_player_low_hp(void);
+/* Live HUD order, including mission mode: sheet icon and the actor belonging to a displayed slot. */
+int khdays_link_hud_portrait(int slot, int *icon, int *hp, int *maximum, int *low_hp);
 /* The vanilla limit threshold in HP, including ability, use count and battle settings; 0 disabled. */
 int khdays_link_player_limit_hp(void);
 /* Original limit clock and entry HP, before the DS HUD rounds its position to pixels. */

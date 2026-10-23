@@ -7,6 +7,7 @@
   "offset_x": 0,
   "offset_y": 0,
   "scale": 0.65,
+  "geometry_scale": 1,
   "canvas_padding": 16,
   "portrait_offset_x": 0,
   "portrait_offset_y": 0,
@@ -45,5 +46,128 @@
   "bar_offset_y": 0,
   "cap": 123,
   "cap_offset_x": 0,
-  "cap_offset_y": 0
+  "cap_offset_y": 0,
+  "player_icon": {
+    "enabled": false,
+    "animation": -1,
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale": 0.65,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "p1": -1,
+    "p2": -1,
+    "p3": -1,
+    "p4": -1
+  },
+  "limit_text": {
+    "enabled": false,
+    "animation": -1,
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale": 0.65,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug"
+  },
+  "party": {
+    "version": 1,
+    "enabled": true,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale": 0.65,
+    "geometry_scale": 0.5111111111111111,
+    "canvas_padding": 16,
+    "portrait_offset_x": 0,
+    "portrait_offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "center_normal": 174,
+    "center_alert": 169,
+    "center_dead": 174,
+    "center_damage_small": 172,
+    "center_damage_medium": 171,
+    "center_damage_large": 170,
+    "center_intro": 173,
+    "center_fade": 175,
+    "center_override": -1,
+    "play_intro": false,
+    "center_offset_x": 0,
+    "center_offset_y": 0,
+    "circle_normal": 160,
+    "circle_alert": 161,
+    "circle_dead": 160,
+    "circle_damage": 165,
+    "circle_fill": 167,
+    "limit_circle": -1,
+    "limit_bar": -1,
+    "limit_marker": -1,
+    "limit_marker_offset_x": 0,
+    "limit_marker_offset_y": 0,
+    "circle_offset_x": 0,
+    "circle_offset_y": 0,
+    "bar_normal": 163,
+    "bar_alert": 164,
+    "bar_dead": 163,
+    "bar_damage": 166,
+    "bar_fill": 168,
+    "bar_offset_x": 0,
+    "bar_offset_y": 0,
+    "cap": 162,
+    "cap_offset_x": 0,
+    "cap_offset_y": 0,
+    "player_icon": {
+      "enabled": false,
+      "animation": -1,
+      "offset_x": 0,
+      "offset_y": 0,
+      "scale": 0.65,
+      "source_origin_x": 0,
+      "source_origin_y": 0,
+      "frames_per_tick": 1,
+      "archive": "zz0field.2dd",
+      "texture": "US_zz0field_2dd1.png",
+      "entry": "gaug",
+      "p1": -1,
+      "p2": -1,
+      "p3": -1,
+      "p4": -1
+    },
+    "slots": {
+      "1": {
+        "offset_x": 0,
+        "offset_y": 0,
+        "player_icon": {
+          "offset_x": 0,
+          "offset_y": 0
+        }
+      },
+      "2": {
+        "offset_x": 0,
+        "offset_y": 0,
+        "player_icon": {
+          "offset_x": 0,
+          "offset_y": 0
+        }
+      },
+      "3": {
+        "offset_x": 0,
+        "offset_y": 0,
+        "player_icon": {
+          "offset_x": 0,
+          "offset_y": 0
+        }
+      }
+    }
+  }
 }

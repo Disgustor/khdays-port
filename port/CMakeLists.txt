@@ -309,6 +309,15 @@ add_library(khdays-kh2-gauge STATIC ui/kh2_hp_gauge.cpp ui/kh2_hp_config.cpp)
 target_link_libraries(khdays-kh2-gauge PUBLIC khdays-kh2-sequence)
 target_compile_options(khdays-kh2-gauge PRIVATE /W4 /std:c++20 /EHsc)
 
+add_library(khdays-kh2-portrait STATIC ui/kh2_portrait.cpp)
+target_link_libraries(khdays-kh2-portrait PUBLIC khdays-kh2-sequence)
+target_compile_options(khdays-kh2-portrait PRIVATE /W4 /std:c++20 /EHsc)
+
+add_executable(khdays-kh2-portrait-test tests/kh2_portrait_test.cpp ui/kh2_portrait_hud.cpp ui/kh2_party_hud.cpp ui/kh2_hud_labels.cpp)
+target_link_libraries(khdays-kh2-portrait-test PRIVATE khdays-kh2-portrait khdays-kh2-gauge)
+target_compile_options(khdays-kh2-portrait-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-portrait COMMAND khdays-kh2-portrait-test)
+
 add_executable(khdays-kh2-sequence-test tests/kh2_sequence_test.cpp)
 target_link_libraries(khdays-kh2-sequence-test PRIVATE khdays-kh2-gauge)
 target_compile_options(khdays-kh2-sequence-test PRIVATE /W4 /std:c++20 /EHsc)
@@ -536,6 +545,9 @@ add_executable(khdays-native
     ui/bg.c
     ui/hud.c
     ui/kh2_hp_hud.cpp
+    ui/kh2_party_hud.cpp
+    ui/kh2_hud_labels.cpp
+    ui/kh2_portrait_hud.cpp
     ui/badges.c                    # the badges' icons on the mission panel
     ui/crowns.c                    # the crowns on the story's day list
     ui/mission_list.c              # the camp's mission list from the game's files
@@ -583,7 +595,7 @@ target_compile_options(khdays-native PRIVATE
 # ufbx, as it is: third-party, not held to the port's warnings.
 add_library(khdays-ufbx STATIC "${ufbx_SOURCE_DIR}/ufbx.c")
 target_link_libraries(khdays-native PRIVATE khdays-ufbx)
-target_link_libraries(khdays-native PRIVATE khdays-lua khdays-kh2-gauge)
+target_link_libraries(khdays-native PRIVATE khdays-lua khdays-kh2-gauge khdays-kh2-portrait)
 target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3 dbghelp winmm delayimp
                       mfplat mfreadwrite mfuuid ole32 ws2_32 iphlpapi advapi32 winhttp)
 # The DS's own addresses are held, inaccessible, first thing in main

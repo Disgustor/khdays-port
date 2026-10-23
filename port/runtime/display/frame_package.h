@@ -123,6 +123,9 @@ typedef struct KhdaysFramePackage {
     uint32_t bank_intact;
     /* Transient native image commands, owned by this package, not part of version-14 recordings. */
     KhdaysSequenceImage sequence_image;
+    KhdaysSequenceImage portrait_images[4];
+    KhdaysSequenceImage party_images[3];
+    KhdaysSequenceImage label_images[5];
 } KhdaysFramePackage;
 
 /* What KHDAYS_RECORD_FRAMES writes of a package (version 14): all of it but

@@ -11,7 +11,7 @@ struct HpGaugeExtent final {
     bool circle_mask = true, bar = false;
 };
 
-HpGaugeExtent hp_gauge_extent(float days_hp);
+HpGaugeExtent hp_gauge_extent(float days_hp, float geometry_scale = 1);
 
 enum class HpGaugeStatus { Normal, Alert, Dead };
 enum class HpGaugeReaction { None, Small, Medium, Large };
@@ -38,6 +38,7 @@ struct HpGaugeStyle final {
     int limit_circle = -1, limit_bar = -1; // optional mod-added clips
     int limit_marker = -1;
     float source_origin_x = 455, source_origin_y = 355;
+    float geometry_scale = 1; // intrinsic art/mask size; independent of the JSON display scale
     std::array<float, 2> center_offset{}, circle_offset{}, bar_offset{}, cap_offset{}, limit_marker_offset{};
 };
 

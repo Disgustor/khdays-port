@@ -8,7 +8,7 @@
 
 namespace khdays::assets::kh2 {
 
-// PC SEQD 0x160. Offsets and execution follow YI::SPRITE/SEQUENCE in the
+// PC SEQD 0x150/0x160. Offsets and execution follow YI::SPRITE/SEQUENCE in the
 // KH2 HD debug executable; runtime objects and PS3 bitfield layouts are not disk types.
 struct SequencePart final {
     std::uint32_t palette = 0;

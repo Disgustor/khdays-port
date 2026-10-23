@@ -10,7 +10,7 @@ namespace seq = assets::kh2;
 constexpr float circle_rad = 0.078539819f;
 
 seq::SequenceQuad mask(float x, float y, float w, float h, float rotation, std::uint32_t depth, float parent_x,
-                       float parent_y)
+                       float parent_y, float geometry_scale)
 {
     seq::SequenceQuad q;
     q.textured = false;
@@ -24,19 +24,30 @@ seq::SequenceQuad mask(float x, float y, float w, float h, float rotation, std::
     if (std::abs(c) == 1)
         s = 0;
     for (std::size_t i = 0; i < 4; ++i) {
-        const float px = x + ((i & 1) ? w : 0), py = y + ((i & 2) ? h : 0);
+        const float px = (x + ((i & 1) ? w : 0)) * geometry_scale;
+        const float py = (y + ((i & 2) ? h : 0)) * geometry_scale;
         q.vertices[i].x = parent_x + float(int((px * c - py * s) * 16)) / 16 + 0.5f;
         q.vertices[i].y = parent_y + float(int((px * s + py * c) * 16)) / 16 + 0.5f;
+    }
+    if (s == 0 || c == 0) {
+        // Cardinal cuts share the same half-open pixel edges as the generated gauge rectangles.
+        const auto bounds = q.vertices;
+        const float x0 = std::min(bounds[0].x, bounds[3].x), x1 = std::max(bounds[0].x, bounds[3].x);
+        const float y0 = std::min(bounds[0].y, bounds[3].y), y1 = std::max(bounds[0].y, bounds[3].y);
+        for (std::size_t i = 0; i < 4; ++i) {
+            q.vertices[i].x = (i & 1) ? x1 : x0;
+            q.vertices[i].y = (i & 2) ? y1 : y0;
+        }
     }
     return q;
 }
 
 void append_mask(seq::SequenceFrame &out, const HpGaugeExtent &extent, std::uint32_t depth, float parent_x,
-                 float parent_y)
+                 float parent_y, float geometry_scale)
 {
     if (!extent.circle_mask)
         return;
-    out.quads.push_back(mask(-64, -64, 64, 64, extent.angle, depth, parent_x, parent_y));
+    out.quads.push_back(mask(-64, -64, 64, 64, extent.angle, depth, parent_x, parent_y, geometry_scale));
     float width = 0, height = 50, y = 0;
     if (extent.hp < 20) {
         width = 64;
@@ -45,7 +56,7 @@ void append_mask(seq::SequenceFrame &out, const HpGaugeExtent &extent, std::uint
     } else if (extent.hp < 40)
         width = 64;
     if (width != 0)
-        out.quads.push_back(mask(0, y, width, height, 0, depth, parent_x, parent_y));
+        out.quads.push_back(mask(0, y, width, height, 0, depth, parent_x, parent_y, geometry_scale));
 }
 
 float looping_frame(const seq::SequenceData &data, std::size_t clip, float frame)
@@ -81,9 +92,9 @@ seq::SequencePose endpoint_pose(seq::SequencePose pose, const HpGaugeExtent &ext
 }
 } // namespace
 
-HpGaugeExtent hp_gauge_extent(float days_hp)
+HpGaugeExtent hp_gauge_extent(float days_hp, float geometry_scale)
 {
-    if (!std::isfinite(days_hp) || days_hp < 0)
+    if (!std::isfinite(days_hp) || days_hp < 0 || !std::isfinite(geometry_scale) || geometry_scale <= 0)
         throw std::runtime_error("KH2 HP gauge: invalid HP");
     HpGaugeExtent extent;
     extent.hp = days_hp * 10.0f / 31.0f;
@@ -92,8 +103,8 @@ HpGaugeExtent hp_gauge_extent(float days_hp)
     extent.angle = extent.hp * circle_rad;
     extent.circle_mask = extent.hp < 60;
     extent.bar = extent.hp >= 60;
-    extent.bar_scale = std::max(0.0f, extent.hp - 60) * 0.03f;
-    extent.bar_length = std::max(0.0f, extent.hp - 60) * 3;
+    extent.bar_scale = std::max(0.0f, extent.hp - 60) * 0.03f * geometry_scale;
+    extent.bar_length = std::max(0.0f, extent.hp - 60) * 3 * geometry_scale;
     return extent;
 }
 
@@ -108,9 +119,9 @@ seq::SequenceFrame evaluate_hp_gauge(const seq::SequenceData &data, const HpGaug
         !std::isfinite(sample.limit_hp) || sample.limit_hp < 0 || !std::isfinite(sample.limit_marker_hp) ||
         sample.limit_marker_hp < -1)
         throw std::runtime_error("KH2 HP gauge: invalid sample");
-    const auto maximum = hp_gauge_extent(sample.max_hp);
-    const auto previous = hp_gauge_extent(std::min(sample.max_hp, sample.previous_hp));
-    const auto current = hp_gauge_extent(std::min(sample.max_hp, sample.hp));
+    const auto maximum = hp_gauge_extent(sample.max_hp, style.geometry_scale);
+    const auto previous = hp_gauge_extent(std::min(sample.max_hp, sample.previous_hp), style.geometry_scale);
+    const auto current = hp_gauge_extent(std::min(sample.max_hp, sample.hp), style.geometry_scale);
     const std::size_t status = sample.status == HpGaugeStatus::Alert ? 1 : sample.status == HpGaugeStatus::Dead ? 2 : 0;
     const auto &base_clips = style.center, &circle_clips = style.circle, &bar_clips = style.bar;
     std::size_t parent_clip = base_clips[status];
@@ -158,12 +169,12 @@ seq::SequenceFrame evaluate_hp_gauge(const seq::SequenceData &data, const HpGaug
     const auto base_pose = pose;
     pose.x += style.circle_offset[0];
     pose.y += style.circle_offset[1];
-    out.quads.push_back(mask(-50, -50, 100, 100, 0, 0, pose.x, pose.y));
-    append_mask(out, maximum, 200, pose.x, pose.y);
+    out.quads.push_back(mask(-50, -50, 100, 100, 0, 0, pose.x, pose.y, style.geometry_scale));
+    append_mask(out, maximum, 200, pose.x, pose.y, style.geometry_scale);
     append_sprite(out, data, circle_clips[status], looping_frame(data, circle_clips[status], sample.frame), pose, 100);
-    append_mask(out, previous, 600, pose.x, pose.y);
+    append_mask(out, previous, 600, pose.x, pose.y, style.geometry_scale);
     append_sprite(out, data, style.circle_damage, sample.damage_frame, pose, 500);
-    append_mask(out, current, 2000, pose.x, pose.y);
+    append_mask(out, current, 2000, pose.x, pose.y, style.geometry_scale);
     append_sprite(out, data, style.circle_fill, looping_frame(data, style.circle_fill, sample.frame), pose, 1000);
     auto bar_pose = base_pose;
     bar_pose.x += style.bar_offset[0];
@@ -181,9 +192,9 @@ seq::SequenceFrame evaluate_hp_gauge(const seq::SequenceData &data, const HpGaug
         append_sprite(out, data, style.bar_fill, looping_frame(data, style.bar_fill, sample.frame), bar_pose, 0);
     }
     if (sample.limit_hp > 0 && sample.hp > 0 && style.limit_circle >= 0 && style.limit_bar >= 0) {
-        const auto limit = hp_gauge_extent(std::min({sample.limit_hp, sample.hp, sample.max_hp}));
+        const auto limit = hp_gauge_extent(std::min({sample.limit_hp, sample.hp, sample.max_hp}), style.geometry_scale);
         // The existing 2000-depth current-HP masks also clip the yellow layer.
-        append_mask(out, limit, 4000, pose.x, pose.y);
+        append_mask(out, limit, 4000, pose.x, pose.y, style.geometry_scale);
         const auto circle_clip = std::size_t(style.limit_circle), bar_clip = std::size_t(style.limit_bar);
         append_sprite(out, data, circle_clip, looping_frame(data, circle_clip, sample.frame), pose, 1000);
         if (limit.bar) {
@@ -194,7 +205,7 @@ seq::SequenceFrame evaluate_hp_gauge(const seq::SequenceData &data, const HpGaug
     const auto endpoint = endpoint_pose(base_pose, maximum, style.cap_offset);
     append_sprite(out, data, style.cap, looping_frame(data, style.cap, sample.frame), endpoint, 0);
     if (style.limit_marker >= 0 && sample.limit_marker_hp >= 0) {
-        const auto marker = hp_gauge_extent(std::min(sample.limit_marker_hp, sample.max_hp));
+        const auto marker = hp_gauge_extent(std::min(sample.limit_marker_hp, sample.max_hp), style.geometry_scale);
         auto marker_pose = endpoint_pose(base_pose, marker, style.limit_marker_offset);
         const auto &offset = marker.bar ? style.bar_offset : style.circle_offset;
         marker_pose.x += offset[0];

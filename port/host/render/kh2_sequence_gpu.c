@@ -68,7 +68,7 @@ int khdays_sequence_gpu_open(SDL_GPUDevice *d)
 
 int khdays_sequence_gpu_draw(SDL_GPUDevice *d, SDL_GPUCommandBuffer *cmd, const KhdaysSequenceImage *image)
 {
-    if (image->words[KSI_COUNT] == 0)
+    if (image->words[KSI_COUNT] == 0 && !image->words[KSI_CLEAR])
         return 1;
     if (image->words[KSI_COUNT] > KSI_MAX_QUADS || !khdays_sequence_gpu_open(d))
         return 0;

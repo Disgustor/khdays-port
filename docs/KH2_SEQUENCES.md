@@ -1,5 +1,8 @@
 # KH2 sequences
 
+Animated player and party portrait replacements are documented in
+[KH2 portraits](KH2_PORTRAITS.md).
+
 The native KH2 implementation includes an independent sequence viewer, reference
 renderer, GPU sequence images, and a mod-provided Days HP gauge replacement. It reads
 local PC BAR/IMGD/SEQD resources and a PNG or supported DDS atlas. General layout
@@ -44,6 +47,7 @@ Copy [the default config](examples/kh2-gauge.json) beside `zz0field.2dd` and
 | `archive`, `texture`, `entry` | Local filenames (PNG or supported DDS), BAR entry name |
 | `offset_x`, `offset_y` | Move the complete widget, including the portrait, in DS dots |
 | `scale` | Gauge size in DS dots per KH2 unit; portrait keeps its existing size |
+| `geometry_scale` | Intrinsic mask/extension ratio: 1 for player art, 23/45 for small party art |
 | `portrait_offset_x/y` | Move the face relative to the animated center, in DS dots |
 | `center/circle/bar/cap_offset_x/y` | Move each gauge element in KH2 logical units; circle masks follow the ring |
 | `center_normal/alert/dead`, `circle_normal/alert/dead`, `bar_normal/alert/dead` | State-to-clip assignments |
@@ -58,7 +62,8 @@ Copy [the default config](examples/kh2-gauge.json) beside `zz0field.2dd` and
 | `canvas_padding` | Extra DS dots around the image, including room for alert effects; default 16 |
 | `source_origin_x/y` | 0 for the centered mod archive; 455/355 for an untouched KH2 archive |
 
-Settings are a flat JSON object. Unknown keys, duplicate keys, invalid types and
+Player gauge settings remain at the root; party and label settings use the
+objects described below. Unknown keys, duplicate keys, invalid types and
 out-of-range values are errors rather than silently ignored misspellings.
 
 The visible center quads are drawn behind the HP ring and Days portrait. Original
@@ -166,7 +171,8 @@ The circle is centered at 230,160 DS dots around the existing face, at 0.65 of
 KH2's logical size, and the bar extends left. The existing face and player tag
 are composed over it. No portrait texture is edited: the border line embedded
 in that artwork remains for a later texture edit. The separately drawn HP fill,
-frame and HP label are suppressed. Allies retain their own gauges.
+frame and HP label are suppressed. Party replacements are configured separately
+within the same JSON, as described below.
 
 The game adapter reads the local battle actor through `game_link`, including the
 game's low-HP predicate (`func_ov022_020ad7b0`, quarter HP with ability 0x42's
@@ -294,6 +300,100 @@ synthetic data. Images and extracted resources belong outside version control;
 the viewer's output can go under the ignored `build/` directory.
 The private check also renders mask coverage across the circular thresholds and
 checks that the previous-HP segment disappears at its blank restart frame.
+
+## Small party gauges
+
+The importer also appends small versions of the player gauge clips and writes
+a `party` object in `layouts/gauge/<lang>/gauge.json`. This independently enables all three party
+slots; `enabled: false` restores their native gauges. The player configuration
+and portrait replacement settings remain independent. Both JSON files expose the
+same animation, placement and display-scale settings; the generated party file
+disables limit clips because Days does not display party limit gauges.
+The [combined defaults](examples/kh2-gauge.json) include shared party settings and
+`party.slots.1`, `.2`, and `.3` overrides. These are HUD slots, ordered upward
+from the player, rather than character IDs. Each override inherits shared party
+settings; its `offset_x/y` adds to the shared value for that slot. Icon offsets
+also add to the shared icon offsets; other settings replace their shared values.
+
+The first party gauge is raised eight DS pixels from its native portrait center.
+This is part of the default placement: JSON `offset_y` remains zero. Subsequent
+gauges are stacked using their artwork radii, with the same edge-to-edge gap as
+the player and first party gauge. Independent offsets apply after that placement,
+so adjusting one slot does not push its neighbors. Portraits and player-number
+labels follow the corresponding animated center.
+
+Rebuilding migrates an old `party.json` into `gauge.json` and removes the separate
+file. The old experimental -8 Y offset becomes zero because the default now
+includes that lift; other custom settings survive. Runtime reads only the combined
+file. Installer conversion validates all languages before publishing outputs.
+
+The smaller atlas quarters have radius 23 rather than 45 sequence units. Their
+`geometry_scale` is therefore `23 / 45`, while the display `scale` stays `0.65`.
+186 Days HP still fills the three-quarter circle. Extension lengths and mask
+geometry scale by the same ratio, so equal HP produces proportionally smaller
+party bars. Changing display scale alone does not change the HP mapping.
+
+Generated groups use parts 101 (background), 103 (green), and 105 (damage,
+tinted with the player damage color). Two mirrored copies of half-circle 102
+form the backing at the origin; the player backing's thin outer ring is omitted.
+A one-unit bottom strip of part 101, tinted `00 00 00 80`, supplies the end cap.
+The copies of clips 121–129 and 132–138 preserve timing, rotations, scale and colors,
+and scale positions and sway by `23 / 45`. Mirroring reverses UVs and corner colors
+while keeping rectangle bounds ordered, so adjacent quarters share a continuous
+pixel edge. Existing player clips and groups remain unchanged.
+Axis-aligned masks use ordered bounds too, preventing stray lines at exact
+quarter-turn HP values.
+
+`port/ui/kh2_party_hud` reads each party slot through the existing read-only
+portrait query, tracks independent HP and damage trails, and uses the existing
+sequence GPU renderer with cached images and atlas. It finds portrait positions
+from the native BG3 tile ranges rather than fixed screen coordinates. Native and
+replacement portraits follow their slot's animated center; the existing UI
+element layout handles widescreen positioning. Only the matching native HP tiles
+and their OBJ copies are suppressed. No game behavior or generated source changes.
+
+The headless viewer accepts `--config PATH/gauge.json --party 1 --hp 248 --max-hp 372
+--previous-hp 310 --damage-frame 30 --output FILE.png` to inspect these resources.
+Focused tests cover the generated geometry, centered backing, unchanged original
+records, animation timing, proportional HP mapping, independent live slots,
+damage, pause, and reuse without repeated pixel uploads. Private asset checks
+compare CPU/GPU output at circular thresholds and along the extended bar. Manual
+game validation should include all occupied slots, native/HD/KH2 portraits,
+damage and defeat/revival, mission mode, widescreen, and disabling each replacement.
+
+## Player-number icons and limit text
+
+`player_icon` at the root configures the player's P1–P4 label; `party.player_icon`
+configures party labels, with overrides under each party slot. `limit_text` at
+the root configures the native LIMIT-available indicator. These objects expose
+`enabled` (false), `animation` (-1), `archive`, `texture`, `entry`, `scale`,
+`source_origin_x/y`, `frames_per_tick`, and `offset_x/y`. Resource names resolve
+beside the combined JSON and default to the gauge's archive and atlas. PNG and
+supported DDS textures use the existing decoders. A label sequence's origin is
+placed at the native label's center; source-origin settings preserve relative
+animation motion when recentering an existing resource.
+
+Player icons also expose `p1`, `p2`, `p3`, and `p4` clip assignments (-1). A
+nonnegative number-specific assignment overrides `animation`, selected by the
+number actually drawn by Days, including when the local multiplayer player is
+not P1. Enabling a replacement requires both `enabled: true` and an assigned
+clip. Missing assets or invalid clips log once and keep the native icon. Offsets
+move native artwork too, so a replacement is not required for positioning.
+
+The native BG3 player-number and LIMIT tiles were identified from the original
+Days `UI/btl/main.p2` NSCR/NCGR/NCLR resources, independently of face tiles and HP
+fill uploads. Only those tiles are regrouped. LIMIT replacement visibility follows
+the presence of Days' own LIMIT text, preserving its display conditions instead
+of inferring availability from HP. Slot geometry and origins retain the checks
+against the native HUD resource. Sequence labels use cached GPU images and
+atlases; playback pauses with the game. These replacements are disabled in the
+generated JSON until artwork is supplied.
+
+Number rows are assigned once in native HUD order rather than searched separately
+below each portrait. Party numbers attach to the bar's reduced 37-unit baseline,
+with their configured offsets applied afterward. Native label images are claimed
+before gauge composition and emitted after gauges and portraits, just like their
+sequence replacements, so neither the number badges nor LIMIT text is covered.
 
 ## Boundaries
 

@@ -492,6 +492,7 @@ HD_MENU_SUPPORT = (
     "port/tools/kh2_center_gauge.py",
     "port/tools/kh2_add_limit_gauge.py",
     "port/tools/kh2_add_limit_marker.py",
+    "port/tools/kh2_add_party_gauges.py",
     "docs/examples/kh2-gauge.json",
 )
 HD_VIDEO_TOOLS = [

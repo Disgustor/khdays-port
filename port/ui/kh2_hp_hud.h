@@ -7,9 +7,12 @@ extern "C" {
 #endif
 #include "elements.h"
 #include "bg.h"
+#include "hud_parent.h"
 #include "../gfx/sequence_image.h"
 void khdays_ui_kh2_hp_frame(unsigned frame);
 int khdays_ui_kh2_hp_ready(void);
+/* Absolute animated center; other slots use their native anchor until they have a gauge. */
+int khdays_ui_kh2_hp_parent(int slot, KhdaysHudParent *parent);
 int khdays_ui_kh2_hp_cell(int screen, int bg, const KhdaysBgLayer *layer, unsigned entry);
 int khdays_ui_kh2_hp_sprite(const unsigned char *pixels, int width, int height);
 int khdays_ui_kh2_hp_compose(const KhdaysUiElement *face, const KhdaysUiElement *hd);

@@ -84,6 +84,9 @@ void parser_and_player()
     Fixture f;
     auto data = f.read();
     expect(data.parts.size() == 1 && data.clips.size() == 1, "table counts");
+    f.word(4, 0x150);
+    expect(f.read().animations.size() == data.animations.size(), "0x150 face tables");
+    f.word(4, 0x160);
     expect(sequence_frame_count(data, 0) == 11, "inclusive end");
     auto frame = evaluate_sequence(data, 0, 5.9f);
     expect(frame.quads.size() == 1 && near(frame.quads[0].vertices[0].x, 5.5f), "integer timeline and position");
@@ -205,7 +208,46 @@ void hp_mapping()
     expect(near(bar.hp, 120) && near(bar.bar_length, 180) && near(bar.bar_scale, 1.8f), "372 Days HP extension");
     expect(gauge::hp_gauge_extent(65535).bar_length > 63000, "extension was capped");
     expect(gauge::hp_gauge_extent(185).circle_mask, "circle threshold");
+    const auto small = gauge::hp_gauge_extent(372, 23.0f / 45);
+    expect(near(small.angle, bar.angle) && near(small.bar_length, bar.bar_length * 23 / 45) &&
+               near(small.bar_scale, bar.bar_scale * 23 / 45),
+           "party art/masks/extensions must scale together");
+    expect(!gauge::hp_gauge_extent(186, 23.0f / 45).circle_mask, "party circular HP capacity changed");
     rejects([] { gauge::hp_gauge_extent(-1); }, "negative HP accepted");
+}
+
+void party_mask_edges()
+{
+    auto data = Fixture{}.read();
+    data.clips.resize(139, data.clips[0]);
+    data.animations[0].x = {};
+    data.animations[0].colors = {0x80808080, 0x80808080};
+    gauge::HpGaugeStyle style;
+    style.source_origin_x = style.source_origin_y = 0;
+    style.geometry_scale = 23.0f / 45;
+    khdays::assets::DecodedTexture atlas;
+    atlas.width = atlas.height = 1;
+    atlas.rgba = {0, 255, 0, 255};
+    for (float hp : {62.0f, 124.0f}) {
+        gauge::HpGaugeSample sample;
+        sample.hp = sample.max_hp = sample.previous_hp = hp;
+        auto frame = gauge::evaluate_hp_gauge(data, sample, style);
+        std::erase_if(frame.quads, [](const auto &q) { return q.color_write; });
+        auto forbidden = quad();
+        forbidden.depth = 1000;
+        forbidden.depth_test = true;
+        for (std::size_t i = 0; i < 4; ++i) {
+            forbidden.vertices[i].x = ((i & 1) ? 23.0f : 0.0f) + 0.5f;
+            forbidden.vertices[i].y = (hp == 62 ? ((i & 2) ? 0.0f : -23.0f) : ((i & 2) ? 23.0f : 0.0f)) + 0.5f;
+        }
+        frame.quads.push_back(forbidden);
+        for (float scale : {1.0f, 3.0f, 5.2f}) {
+            std::vector<std::uint32_t> pixels(256 * 256);
+            render::draw_sequence(frame.quads, atlas, 1, 1, pixels, 256, 256, {128, 128, scale});
+            expect(std::none_of(pixels.begin(), pixels.end(), [](auto p) { return p != 0; }),
+                   "party quarter-turn mask left an exposed pixel edge");
+        }
+    }
 }
 
 void hp_pixels(const render::SequenceAsset &asset)
@@ -415,6 +457,7 @@ int main(int argc, char **argv)
         parser_and_player();
         rendering();
         hp_mapping();
+        party_mask_edges();
         if (argc >= 3) {
             const auto asset = render::load_sequence_asset(argv[1], "gaug", argv[2]);
             expect(asset.logical_size == std::array{512, 256}, "private asset logical dimensions");

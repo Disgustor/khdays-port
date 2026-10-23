@@ -4,6 +4,9 @@
  * ...": at those VBlanks, each text layer's groups of touching cells. */
 #include "hud.h"
 #include "kh2_hp_hud.h"
+#include "kh2_portrait_hud.h"
+#include "kh2_party_hud.h"
+#include "kh2_hud_labels.h"
 #include "badges.h"
 #include "crowns.h"
 #include "autosave_notice.h"
@@ -42,9 +45,19 @@ typedef struct Piece {
     int x0, y0, x1, y1;
     unsigned layers; /* bit n: BGn */
     const char *from[3];
+    int party_slot; /* 1-3: the live portrait bounds, rather than a fixed region */
+    int label;      /* 1-5: player numbers and the native limit text */
 } Piece;
 
 static const Piece pieces_table[] = {
+    {"hud.player_icon", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 0, 1},
+    {"hud.party1.icon", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 0, 2},
+    {"hud.party2.icon", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 0, 3},
+    {"hud.party3.icon", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 0, 4},
+    {"hud.limit_text", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 0, 5},
+    {"hud.party1", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 1},
+    {"hud.party2", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 2},
+    {"hud.party3", 0, 0, 0, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}, 3},
     {"hud.deck", 0, 0, 136, 88, 192, 1u << 3, {"UI/btl/*/main.p2"}},
     {"hud.portrait", 0, 160, 136, 256, 192, 1u << 3, {"UI/btl/*/main.p2", "UI/btl/main.p2"}},
     {"hud.info", 1, 0, 0, 256, 24, 1u << 1, {"UI/btl/*/bl000.NCGR"}},
@@ -151,11 +164,20 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
     const int scale = khdays_ui_scale();
     int i0 = GW, j0 = GH, i1 = -1, j1 = -1, there = piece->from[0] == NULL, changed = 0, w, h;
     KhdaysUiElement e;
+    KhdaysUiElement party_box = {0};
+    if (piece->party_slot && !khdays_ui_kh2_party_box(piece->party_slot, &party_box))
+        return 0;
+    if (piece->label && !khdays_ui_kh2_label_box(piece->label - 1, &party_box))
+        return 0;
     /* the visible cells whose middle lies in the region */
     for (int j = 0; j < GH; ++j) {
         for (int i = 0; i < GW; ++i) {
             const int mx = i * 8 - fx + 4, my = j * 8 - fy + 4;
-            if (mx >= piece->x0 && mx < piece->x1 && my >= piece->y0 && my < piece->y1) {
+            const int inside = (piece->party_slot || piece->label)
+                                   ? mx >= party_box.x && mx < party_box.x + party_box.w && my >= party_box.y &&
+                                         my < party_box.y + party_box.h
+                                   : mx >= piece->x0 && mx < piece->x1 && my >= piece->y0 && my < piece->y1;
+            if (inside) {
                 i0 = i < i0 ? i : i0, i1 = i > i1 ? i : i1;
                 j0 = j < j0 ? j : j0, j1 = j > j1 ? j : j1;
             }
@@ -189,6 +211,8 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
             uint32_t entry = khdays_ui_cell_taken(piece->screen, bg, cx, cy)
                                  ? 0xffffffffu
                                  : khdays_bg_map_entry(piece->screen, l, cx, cy);
+            if (piece->label && entry != 0xffffffffu && !khdays_ui_kh2_label_cell(piece->label - 1, entry))
+                entry = 0xffffffffu;
             if (entry != 0xffffffffu && khdays_ui_kh2_hp_cell(piece->screen, bg, l, entry)) {
                 khdays_ui_left_out_cell(KHDAYS_UI_HUD, piece->screen, bg, cx, cy);
                 entry = 0xffffffffu;
@@ -306,8 +330,13 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
     KhdaysUiElement hd_element = e;
     hd_element.slot = KES_DIRECT | (uint32_t)bg;
     hd_element.image = sh->hd_image1 - 1;
-    const int native_hp = bg == 3 && strcmp(piece->id, "hud.portrait") == 0 &&
-                          khdays_ui_kh2_hp_compose(&e, sh->hd_image1 ? &hd_element : NULL);
+    const int native_hp = piece->label ? khdays_ui_kh2_label_native(piece->label - 1, &e)
+                          : piece->party_slot
+                              ? khdays_ui_kh2_party_compose(piece->party_slot, &e, sh->hd_image1 ? &hd_element : NULL)
+                              : bg == 3 && strcmp(piece->id, "hud.portrait") == 0 &&
+                                    khdays_ui_kh2_hp_compose(&e, sh->hd_image1 ? &hd_element : NULL);
+    if (piece->label && sh->hd_image1)
+        khdays_ui_kh2_label_native(piece->label - 1, &hd_element);
     if (!native_hp)
         khdays_ui_emit(KHDAYS_UI_HUD, &e);
     if (sh->hd_image1 != 0 && !native_hp) {
@@ -361,10 +390,15 @@ static void emit_sprites(int index)
     static const uint8_t obj_w[3][4] = {{8, 16, 32, 64}, {16, 32, 32, 64}, {8, 8, 16, 32}};
     static const uint8_t obj_h[3][4] = {{8, 16, 32, 64}, {8, 8, 16, 32}, {16, 32, 32, 64}};
     const Piece *piece = &pieces_table[index];
+    if (piece->label)
+        return;
     const int engine = piece->screen;
     const uint8_t *oam = (const uint8_t *)KHDAYS_W(0x07000000u + (uint32_t)engine * 0x400u);
     const uint32_t dispcnt = IO32(engine ? 0x1000u : 0u);
     const int scale = khdays_ui_scale();
+    KhdaysUiElement party_box = {0};
+    if (piece->party_slot && !khdays_ui_kh2_party_box(piece->party_slot, &party_box))
+        return;
     if (!(dispcnt & 0x1000u)) {
         return; /* the screen shows no sprites (DISPCNT bit 12 off) */
     }
@@ -387,8 +421,23 @@ static void emit_sprites(int index)
         x = (int)(a1 & 0x1ffu), y = (int)(a0 & 0xffu);
         x = x >= 256 ? x - 512 : x;
         y = y >= 192 ? y - 256 : y;
-        if (x + w / 2 < piece->x0 || x + w / 2 >= piece->x1 || y + h / 2 < piece->y0 || y + h / 2 >= piece->y1) {
+        const int outside =
+            piece->party_slot
+                ? x + w / 2 < party_box.x || x + w / 2 >= party_box.x + party_box.w || y + h / 2 < party_box.y ||
+                      y + h / 2 >= party_box.y + party_box.h + 8
+                : x + w / 2 < piece->x0 || x + w / 2 >= piece->x1 || y + h / 2 < piece->y0 || y + h / 2 >= piece->y1;
+        if (outside) {
             continue;
+        }
+        uint8_t party_pixels[16 * 8];
+        Sprite party_sprite = {0};
+        if (piece->party_slot) {
+            if (w != 16 || h != 8)
+                continue;
+            party_sprite.pixels = party_pixels;
+            party_sprite.room = sizeof(party_pixels);
+            memset(party_pixels, 0, sizeof(party_pixels));
+            sp = &party_sprite;
         }
         if (sp->room < w * h) {
             uint8_t *grown = (uint8_t *)realloc(sp->pixels, (size_t)w * (size_t)h);
@@ -433,10 +482,13 @@ static void emit_sprites(int index)
                 }
             }
         }
-        if (index == 1 && khdays_ui_kh2_hp_sprite(sp->pixels, w, h)) {
+        if ((strcmp(piece->id, "hud.portrait") == 0 || piece->party_slot) &&
+            khdays_ui_kh2_hp_sprite(sp->pixels, w, h)) {
             khdays_ui_left_out_obj(KHDAYS_UI_HUD, engine, i);
             continue;
         }
+        if (piece->party_slot)
+            continue; /* only the gauge's own OBJ copy is suppressed here */
         if (sp->image < 0 || sp->image_scale != scale) {
             khdays_ui_image_put(sp->image);
             sp->image = -1;
@@ -486,6 +538,9 @@ static void emit_sprites(int index)
 
 static void emit(void)
 {
+    khdays_ui_kh2_party_prepare();
+    khdays_ui_kh2_labels_prepare();
+    khdays_ui_kh2_portrait_prepare();
     int party_there = 0;
     for (int n = 0; n < PIECE_COUNT; ++n) {
         int there = 0;
@@ -503,6 +558,8 @@ static void emit(void)
         }
         party_there |= there && strcmp(pieces_table[n].id, "hud.portrait") == 0;
     }
+    khdays_ui_kh2_portrait_emit();
+    khdays_ui_kh2_labels_emit();
     khdays_ui_player_names_emit(party_there); /* the port's: the players' names in multiplayer */
     khdays_ui_crowns_emit();                  /* the port's: the crowns on the story's day list */
     khdays_ui_save_numbers_emit();            /* the port's: the files' numbers on the game's save lists */

@@ -14,6 +14,57 @@ static Picture *pictures;
 static KhdaysShape *placed;
 static size_t picture_capacity, placed_capacity;
 
+int khdays_onescreen_information(const KhdaysFramePackage *p, KhdaysSituation *s)
+{
+    s->states &= ~(1u << KHDAYS_ST_INFORMATION_MOD);
+    if (!(p->information_state & KHDAYS_INFORMATION_AVAILABLE))
+        return 0;
+    s->states |= 1u << KHDAYS_ST_INFORMATION_MOD;
+    /* INFO_UPPER controls the native HUD's placement as well as the banner crop. Its lifetime
+     * must remain the game's, even while the independent sequence is entering or leaving. */
+    s->states &= ~(1u << KHDAYS_ST_INFO_NEW);
+    return 1;
+}
+
+static int information_shown(const KhdaysFramePackage *p, const KhdaysSituation *s, int engine)
+{
+    if (!(p->information_state & KHDAYS_INFORMATION_AVAILABLE) || !(p->information_state & (1u << (8 + engine))) ||
+        (s->states & (1u << KHDAYS_ST_DIALOG)))
+        return 0;
+    const int field = s->scene == KHDAYS_SIT_FIELD || s->scene == KHDAYS_SIT_FIELD_3D_BOTH;
+    const int pause = s->scene == KHDAYS_SIT_PAUSE && !(s->states & (1u << KHDAYS_ST_EVENT));
+    if (!field && !pause)
+        return 0;
+    if (pause)
+        return engine != p->upper || !(p->information_state & (1u << (9 - p->upper)));
+    /* The physical upper banner takes priority during a mission introduction. No cropped
+     * pixels, lower-panel detection or native text-layer opacity determines this image's life. */
+    if (engine == p->upper)
+        return 1;
+    return !(p->information_state & (1u << (8 + p->upper))) &&
+           (pause || ((s->states & (1u << KHDAYS_ST_HUD)) && khdays_situation_hud_mode() == KHDAYS_HUD_COMPLETE));
+}
+
+static void image_shape(KhdaysShape *shape, const uint32_t *r, uint32_t lower, float x, float y, float w, float h)
+{
+    uint32_t *dst = shape->words;
+    memset(dst, 0, KO_WORDS * sizeof(*dst));
+    dst[KO_FLAGS] = KOF_IMAGE | lower;
+    dst[KO_KEYS] = r[KE_IMAGE];
+    const float opacity = 1;
+    memcpy(dst + KO_OPACITY, &opacity, 4);
+    float values[4] = {0, 0, (float)r[KE_IW], (float)r[KE_IH]};
+    memcpy(dst + KO_SRC_X, values, sizeof(values));
+    values[0] = x;
+    values[1] = y;
+    values[2] = x + w;
+    values[3] = y + h;
+    memcpy(dst + KO_DST_X1, values, sizeof(values));
+    const float sx = w / (float)r[KE_IW], sy = h / (float)r[KE_IH];
+    memcpy(dst + KO_SCALE_X, &sx, 4);
+    memcpy(dst + KO_SCALE_Y, &sy, 4);
+}
+
 static int hud_shown(const KhdaysSituation *s)
 {
     return (s->scene == KHDAYS_SIT_FIELD || s->scene == KHDAYS_SIT_FIELD_3D_BOTH || s->scene == KHDAYS_SIT_TUTORIAL) &&
@@ -24,8 +75,6 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                              KhdaysComposition *composition)
 {
     size_t maximum = 0, count = 0, out = 0;
-    if (!composition->shape_count)
-        return;
     for (int e = 0; e < 2; ++e)
         maximum += p->elements[e].count;
     if (!maximum)
@@ -62,6 +111,27 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 memcpy(&anchor_x, native + KSI_ANCHOR_X, 4);
                 memcpy(&anchor_y, native + KSI_ANCHOR_Y, 4);
             }
+            int information = 0;
+            for (int j = 0; j < 2; ++j) {
+                native = p->information_images[j].words;
+                if (native[KSI_ANCHORED] && native[KSI_OUTPUT] == r[KE_IMAGE]) {
+                    information = 1;
+                    memcpy(&anchor_x, native + KSI_ANCHOR_X, 4);
+                    memcpy(&anchor_y, native + KSI_ANCHOR_Y, 4);
+                }
+            }
+            if (information) {
+                if (!information_shown(p, situation, e))
+                    continue;
+                /* Match the player/party gauge's composition scale, with one root for both native engines.
+                 * The element already contains gauge.json's offsets and the entire animation. */
+                const float factor = khdays_composition_hud_factor(), scale = 0.766667f * factor;
+                Picture *picture = &pictures[count++];
+                picture->owner = -1;
+                image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0, x * scale, 5 * factor + y * scale,
+                            w * scale, h * scale);
+                continue;
+            }
             const uint32_t lower = e != p->upper ? KOF_LOWER : 0;
             for (int s = 0; s < composition->shape_count; ++s) {
                 const uint32_t *src = composition->shapes[s].words;
@@ -83,12 +153,11 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 const float dw = w * scale_x, dh = h * scale_y;
                 Picture *picture = &pictures[count++];
                 picture->owner = s;
+                image_shape(&picture->shape, r, lower, dx, dy, dw, dh);
                 uint32_t *dst = picture->shape.words;
-                memset(dst, 0, KO_WORDS * sizeof(*dst));
-                dst[KO_FLAGS] = KOF_IMAGE | lower | (src[KO_FLAGS] & KOF_DIM);
-                dst[KO_KEYS] = r[KE_IMAGE];
+                dst[KO_FLAGS] |= src[KO_FLAGS] & KOF_DIM;
                 dst[KO_OPACITY] = src[KO_OPACITY];
-                if (r[KE_SLOT] & KES_HUD) {
+                if (r[KE_SLOT] & (KES_HUD | KES_NATIVE_FADE)) {
                     const unsigned layer = r[KE_SLOT] & KES_NUMBER_MASK;
                     const unsigned blend = p->desc2d[e][KD_BLEND], coef = p->desc2d[e][KD_COEF];
                     float alpha = 1;
@@ -99,23 +168,15 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                     dst[KO_IMAGE_GROUP] = 1u + (unsigned)e * 4u + layer;
                     memcpy(dst + KO_IMAGE_ALPHA, &alpha, 4);
                 }
-                float values[4] = {0, 0, (float)r[KE_IW], (float)r[KE_IH]};
-                memcpy(dst + KO_SRC_X, values, sizeof(values));
-                values[0] = dx;
-                values[1] = dy;
-                values[2] = dx + dw;
-                values[3] = dy + dh;
-                memcpy(dst + KO_DST_X1, values, sizeof(values));
-                scale_x = dw / (float)r[KE_IW];
-                scale_y = dh / (float)r[KE_IH];
-                memcpy(dst + KO_SCALE_X, &scale_x, 4);
-                memcpy(dst + KO_SCALE_Y, &scale_y, 4);
                 break;
             }
         }
     }
     if (!count)
         return;
+    for (size_t i = 0; i < count; ++i)
+        if (pictures[i].owner == -1)
+            placed[out++] = pictures[i].shape;
     for (int s = 0; s < composition->shape_count; ++s) {
         for (size_t i = 0; i < count; ++i)
             if (pictures[i].owner == s)

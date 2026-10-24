@@ -6,6 +6,7 @@
 #include "button_icons.h"
 #include "elements.h"
 #include "parts.h"
+#include "kh2_information.h"
 #include "../gpu/gpu2d.h"
 #include "../runtime/mods/font_runtime.h"
 #include "../runtime/mods/tiles2d.h"
@@ -129,6 +130,12 @@ typedef struct Canvas {
     int editing_display; /* temporary command-list views can dirty published images */
     MappedImage *extra;
     uint32_t button_signature; /* khdays_button_icons_signature its button icons were drawn with */
+    int information, display_information;
+    unsigned information_epoch, display_information_epoch;
+    uint32_t *information_pixels;
+    size_t information_room;
+    uint32_t information_version;
+    int information_scale;
 } Canvas;
 
 static struct {
@@ -306,6 +313,7 @@ static void release_extra(Canvas *c)
 
 static void dispose_canvas(Canvas *c)
 {
+    free(c->information_pixels);
     release_extra(c);
     free(c->seen);
     free(c->cells);
@@ -1040,7 +1048,13 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
     if (!c || !c->before_glyph)
         return;
     c->before_glyph = 0;
-    if (!hd_enabled() || !path || !font || !glyph || c->ops_disabled) {
+    if (operation_depth && !operation_overflow)
+        c->information = strcmp(operation_scopes[operation_depth - 1], "field.hud.information") == 0;
+    if (c->information)
+        c->information_epoch = khdays_ui_information_epoch();
+    if (c->information && !path)
+        path = "";
+    if ((!hd_enabled() && !c->information) || !path || !font || !glyph || c->ops_disabled) {
         fallback_glyph(c, font, glyph, x, y);
         return;
     }
@@ -1066,14 +1080,14 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
     }
     const uint8_t *widths = (const uint8_t *)KHDAYS_W(g[0]);
     const int index = (int)((g[1] - start) / stride);
-    const int native = !khdays_hd_font_glyph_available(path, index);
+    const int native = !hd_enabled() || !path[0] || !khdays_hd_font_glyph_available(path, index);
     const int fitted = fit_run.font == KHDAYS_REF(font) && fit_run.factor > 0 && fit_run.factor < 1;
     const int small = c->bpp == 4 && table[0] <= 16 && table[1] <= 16 && widths[1] <= 16;
     /* a DS button's glyph is kept as an operation (a snapshot of it when the font has no artwork for
        it): the player's input is drawn in its place, the glyph itself when there is no icon */
     int piece = 0;
     const int button = !native || small ? glyph_button(font, index, &piece) : KHDAYS_BUTTON_NONE;
-    if (native && !button && (!fitted || !small)) {
+    if (native && !button && ((!fitted && !c->information) || !small)) {
         fallback_glyph(c, font, glyph, x, y);
         return;
     }
@@ -1401,6 +1415,7 @@ void khdays_ui_text_memory_copy(const void *src_host, void *dst_host, unsigned i
     if (from < 0) {
         if (to >= 0 && !canvases[to].scrolling) {
             Canvas *target = &canvases[to];
+            target->information = 0;
             target->op_count = target->ops_disabled = 0;
             memcpy(target->source, dst_host, size);
             memcpy(target->base, dst_host, size);
@@ -1428,6 +1443,8 @@ void khdays_ui_text_memory_copy(const void *src_host, void *dst_host, unsigned i
         source = &canvases[from]; /* new_canvas can move the array. */
     }
     Canvas *target = &canvases[to];
+    target->information = source->information;
+    target->information_epoch = source->information_epoch;
     if (target->scrolling || target->area_w != source->area_w || target->area_h != source->area_h ||
         target->param != source->param || target->bpp != source->bpp) {
         if (!target->scrolling) {
@@ -1665,6 +1682,8 @@ static void publish_rect(Canvas *c, int x, int y, int w, int h)
 
 static void publish_range(Canvas *c, uint32_t at, uint32_t size)
 {
+    c->display_information = c->information;
+    c->display_information_epoch = c->information_epoch;
     const uint32_t end = size < c->bytes - at ? at + size : c->bytes;
     const uint32_t tile_bytes = 8u * c->bpp;
     if (!at && end == c->bytes) {
@@ -2910,6 +2929,100 @@ static void emit_obtained(void)
             khdays_ui_left_out_cell(KHDAYS_UI_TEXT, 0, 1, col, row);
 }
 
+/* A separate glyph-only plane shares the existing painter and changes only with text/palette/scale. */
+static int emit_information(Canvas *c, int ox, int oy, const KhdaysBgLayer *layer, uint32_t palette, int scale)
+{
+    /* SetCaptionText maps the lower caption to BG0; the upper BeginTextCrawl uses BG1. */
+    if (!c->display_information || c->bg != (c->engine ? 0 : 1) || !khdays_ui_information_wants())
+        return 0;
+    if (c->display_information_epoch != khdays_ui_information_epoch())
+        return khdays_ui_information_active(c->engine);
+    if (!c->display_count)
+        return khdays_ui_information_active(c->engine);
+    const int lw = layer->wt * 8, lh = layer->ht * 8;
+    int px = ((ox * 8 - layer->hofs) % lw + lw) % lw;
+    int py = ((oy * 8 - layer->vofs) % lh + lh) % lh;
+    if (px >= 256)
+        px -= lw;
+    if (py >= 192)
+        py -= lh;
+    if (py < -16 || py >= 24 || px >= 256 || px + c->area_w * 8 <= 0)
+        return 0;
+    const int width = c->area_w * 8 * scale, height = c->area_h * 8 * scale;
+    if (width > 4096 || height > 512)
+        return 0;
+    unsigned coverage = 0;
+    for (int i = 0; i < c->display_count; ++i) {
+        const GlyphOp *op = &c->display_ops[i];
+        for (int wrap = -1; wrap <= 1; ++wrap) {
+            int l = px + op->source_x + wrap * lw, r = l + op->source_w;
+            int t = py + op->source_y, b = t + op->source_h;
+            if (l < 0)
+                l = 0;
+            if (r > 256)
+                r = 256;
+            if (t < 0)
+                t = 0;
+            if (b > 24)
+                b = 24;
+            if (l < r && t < b)
+                coverage += (unsigned)((r - l) * (b - t));
+        }
+    }
+    if (!coverage)
+        return khdays_ui_information_active(c->engine);
+    const size_t count = (size_t)width * height;
+    uint32_t signature = (palette ^ (uint32_t)c->display_count) * 16777619u;
+    for (int i = 0; i < c->display_count; ++i) {
+        const unsigned char *p = (const unsigned char *)&c->display_ops[i];
+        for (size_t k = 0; k < sizeof(GlyphOp); ++k)
+            signature = (signature ^ p[k]) * 16777619u;
+    }
+    uint16_t colour_cell = 0;
+    for (int i = 0; i < c->area_w * c->area_h; ++i)
+        if (c->cells[i] != 0xffffu) {
+            colour_cell = c->cells[i] & 0xf000u;
+            break;
+        }
+    signature = (signature ^ colour_cell) * 16777619u;
+    if (count > c->information_room) {
+        uint32_t *grown = realloc(c->information_pixels, count * sizeof(uint32_t));
+        if (!grown)
+            return 0;
+        c->information_pixels = grown;
+        c->information_room = count;
+        c->information_scale = 0;
+    }
+    if (c->information_version != signature || c->information_scale != scale) {
+        memset(c->information_pixels, 0, count * sizeof(uint32_t));
+        for (int i = 0; i < c->display_count; ++i) {
+            const GlyphOp *op = &c->display_ops[i];
+            for (int row = 0; row < c->area_h; ++row)
+                for (int col = 0; col < c->area_w; ++col) {
+                    // Keep offscreen glyphs: the replacement owns the horizontal reveal and marquee.
+                    const uint16_t cell = colour_cell;
+                    int l = col * 8, t = row * 8, r = l + 8, b = t + 8;
+                    if (l < op->clip_l)
+                        l = op->clip_l;
+                    if (t < op->clip_t)
+                        t = op->clip_t;
+                    if (r > op->clip_r)
+                        r = op->clip_r;
+                    if (b > op->clip_b)
+                        b = op->clip_b;
+                    if (l < r && t < b)
+                        paint_op(c, op, cell, op->x, op->y, c->information_pixels, width, height, scale, l, t, r, b);
+                }
+        }
+        c->information_version = signature;
+        c->information_scale = scale;
+    }
+    KhdaysUiElement e = {"hud.info", c->engine, (uint32_t)c->bg, 0, 0, 256, 24, c->image};
+    /* BG scrolling belongs to the message, not the KH2 window's root. */
+    return khdays_ui_information_text(&e, c->information_pixels, width, height, signature ^ (unsigned)scale, 8, 3,
+                                      coverage);
+}
+
 static void emit(void)
 {
     const int profile = profiling();
@@ -2919,6 +3032,7 @@ static void emit(void)
     const int scale = khdays_ui_scale();
     uint32_t palettes[2] = {0};
     unsigned palettes_valid = 0;
+    khdays_ui_information_begin();
     prepare_obtained(scale);
     for (int i = 0; i < canvas_count; ++i) {
         Canvas *c = &canvases[i];
@@ -3024,6 +3138,7 @@ static void emit(void)
         if (c->image < 0 || !c->cells) {
             continue;
         }
+        const int information = emit_information(c, ox, oy, &l, palettes[c->engine], scale);
         /* Follow layer scroll and repeat where the tilemap wraps onto the screen. */
         lw = l.wt * 8;
         lh = l.ht * 8;
@@ -3037,7 +3152,7 @@ static void emit(void)
         e.image = c->image;
         KhdaysUiElement anchor = e;
         int anchor_cells = -1;
-        for (int ex = x - lw; ex < KHDAYS_SCREEN_W; ex += lw) {
+        for (int ex = x - lw; !information && ex < KHDAYS_SCREEN_W; ex += lw) {
             for (int ey = y - lh; ey < KHDAYS_SCREEN_H; ey += lh) {
                 if (ex + c->area_w * 8 > 0 && ey + c->area_h * 8 > 0) {
                     e.x = (float)ex;
@@ -3074,7 +3189,7 @@ static void emit(void)
                 }
             }
         }
-        if (c->extra && c->extra->image >= 0) {
+        if (!information && c->extra && c->extra->image >= 0) {
             MappedImage *m = c->extra;
             e.x = (float)-(l.hofs & 7);
             e.y = (float)-(l.vofs & 7);
@@ -3101,6 +3216,7 @@ static void emit(void)
             for (int k = 0; k < c->area_w * c->area_h; ++k)
                 c->dirty[k] &= 0xfeu;
     }
+    khdays_ui_information_end();
     emit_obtained();
     if (profile) {
         const double ms = 1000.0 / CLOCKS_PER_SEC;

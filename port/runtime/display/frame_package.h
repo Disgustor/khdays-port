@@ -60,6 +60,10 @@ typedef struct KhdaysFrameElements {
     KHDAYS_G3D_POINTER(uint32_t, records);
 } KhdaysFrameElements;
 
+/* Information state: low bits own each engine's banner, bits 8/9 have an image. Availability
+ * survives an empty message, a completed exit and a scene change, so native crops stay disabled. */
+#define KHDAYS_INFORMATION_AVAILABLE (1u << 16)
+
 typedef struct KhdaysFramePackage {
     uint32_t frame;     /* the VBlank it was drawn at */
     uint32_t alike;     /* how many VBlanks before it showed the frame before it again (nothing changed) */
@@ -127,6 +131,10 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage party_images[3];
     KhdaysSequenceImage label_images[5];
     KhdaysSequenceImage enemy_image;
+    KhdaysSequenceImage reticle_images[5];
+    KhdaysSequenceImage information_images[2];
+    uint32_t information_hold_frames;
+    uint32_t information_state;
 } KhdaysFramePackage;
 
 /* What KHDAYS_RECORD_FRAMES writes of a package (version 14): all of it but

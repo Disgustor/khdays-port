@@ -15,7 +15,7 @@ The installer's existing **HD menus and HUD** import now makes this gauge from
 the player's installed collections. `installer/setup_steps.py build-hd --menus`
 reads the five `field2d/<region>/zz0field.2dd` entries from KH2's `kh2_fifth`
 package using the existing archive reader. `tools/hd/kh2_gauge.py` copies the
-corresponding remastered `*_zz0field_2dd1.png`, recenters clips 132–138, adds the
+corresponding remastered `*_zz0field_2dd1.png` and reticle atlas `*_zz0field_2dd0.png`, recenters clips 132–138, adds the
 yellow limit clips and white divider, and writes `gauge.json` with the resulting
 indices (157/158/159 for the verified PC resources). The output goes into
 `mods/HD PACK/layouts/gauge/<language>/` for en/us, es/sp, fr/fr, de/gr and it/it.
@@ -490,10 +490,231 @@ at all 17 hardware fade levels.
   with normal/add/subtract blending and depth-only masks, and encodes GPU commands.
   It remains the CPU reference. `port/host/render/kh2_sequence_gpu` and
   `port/shaders/kh2_sequence.hlsl` render those commands into a UI image. Blend
-  modes operate against that image's accumulated pixels; destination-dependent
-  blending against the scene itself still needs compositor integration.
+  modes operate against that image's accumulated pixels. The 3D reticle path
+  instead blends its ordered elements directly with the scene (see below).
 - `port/ui/kh2_hp_gauge` selects the gauge clips and builds mask geometry. The
   reusable sequence code has no knowledge of gauge thresholds or Days HP units.
+
+## Information window
+
+`gauge.json` also accepts an independent `information` object. The HD importer enables
+it and uses the localized gaug archive and `*_zz0field_2dd1.png` atlas. Missing settings,
+disabled HD graphics, unavailable resources or unsupported clips retain Days' banner.
+No additional asset patch is required. Restart after editing settings.
+
+Settings are `enabled`, `archive`, `texture`, `entry`, `scale` (0.65), `offset_x/y`,
+`source_origin_x/y` (0,15), `frames_per_tick`, `intro` (0), `loop` (1), `reveal` (2),
+`outro` (3), `text_offset_x/y`, `text_scale` (1), `clip_width/height` (0,64 KH2
+units; width 0 reads the PC sequence's Ex parameter), `hold_frames` (300 VBlanks), `scroll_wait_frames` (180 sequence frames),
+and `scroll_speed` (1 KH2 unit per sequence frame; 0 disables scrolling).
+Text offsets use DS screen units before
+composition scaling. `text_scale=1` keeps Days' glyph size at gauge scale 0.65;
+changing the gauge scale scales the text proportionally. Native font mappings,
+language, glyph metrics, control icons, palette and typewriter updates remain
+owned by Days. The replacement retains offscreen glyphs and supplies its own
+marquee only when the line exceeds the readable area. The original PC gaug window
+has Ex=360; the independent PC image uses that width directly. PS3's debug update
+subtracts 170 before its platform scissor call; applying that adjustment to this
+image incorrectly clipped the text halfway across the window. The final reveal
+quads supply the right fade's clear boundary (335.5 in the original data), so the
+last character stops before the fade instead of disappearing under it. Positive
+`clip_width` values still override the viewport for custom sequences.
+Two-screen mode retains
+the message until Days closes it; one-screen mode holds short lines for five
+seconds before playing the complete exit. Long lines get enough time to scroll
+to their end and remain readable. `hold_frames` changes the minimum one-screen
+hold, measured after the intro before any reading/scroll delay can expire.
+Pause freezes playback and shows the retained caption without the reveal
+cover (animation 2). If paused during the intro, the displayed background uses the
+open looping window with visible text; the animation clock stays frozen. Returning
+to play starts a fresh display period for the retained lower caption.
+
+Generation hooks observe accepted `Ov002_RequestPanelScreen` requests before any
+glyphs arrive, lower `Ov002_SetCaptionText` updates, `Ov002_StartPanelFadeIn` and
+the confirmed upper `Ov002_BeginTextCrawl`, and `Ov002_HoldPanelScreen` pause/resume.
+`Ov002_OpenPanelScreen` and `Ov002_ClosePanelScreen` reset both captions and advance
+a context generation. Captured and copied glyph canvases retain that generation;
+old map canvases cannot supply a new caption, even if the message is identical.
+Existing
+`field.hud.information` glyph capture identifies the
+visible text canvases. The lower caption uses sub BG0 (`Ov002_GetItemResource(0x18)`
+returns `G2S_GetBG0ScrPtr`, and `Ov002_UploadCaptionChars` uses `GXS_LoadBG0Char`);
+the upper crawl uses main BG1. `ui/text.c` uses its original/native or replacement-font
+painter to cache a transparent glyph-only plane; it does not sample the old border
+or recolor a flattened screenshot. Rasterization and glyph-plane uploads occur only
+when commands, palette or resolution change. Full RAM canvas copies retain the
+information tag as well as glyph commands, including ordinary native-font glyphs.
+Wrapped tilemap positions are normalized before selecting a source; when several
+staging canvases share a layer, the one with the greatest visible glyph coverage wins.
+The GPU sequence pass
+inserts that plane between the background and the independent reveal quads, with
+animated positioning, clipping, scale and sequence alpha. Closing follows the
+original `INFORMATION_WINDOW::close`: it clears the message and hides the reveal
+overlay together, then plays the background's exit animation. Retained glyph
+pixels are kept for pause/restore, but never shown during the exit.
+
+The adapter removes observed information text and `bl000.NCGR` artwork in
+the original top rows. The upper crawl instead uses BG3 artwork from `main.p2`.
+During panel states 1–8 the adapter records those cells' map entries, location and
+tile bytes. Identical retired artwork stays hidden after the panel state ends;
+a changed map, entry or tile releases its suppression immediately, preventing a
+final flash without hiding newly published HUD artwork.
+
+In single-screen mode the original port crops the lower banner (232x24 DS dots,
+224x24 during pause) or the upper banner (256x24) and places that crop at the top
+left. An available information replacement disables those built-in crops with the
+`information-mod` composition state, even before the first message or after an exit.
+The replacement instead receives its own full-image shape at the top left, with
+the port's 5-dot top margin and the player/party gauge's 0.766667 composition scale,
+both following HUD size. A JSON scale of 0.65 therefore has the same ratio to
+player/party gauge art; it is not shrunk again by the old native banner's 0.5 scale.
+The same root and scale apply to either native engine, independently of crop
+shapes, mission-panel pixel detection and native text-layer scroll or alpha.
+JSON offsets remain in DS units before that composition scale. Sequence intro,
+reveal and exit control visibility; the game's master screen fades still apply.
+The upper image has priority over the lower copy during a mission introduction;
+pause prefers the retained lower caption. The replacement does not change
+`info-upper`: that state also controls whether the native HUD's 3D is hidden or
+positioned. Its lifetime remains Days' even while a sequence is entering or leaving,
+so the heart counter cannot lose its layout transform for a transition frame.
+Dialogs, tutorials and other screens cannot receive this shape. Without a loaded,
+enabled replacement, the existing crops and native-pixel timer remain unchanged.
+
+The native `Ov002_RequestPanelScreen` function is observed rather than invoked
+for lower-screen hints: it controls panel modes, world fades, sound and game flow
+as well as rendering. Both native message paths feed the same replacement renderer.
+The game-thread situation snapshot gates replacement drawing and native suppression
+in both screen modes: camp/Panel menus, shops, game over, tutorials, movies,
+running event scenes, dialog panels and held loading screens cannot retain a
+field information image. Returning to the field restores the current caption;
+changing between one and two screens also restores its appropriate lifetime.
+
+KH2 provenance: maintainer-supplied PS3 debug disassembly for
+`INFORMATION::openInformationWindow` (0xA6BC0), `INFORMATION_WINDOW::create`
+(0xA8A30), `init` (0xA8924), `update` (0xA8710), `setMessage` (0xA8B4C), `close`
+(0xA8690), `SpriteMessage::drawMessage` (0x7B5C8), and `ScisSpriteMessage::draw`
+(0x6A9634), checked against DWARF field offsets and the local little-endian PC
+SEQD. Window and mask begin on 0, then independently select 1 and 2. Updating an
+open message keeps 1 and restarts 2; closing selects 3 and hides the mask. Text
+position adds sequence active XY, sprite offsets/position, clip X/Y parameters,
+and the message offset. The original clip parameters are (6,-12,0,45,360), and
+init separately sets the message offset to (6,0). PS3's -85 widescreen adjustment
+and INFO_BASE stacking are replaced by Days' composition and JSON offsets.
+The marquee uses KH2's 180-frame initial wait and one-unit-per-frame speed by
+default. Intentional differences: fitting text remains still, scrolling stops
+at the final readable position outside the edge fade, and Days retains control of message lifetime
+except for the port's temporary one-screen display. System sound is omitted.
+
+Tests cover independent intro/reveal/exit, message replacement, retained glyphs,
+pause, warm-frame allocation/upload counts, resolution changes, timeout without
+reopening, and fallback. Font-canvas tests exercise native and replacement glyph
+planes and their cache. GPU tests cover text insertion, scaling, scissor, alpha,
+mask order and exact shared-edge coverage at non-power-of-two scales. Local-only
+`khdays-kh2-gpu-test --information ARCHIVE TEXTURE` compares original clips 0–3
+against the reference rasterizer at 1x/4x/8x. In-game verification should include
+boss hints, mission-start information, changing/empty messages, long scrolling
+lines, font replacements, one/two screens, dialogs, pause, and scene fades.
+`khdays-kh2-information-test --reference ARCHIVE` also checks the runtime's text
+viewport, final scroll position and text removal at closing against a private
+original PC gaug sequence without launching the game.
+
+## Target and interaction reticles
+
+The same `gauge.json` has a `reticles` object. Its shared `archive`, `texture`,
+`entry`, `scale`, `offset_x/y`, `source_origin_x/y` and `frames_per_tick` apply to
+the five objects below; each object can override those fields independently.
+`enabled: false` on `reticles` disables them all. The gauge's root `enabled`
+does not disable reticles. Restart after changing the file.
+
+| Object | Start and loop | Exit | Default |
+| --- | --- | --- | --- |
+| `soft_lock` | 5 | 4 | On |
+| `hard_lock` | 27 | 26 | On |
+| `interact` | 50 | 49 | On |
+| `chain` | -1 | -1 | Off |
+| `error` | -1 | -1 | Off |
+
+The fields are `animation` and `end_animation`. A negative start animation keeps
+the Days draw; a negative exit animation removes the replacement immediately.
+The defaults use `fiel` and `US_zz0field_2dd0.png` at scale 0.65. PNG and supported
+DDS atlases use the existing loader. Offsets are DS screen dots relative to the
+projected target; source origin is in KH2 logical units. The original `fiel`
+coordinates are already centered. No binary recentering is needed. Its IMGD is
+256x256 and the supplied remaster is 1024x1024; the existing logical atlas
+conversion supplies the factor of four.
+
+Days already projects targets to screen coordinates before drawing its 3D sprite
+quads. The port observes those draws, preserving selection, hard-lock input,
+target eligibility, offscreen checks and the eight-dot vertical lift. Only the
+chosen marker draws are suppressed. The actual archive members are `rockon2t`
+and `rockon02` for the target pair, `rockon03` for the four interaction corners,
+`rockon04` for its usable center, `rockon05@rockon05_pl` for its unavailable
+center, and `t_02@t_02_pl` for the chain timer. Error replacement includes its
+corner set; with it disabled, that entire native set is retained.
+
+Unavailable or invalid resources fail independently for each object. Its native
+draw continues, so the existing `graphics/ba/ef/ta.p.z/...png` replacement path
+still applies, followed by the DS texture. Other effects in this archive are
+unaffected. New targets restart the intro; a lost target or change of marker kind
+plays the prior exit once at its last world position, reprojected through the
+current camera each update. The position is copied rather than retaining a
+target pointer, so removed targets cannot leave dangling references. Before
+native markers switch to an orthographic camera, `Ov022_UpdateSelectionMarker`
+projects retained anchors through `Ov022_ProjectToScreen`, including its
+8-pixel lift, viewport and behind-camera checks. Off-screen exits keep advancing
+without drawing; they can reappear only while their exit timeline is unfinished.
+Native input/UI
+suppression cancels the replacement. A long gap without marker updates restarts
+cleanly. Loop points and timing come from SEQD (`5`: 11–59, `27`: 12–69,
+`50`: 71–189), with one source frame per VBlank by default. Pause freezes playback.
+
+Reticles submit a sequence polygon into the existing 3D layer, with the native
+polygon ID, alpha, orthographic depth and W scale. `raster3d.hlsl` evaluates its
+ordered elements against the scene at that pixel: normal source-alpha, additive
+and subtractive blending preserve atlas alpha at 8-bit precision. The DS's
+5-bit texture-alpha conversion and alpha-test threshold do not apply to these
+sequence elements. Blend/filter/mask sampling is shared with the sequence-image
+shader through `kh2_sequence_sample.hlsli`; unrelated DS polygons keep their
+original rules. No intermediate transparent image is allocated or alpha-blended
+over the world. This avoids dark glow disks, double attenuation, low-alpha
+cutoffs and 5-bit alpha bands. The existing HD rendering mode retains 8-bit RGB.
+
+Programs are retained separately for the four geometry-list slots, so preparing
+a later frame does not overwrite the shown list's commands. The polygon's
+`KHDAYS_G3D_SEQUENCE` flag selects this path; its palette word identifies the
+retained program. Atlases are cached, and normal frames upload only commands.
+The screen's existing fade and UI composition still apply. The software DS
+renderer keeps the native markers. Both styles (including PNG fallback) receive
+`KHDAYS_G3D_MARKER` only around the existing selection draws. They draw after
+world geometry, independently of Z/W depth or translucent-enemy sort order,
+without writing world depth. This does not promote them over 2D UI. The marker
+scope is cleared even when replacements are unavailable or a draw is cancelled.
+
+Days provenance: `khdays-decomp` `a2b0478b87e3102732094c34f6ca89595f98ab93`,
+`Ov022_ReadSelectionInput` (`0x02085380`), `Ov022_UpdateSelectionMarker`,
+`Ov022_ProjectToScreen` (`0x02085ec4`), `func_0201653c` (`0x0201653c`),
+`Ov022_DrawSelectionMarkers` (`0x020863d0`), `Ov022_UpdateUiSelectionMarker`
+(`0x02086138`), `Ov022_InitUiSubsystem`, `Ov022_LoadMarkerSprites`, and
+`Ov002_DrawSpriteQuad` (`0x02050f50`). Hooks live in `port/tools/prepare.py`;
+no gameplay state or generated/decomp source is edited. KH2 clip assignments
+come from the maintainer; the supplied little-endian PC resource confirms the
+timelines and loop points. Exact original-game reticle size, glow and timing still
+need capture comparison.
+
+Automated checks cover transitions, one-shot exits, restart on target change,
+per-object settings, copied world anchors, reprojected exits, hidden/paused exit
+timelines, retained list images, warm-frame allocations, HD-off and
+missing-file fallback. `khdays-kh2-gpu-test --reticles ARCHIVE TEXTURE` compares
+the actual six clips against the reference at 1x, 4x and 8x, both as images and
+over a colored 3D background. Synthetic scene tests additionally cover all three
+blend modes, their order, a full alpha ramp with the native alpha cutoff enabled,
+black additive texels, masks, world depth, and the selection-only foreground
+override. Native/PNG tests exercise Z/W buffering, matching translucent world
+IDs, and opaque 2D elements above the marker. In-game validation:
+approach/leave an NPC, soft-target enemies, toggle hard lock, switch targets,
+move a target beyond the camera, pause, open a tutorial, and test widescreen and
+two-screen modes. Also disable each object/remove its file and check HD PNG and
+DS fallback; chain/error should stay native until explicitly configured.
 
 ## Provenance and supported behavior
 

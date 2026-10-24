@@ -17,6 +17,7 @@
 #include "bg.h"
 #include "elements.h"
 #include "parts.h"
+#include "kh2_information.h"
 #include "../gpu/gpu2d.h"
 #include "../runtime/core/io.h"
 #include "../runtime/core/origin.h"
@@ -331,13 +332,15 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
     KhdaysUiElement hd_element = e;
     hd_element.slot = KES_DIRECT | (uint32_t)bg;
     hd_element.image = sh->hd_image1 - 1;
-    const int native_hp = piece->label ? khdays_ui_kh2_label_native(piece->label - 1, &e)
-                          : piece->party_slot
-                              ? khdays_ui_kh2_party_compose(piece->party_slot, &e, sh->hd_image1 ? &hd_element : NULL)
-                              : bg == 3 && strcmp(piece->id, "hud.portrait") == 0 &&
-                                    khdays_ui_kh2_hp_compose(&e, sh->hd_image1 ? &hd_element : NULL);
+    int native_hp = piece->label ? khdays_ui_kh2_label_native(piece->label - 1, &e)
+                    : piece->party_slot
+                        ? khdays_ui_kh2_party_compose(piece->party_slot, &e, sh->hd_image1 ? &hd_element : NULL)
+                        : bg == 3 && strcmp(piece->id, "hud.portrait") == 0 &&
+                              khdays_ui_kh2_hp_compose(&e, sh->hd_image1 ? &hd_element : NULL);
     if (piece->label && sh->hd_image1)
         khdays_ui_kh2_label_native(piece->label - 1, &hd_element);
+    if (strcmp(piece->id, "hud.info") == 0 && khdays_ui_information_active(piece->screen))
+        native_hp = 1;
     if (!native_hp)
         khdays_ui_emit(KHDAYS_UI_HUD, &e);
     if (sh->hd_image1 != 0 && !native_hp) {

@@ -170,6 +170,67 @@
       }
     }
   },
+  "reticles": {
+    "enabled": true,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd0.png",
+    "entry": "fiel",
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale": 0.65,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "soft_lock": {
+      "enabled": true,
+      "animation": 5,
+      "end_animation": 4
+    },
+    "hard_lock": {
+      "enabled": true,
+      "animation": 27,
+      "end_animation": 26
+    },
+    "interact": {
+      "enabled": true,
+      "animation": 50,
+      "end_animation": 49
+    },
+    "chain": {
+      "enabled": false,
+      "animation": -1,
+      "end_animation": -1
+    },
+    "error": {
+      "enabled": false,
+      "animation": -1,
+      "end_animation": -1
+    }
+  },
+  "information": {
+    "enabled": true,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "scale": 0.65,
+    "offset_x": 0,
+    "offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 15,
+    "frames_per_tick": 1,
+    "intro": 0,
+    "loop": 1,
+    "reveal": 2,
+    "outro": 3,
+    "text_offset_x": 0,
+    "text_offset_y": 0,
+    "text_scale": 1,
+    "clip_width": 0,
+    "clip_height": 64,
+    "hold_frames": 300,
+    "scroll_wait_frames": 180,
+    "scroll_speed": 1
+  },
   "enemy": {
     "enabled": true,
     "archive": "zz0field.2dd",

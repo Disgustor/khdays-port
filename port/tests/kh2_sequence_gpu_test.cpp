@@ -6,12 +6,16 @@
 extern "C" {
 #include "../host/render/kh2_sequence_gpu.h"
 #include "../host/render/gpu_hd.h"
+#include "../host/render/gpu_raster3d.h"
+#include "../runtime/display/frame_package.h"
 #include "../runtime/mods/textures.h"
+#include "../gpu/gpu3d.h"
 }
 #include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -122,6 +126,261 @@ void compare(const KhdaysSequenceImage &p, const std::vector<seq::SequenceQuad> 
         throw std::runtime_error("GPU/reference mismatch: " + std::to_string(bad) + " channels, max " +
                                  std::to_string(maximum));
     }
+}
+
+// Check the actual 3D destination, rather than comparing two flattened transparent images.
+std::vector<std::uint32_t> scene_pixels(int resolution, bool attributes = false)
+{
+    SDL_GPUTexture *color, *attr;
+    int columns;
+    require(khdays_raster3d_targets(&color, &attr, &columns));
+    const unsigned side = unsigned(64 * resolution), bytes = side * side * 4;
+    SDL_GPUTransferBufferCreateInfo info{};
+    info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+    info.size = bytes;
+    auto *transfer = SDL_CreateGPUTransferBuffer(device, &info);
+    require(transfer != nullptr);
+    auto *cmd = SDL_AcquireGPUCommandBuffer(device);
+    auto *copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion region{};
+    region.texture = attributes ? attr : color;
+    region.x = unsigned(16 * resolution);
+    region.y = unsigned(24 * resolution);
+    region.w = region.h = side;
+    region.d = 1;
+    SDL_GPUTextureTransferInfo to{};
+    to.transfer_buffer = transfer;
+    SDL_DownloadFromGPUTexture(copy, &region, &to);
+    SDL_EndGPUCopyPass(copy);
+    finish(cmd);
+    auto *mapped = static_cast<const std::uint32_t *>(SDL_MapGPUTransferBuffer(device, transfer, false));
+    require(mapped != nullptr);
+    std::vector<std::uint32_t> out(mapped, mapped + side * side);
+    SDL_UnmapGPUTransferBuffer(device, transfer);
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    return out;
+}
+
+void compare_scene(const std::vector<seq::SequenceQuad> &quads, const khdays::assets::DecodedTexture &atlas,
+                   int logical_w, int logical_h, int resolution, unsigned token = 0, bool occluded = false,
+                   const render::SequenceView &view = {}, bool marker = false, bool wbuffer = false)
+{
+    auto p = std::make_unique<KhdaysFramePackage>();
+    constexpr unsigned background = 0xff844a10u; // CLEAR_COLOR's 2/9/16 expanded to 8 bits.
+    const unsigned clear = 2u | (9u << 5) | (16u << 10) | (31u << 16);
+    std::memcpy(p->io3d + 0x50, &clear, 4);
+    const unsigned depth = occluded ? 0 : 32767;
+    std::memcpy(p->io3d + 0x54, &depth, 4);
+    p->disp3dcnt = 13; // texture, alpha test and blending on; the DS cutoff must not affect SEQD.
+    p->io3d[0x40] = 31;
+    auto &program = p->reticle_images[token / 4];
+    program.words[KSI_OUTPUT] = token;
+    program.words[KSI_ATLAS] = 1;
+    program.words[KSI_LOGICAL_W] = unsigned(logical_w);
+    program.words[KSI_LOGICAL_H] = unsigned(logical_h);
+    program.words[KSI_WIDTH] = program.words[KSI_HEIGHT] = 64;
+    number(program, KSI_VIEW_X, view.x);
+    number(program, KSI_VIEW_Y, view.y);
+    number(program, KSI_SCALE, view.scale);
+    render::encode_sequence_quads(program, quads);
+    KhdaysG3dPolygon polygon{};
+    polygon.flags = KHDAYS_G3D_MOD | KHDAYS_G3D_SEQUENCE;
+    if (marker)
+        polygon.flags |= KHDAYS_G3D_MARKER;
+    polygon.pltt = token;
+    polygon.replacement = 1;
+    polygon.attr = 0xc0u | (31u << 16) | (62u << 24);
+    polygon.count = 4;
+    polygon.ymin = 24;
+    polygon.ymax = 88;
+    polygon.translucent = 1;
+    KhdaysG3dVertex vertices[4]{};
+    constexpr int corners[]{0, 1, 3, 2};
+    for (int i = 0; i < 4; ++i) {
+        auto &v = vertices[i];
+        const auto c = corners[i];
+        v.x = (c & 1) ? 80.0f : 16.0f;
+        v.y = (c & 2) ? 88.0f : 24.0f;
+        v.z = -1;
+        v.w = 4194304;
+        v.r = v.g = v.b = 63;
+        v.a = 1;
+        v.s = (c & 1) ? 128.0f : 0;
+        v.t = (c & 2) ? 128.0f : 0;
+    }
+    p->list3d.polys = &polygon;
+    p->list3d.npolys = 1;
+    p->list3d.verts = vertices;
+    p->list3d.nverts = 4;
+    p->list3d.widen = 1;
+    p->list3d.swap_params = wbuffer ? 2u : 0u;
+    const int side = 64 * resolution;
+    std::vector<std::uint32_t> expected(std::size_t(side * side), background);
+    if (!occluded || marker)
+        render::draw_sequence(quads, atlas, logical_w, logical_h, expected, side, side,
+                              {view.x * resolution, view.y * resolution, view.scale * resolution});
+    require(khdays_raster3d_rasterize(p.get(), resolution, 0));
+    const auto got = scene_pixels(resolution);
+    for (const auto pixel : got)
+        if (pixel & (1u << 29))
+            throw std::runtime_error("selection marker was promoted above the 2D layer");
+    for (std::size_t i = 0; i < got.size(); ++i)
+        for (unsigned shift = 0; shift < 24; shift += 8)
+            if (std::abs(int((got[i] >> shift) & 255) - int((expected[i] >> shift) & 255)) > 2)
+                throw std::runtime_error("scene blending mismatch at " + std::to_string(i % std::size_t(side)) + "," +
+                                         std::to_string(i / std::size_t(side)) + " got " +
+                                         std::to_string(got[i] & 0xffffffu) + " expected " +
+                                         std::to_string(expected[i] & 0xffffffu));
+}
+
+void scene_blending()
+{
+    khdays::assets::DecodedTexture atlas;
+    atlas.width = 256;
+    atlas.height = 1;
+    atlas.rgba.resize(1024);
+    for (unsigned i = 0; i < 256; ++i) {
+        atlas.rgba[i * 4] = atlas.rgba[i * 4 + 1] = atlas.rgba[i * 4 + 2] = 255;
+        atlas.rgba[i * 4 + 3] = std::uint8_t(i);
+    }
+    std::vector<std::uint32_t> texels(256);
+    std::memcpy(texels.data(), atlas.rgba.data(), 1024);
+    set_image(1, 256, 1, texels);
+    images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+    khdays_gpu_hd_close();
+    require(khdays_raster3d_open(device));
+    khdays_raster3d_set_fine(1);
+    seq::SequenceQuad ramp;
+    for (int i = 0; i < 4; ++i)
+        ramp.vertices[std::size_t(i)] = {(i & 1) ? 64.0f : 0, (i & 2) ? 64.0f : 0, (i & 1) ? 256.0f : 0,
+                                         (i & 2) ? 1.0f : 0, 0x80808080};
+    for (int resolution : {1, 4, 8}) {
+        for (unsigned blend : {0u, 1u, 2u}) {
+            ramp.blend = blend;
+            compare_scene({ramp}, atlas, 256, 1, resolution, 19);
+        }
+        auto add = ramp, subtract = ramp, normal = ramp;
+        add.blend = 1;
+        subtract.blend = 2;
+        normal.blend = 0;
+        for (auto &v : subtract.vertices)
+            v.color = 0x80800000;
+        for (auto &v : normal.vertices)
+            v.color = 0x40008000;
+        compare_scene({add, subtract, normal}, atlas, 256, 1, resolution);
+        auto black = ramp;
+        black.textured = false;
+        black.blend = 1;
+        for (auto &v : black.vertices)
+            v.color = 0x80000000;
+        compare_scene({black}, atlas, 256, 1, resolution);
+        compare_scene({add}, atlas, 256, 1, resolution, 0, true);
+        compare_scene({add}, atlas, 256, 1, resolution, 0, true, {}, true);
+        compare_scene({add}, atlas, 256, 1, resolution, 0, true, {}, true, true);
+        auto mask = ramp, clipped = add;
+        mask.color_write = false;
+        mask.depth_write = true;
+        mask.depth = 100;
+        clipped.depth_test = true;
+        clipped.depth = 99;
+        compare_scene({mask, clipped}, atlas, 256, 1, resolution);
+    }
+    khdays_raster3d_close();
+    std::cout << "Scene normal/add/subtract, ordered mixtures, black glow, full alpha ramp and depth checks passed\n";
+}
+
+void native_marker_depth()
+{
+    set_image(1, 1, 1, {0xffffffffu});
+    images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+    khdays_gpu_hd_close();
+    require(khdays_raster3d_open(device));
+    khdays_raster3d_set_fine(0);
+    auto p = std::make_unique<KhdaysFramePackage>();
+    const unsigned clear = (31u << 16), clear_depth = 32767;
+    std::memcpy(p->io3d + 0x50, &clear, 4);
+    std::memcpy(p->io3d + 0x54, &clear_depth, 4);
+    p->disp3dcnt = 9;
+    KhdaysG3dPolygon polygons[2]{};
+    KhdaysG3dVertex vertices[8]{};
+    constexpr int corners[]{0, 1, 3, 2};
+    for (int i = 0; i < 2; ++i) {
+        auto &poly = polygons[i];
+        poly.first = i * 4;
+        poly.count = 4;
+        poly.ymin = 24;
+        poly.ymax = 88;
+        poly.attr = 0xc0u | (16u << 16) | (62u << 24) | 0x800u;
+        poly.replacement = -1;
+        poly.translucent = 1;
+        for (int j = 0; j < 4; ++j) {
+            auto &v = vertices[i * 4 + j];
+            v.x = (corners[j] & 1) ? 80.0f : 16.0f;
+            v.y = (corners[j] & 2) ? 88.0f : 24.0f;
+            v.z = i ? 0.5f : -1.0f;
+            v.w = i ? 4194304.0f : 4096.0f;
+            v.r = i ? 0.0f : 63.0f;
+            v.g = i ? 63.0f : 0.0f;
+            v.a = 1;
+            v.s = (corners[j] & 1) ? 128.0f : 0;
+            v.t = (corners[j] & 2) ? 128.0f : 0;
+        }
+    }
+    p->list3d.polys = polygons;
+    p->list3d.npolys = 2;
+    p->list3d.verts = vertices;
+    p->list3d.nverts = 8;
+    p->list3d.widen = 1;
+    std::array<unsigned char, 0x400> io{};
+    KhdaysVramPages vram{};
+    std::vector<unsigned> expected(256 * 192);
+    for (bool wbuffer : {false, true}) {
+        p->list3d.swap_params = wbuffer ? 2u : 0u;
+        for (bool marked : {false, true}) {
+            polygons[1].flags = marked ? KHDAYS_G3D_MARKER : 0;
+            io[0x60] = 9;
+            std::memcpy(io.data() + 0x300, p->io3d, 0x100);
+            khdays_gpu3d_draw(&p->list3d, io.data(), &vram, expected.data());
+            require(khdays_raster3d_rasterize(p.get(), 1, 0));
+            auto got = scene_pixels(1);
+            for (int y = 0; y < 64; ++y)
+                for (int x = 0; x < 64; ++x) {
+                    const auto actual = got[std::size_t(y * 64 + x)];
+                    const auto reference = expected[std::size_t((y + 24) * 256 + x + 16)];
+                    require((actual & 0xffffffu) == (reference & 0xffffffu));
+                    require((((actual >> 8) & 63u) != 0u) == marked);
+                    require(!(actual & (1u << 29)));
+                }
+        }
+        // The existing HD PNG fallback still goes through the native polygon's marker stage.
+        polygons[1].tex = 7u << 26;
+        polygons[1].replacement = 1;
+        require(khdays_raster3d_rasterize(p.get(), 1, 0));
+        for (const auto pixel : scene_pixels(1))
+            require(((pixel >> 8) & 63u) > 0);
+        for (const auto pixel : scene_pixels(1, true))
+            require((pixel & 0xffffffu) == (wbuffer ? 4096u : 0u));
+        polygons[1].attr = 0xc0u | (31u << 16) | (62u << 24);
+        require(khdays_raster3d_rasterize(p.get(), 1, 0));
+        for (const auto pixel : scene_pixels(1, true))
+            require((pixel & 0xffffffu) == (wbuffer ? 4096u : 0u));
+        polygons[1].attr = 0xc0u | (16u << 16) | (62u << 24) | 0x800u;
+        polygons[1].tex = 0;
+        polygons[1].replacement = -1;
+    }
+    for (unsigned role : {unsigned(KHDAYS_2D_3D_HIDDEN), unsigned(KHDAYS_2D_3D_SECOND)}) {
+        for (auto &rec : p->composition) {
+            rec.under = rec.other = 0x03e0;
+            rec.role = static_cast<unsigned char>(role);
+        }
+        require(khdays_raster3d_draw(p.get(), 1, 0));
+        int width, height;
+        auto *composed = khdays_raster3d_read(&width, &height);
+        require(composed && composed[56 * width + 48] == 0x00ff00u);
+        SDL_free(composed);
+    }
+    khdays_raster3d_close();
+    std::cout << "Native/PNG marker foreground, Z/W depth, translucent ID isolation and 2D occlusion passed\n";
 }
 void synthetic()
 {
@@ -381,6 +640,178 @@ void private_enemy(const char *archive, const char *texture)
                   << timings[95] << " ms (includes submission/wait)\n";
     }
 }
+
+void private_reticles(const char *archive, const char *texture)
+{
+    const auto a = render::load_sequence_asset(archive, "fiel", texture);
+    std::vector<std::uint32_t> texels(a.texture.rgba.size() / 4);
+    std::memcpy(texels.data(), a.texture.rgba.data(), a.texture.rgba.size());
+    set_image(1, a.texture.width, a.texture.height, texels);
+    images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+    require(khdays_raster3d_open(device));
+    khdays_raster3d_set_fine(1);
+    for (int resolution : {1, 4, 8}) {
+        KhdaysSequenceImage p{};
+        for (int clip : {4, 5, 26, 27, 49, 50}) {
+            const int end = seq::sequence_frame_count(a.sequence, std::size_t(clip));
+            seq::SequencePlayer player;
+            player.select(a.sequence, std::size_t(clip));
+            for (int t : {0, 1, 5, 9, 10, 20, 39, 59, 70, 100, 189}) {
+                if (t >= end)
+                    continue;
+                const auto frame = seq::evaluate_sequence(a.sequence, std::size_t(clip), float(t));
+                const render::SequenceView view{52.0f * resolution, 52.0f * resolution, 0.65f * resolution};
+                initialize(p, 104 * resolution, 104 * resolution, a.logical_size[0], a.logical_size[1], view);
+                render::encode_sequence_quads(p, frame.quads);
+                compare(p, frame.quads, a.texture, a.logical_size[0], a.logical_size[1], view);
+            }
+            if (clip == 5 || clip == 27 || clip == 50) {
+                player.advance(a.sequence, float(end));
+                require(player.playing() && player.frame() == float(a.sequence.clips[std::size_t(clip)].restart));
+            }
+            const auto scene = seq::evaluate_sequence(a.sequence, std::size_t(clip), float(std::min(end / 2, 32)));
+            compare_scene(scene.quads, a.texture, a.logical_size[0], a.logical_size[1], resolution, 0, false,
+                          {32, 32, 0.65f});
+        }
+        std::cout << "Reticle intros, loops and exits matched GPU/reference at " << resolution << "x\n";
+    }
+    khdays_raster3d_close();
+}
+void private_information(const char *archive, const char *texture)
+{
+    const auto a = render::load_sequence_asset(archive, "gaug", texture);
+    set_image(1, a.texture.width, a.texture.height, [&] {
+        std::vector<std::uint32_t> p(a.texture.rgba.size() / 4);
+        std::memcpy(p.data(), a.texture.rgba.data(), a.texture.rgba.size());
+        return p;
+    }());
+    for (int resolution : {1, 4, 8})
+        for (int clip : {0, 1, 2, 3})
+            for (float frame : {0.0f, 10.0f, 80.0f}) {
+                if (frame >= seq::sequence_frame_count(a.sequence, std::size_t(clip)))
+                    continue;
+                const auto f = seq::evaluate_sequence(a.sequence, std::size_t(clip), frame);
+                const render::SequenceView view{80.0f * resolution, 0, .65f * resolution};
+                KhdaysSequenceImage p;
+                initialize(p, 340 * resolution, 60 * resolution, a.logical_size[0], a.logical_size[1], view);
+                render::encode_sequence_quads(p, f.quads);
+                compare(p, f.quads, a.texture, a.logical_size[0], a.logical_size[1], view);
+            }
+    for (int resolution : {1, 4, 8}) {
+        const int tw = 400 * resolution, th = 16 * resolution;
+        std::vector<std::uint32_t> glyphs(std::size_t(tw) * th);
+        for (int y = 3 * resolution; y < 11 * resolution; ++y)
+            for (int x = 8 * resolution; x < tw; ++x)
+                glyphs[std::size_t(y) * tw + x] = 0xffff00ffu;
+        set_image(2, tw, th, glyphs);
+        for (float frame : {0.0f, 120.0f}) {
+            const auto window = seq::evaluate_sequence(a.sequence, 1, frame);
+            const auto mask = seq::evaluate_sequence(a.sequence, 2, frame);
+            auto quads = window.quads;
+            quads.insert(quads.end(), mask.quads.begin(), mask.quads.end());
+            const render::SequenceView view{80.0f * resolution, 0, .65f * resolution};
+            KhdaysSequenceImage p;
+            initialize(p, 340 * resolution, 60 * resolution, a.logical_size[0], a.logical_size[1], view);
+            render::encode_sequence_quads(p, quads);
+            const auto active = window.active.value();
+            p.words[KSI_TEXT_INSERT] = unsigned(window.quads.size()) + 1;
+            number(p, KSI_TEXT_SCALE, 1);
+            number(p, KSI_FACE_X, view.x + ((active.x + 12) * .65f - 8) * resolution);
+            number(p, KSI_FACE_Y, ((active.y - 12) * .65f - 3) * resolution);
+            number(p, KSI_FACE_W, float(tw));
+            number(p, KSI_FACE_H, float(th));
+            number(p, KSI_TEXT_CLIP_X, view.x);
+            number(p, KSI_TEXT_CLIP_Y, 0);
+            number(p, KSI_TEXT_CLIP_W, 360 * .65f * resolution);
+            number(p, KSI_TEXT_CLIP_H, 64 * .65f * resolution);
+            number(p, KSI_TEXT_ALPHA, float(active.color >> 24) / 128);
+            draw(p);
+            const unsigned first = read(0, 16)[0];
+            const auto got = read(first * 4, unsigned(340 * resolution * 60 * resolution * 4));
+            const auto visible = std::count_if(got.begin(), got.end(), [](unsigned pixel) {
+                return (pixel & 255u) > 220 && ((pixel >> 8) & 255u) < 30 && ((pixel >> 16) & 255u) > 220;
+            });
+            if ((frame == 0 && visible != 0) || (frame == 120 && visible < 100 * resolution * resolution))
+                throw std::runtime_error("real information mask did not hide, then reveal, the glyph plane");
+            if (frame == 120) {
+                int right_visible = 0;
+                for (int y = 0; y < 60 * resolution; ++y)
+                    for (int x = 220 * resolution; x < 295 * resolution; ++x) {
+                        const unsigned pixel = got[std::size_t(y) * 340 * resolution + x];
+                        right_visible +=
+                            (pixel & 255u) > 220 && ((pixel >> 8) & 255u) < 30 && ((pixel >> 16) & 255u) > 220;
+                    }
+                if (right_visible < 100 * resolution * resolution)
+                    throw std::runtime_error("original PC information text was clipped in the middle of the box");
+            }
+        }
+    }
+    std::cout << "Original gaug information clips and combined text/reveal matched at 1x/4x/8x\n";
+}
+void information_text()
+{
+    // .65 at 4x puts x=7.5 exactly on pixel center 339.5; adjacent faded quads must not overlap.
+    for (bool mirrored : {false, true}) {
+        khdays::assets::DecodedTexture a;
+        a.width = a.height = 1;
+        a.rgba = {255, 255, 255, 255};
+        set_image(1, 1, 1, {0xffffffffu});
+        KhdaysSequenceImage p;
+        const render::SequenceView view{320, 0, 2.6f};
+        initialize(p, 400, 160, 1, 1, view);
+        std::vector<seq::SequenceQuad> quads;
+        for (const auto span : {std::array{-97.5f, 7.5f}, std::array{7.5f, 20.0f}}) {
+            seq::SequenceQuad q;
+            const float l = span[mirrored ? 1 : 0], r = span[mirrored ? 0 : 1];
+            q.vertices = {{{l, 15.5f, .5f, .5f, 0x40808080},
+                           {r, 15.5f, .5f, .5f, 0x40808080},
+                           {l, 58.5f, .5f, .5f, 0x40808080},
+                           {r, 58.5f, .5f, .5f, 0x40808080}}};
+            quads.push_back(q);
+        }
+        render::encode_sequence_quads(p, quads);
+        compare(p, quads, a, 1, 1, view);
+    }
+    for (int scale : {1, 4, 8}) {
+        KhdaysSequenceImage p{};
+        set_image(1, 1, 1, {0xffffffffu});
+        set_image(2, 4 * scale, 4 * scale, std::vector<std::uint32_t>(std::size_t(16 * scale * scale), 0xffffffffu));
+        initialize(p, 16 * scale, 16 * scale, 1, 1, {0, 0, float(scale)});
+        const auto quad = [](float left, float right, unsigned color) {
+            seq::SequenceQuad q;
+            q.vertices = {{{left, 0, 0.5f, 0.5f, color},
+                           {right, 0, 0.5f, 0.5f, color},
+                           {left, 16, 0.5f, 0.5f, color},
+                           {right, 16, 0.5f, 0.5f, color}}};
+            return q;
+        };
+        const std::array quads{quad(0, 16, 0x80000080u), quad(8, 16, 0x80000000u)};
+        render::encode_sequence_quads(p, quads);
+        p.words[KSI_TEXT_INSERT] = 2;
+        number(p, KSI_TEXT_SCALE, 2);
+        number(p, KSI_FACE_X, float(2 * scale));
+        number(p, KSI_FACE_Y, float(2 * scale));
+        number(p, KSI_FACE_W, float(8 * scale));
+        number(p, KSI_FACE_H, float(8 * scale));
+        number(p, KSI_TEXT_CLIP_X, 0);
+        number(p, KSI_TEXT_CLIP_Y, 0);
+        number(p, KSI_TEXT_CLIP_W, float(7 * scale));
+        number(p, KSI_TEXT_CLIP_H, float(16 * scale));
+        number(p, KSI_TEXT_ALPHA, 1);
+        draw(p);
+        const unsigned first = read(0, 16)[0];
+        const auto got = read(first * 4, unsigned(16 * scale * 16 * scale * 4));
+        const auto pixel = [&](int x, int y) { return got[std::size_t(y * scale * 16 * scale + x * scale)]; };
+        require(pixel(3, 3) == 0xffffffffu); // Native or HD glyph plane above the background.
+        require(pixel(7, 3) == 0xff0000ffu); // Text clipped independently of the sequence artwork.
+        require(pixel(9, 3) == 0xff000000u); // Reveal mask remains above the glyphs.
+        number(p, KSI_TEXT_ALPHA, 0);
+        draw(p);
+        const auto hidden = read(first * 4, unsigned(16 * scale * 16 * scale * 4));
+        require(hidden[std::size_t(3 * scale * 16 * scale + 3 * scale)] == 0xff0000ffu);
+    }
+    std::cout << "Information text insertion, scale, clipping and alpha passed at 1x/4x/8x\n";
+}
 } // namespace
 extern "C" {
 int khdays_textures_replacements(void)
@@ -415,7 +846,14 @@ int main(int argc, char **argv)
         synthetic();
         large_atlas();
         multiple_images();
-        if (argc == 4 && std::string(argv[1]) == "--enemy")
+        information_text();
+        scene_blending();
+        native_marker_depth();
+        if (argc == 4 && std::string(argv[1]) == "--information")
+            private_information(argv[2], argv[3]);
+        else if (argc == 4 && std::string(argv[1]) == "--reticles")
+            private_reticles(argv[2], argv[3]);
+        else if (argc == 4 && std::string(argv[1]) == "--enemy")
             private_enemy(argv[2], argv[3]);
         else if (argc == 3 && std::string(argv[1]) == "--portraits")
             private_portraits(argv[2]);
@@ -428,6 +866,7 @@ int main(int argc, char **argv)
         std::cerr << e.what() << '\n';
         result = 1;
     }
+    khdays_raster3d_close();
     khdays_sequence_gpu_close();
     khdays_gpu_hd_close();
     SDL_DestroyGPUDevice(device);

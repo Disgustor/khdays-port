@@ -1,7 +1,7 @@
 /* A native sequence image's GPU commands. Words, copied into a frame package; no game pointers. */
 #ifndef KHDAYS_SEQUENCE_IMAGE_H
 #define KHDAYS_SEQUENCE_IMAGE_H
-#define KSI_HEADER 24u
+#define KSI_HEADER 40u
 #define KSI_QUAD_WORDS 24u
 #define KSI_MAX_QUADS 128u
 #define KSI_WORDS (KSI_HEADER + KSI_QUAD_WORDS * KSI_MAX_QUADS)
@@ -28,6 +28,13 @@
 #define KSI_FLAGS 20u
 #define KSI_DEPTH 21u
 #define KSI_BLEND 22u
+#define KSI_TEXT_INSERT 23u /* 0: legacy face on top; otherwise insert before quad (value - 1) */
+#define KSI_TEXT_SCALE 24u
+#define KSI_TEXT_CLIP_X 25u
+#define KSI_TEXT_CLIP_Y 26u
+#define KSI_TEXT_CLIP_W 27u
+#define KSI_TEXT_CLIP_H 28u
+#define KSI_TEXT_ALPHA 29u
 /* A quad: four x,y,u,v,RGBA vertices, then flags (test/write/colour/texture/filter), depth, blend. */
 #ifndef KSI_SHADER
 typedef struct KhdaysSequenceImage {

@@ -1,5 +1,6 @@
 // The mod gauge's flat JSON settings; no game or graphics-device dependencies.
 #include "kh2_hp_config.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -124,7 +125,10 @@ class Reader {
                 if (next() == '{') {
                     const bool label = key == "player_icon" || key == "limit_text";
                     const bool allowed =
-                        (prefix.empty() && (key == "party" || key == "enemy" || label)) ||
+                        (prefix.empty() &&
+                         (key == "party" || key == "enemy" || key == "reticles" || key == "information" || label)) ||
+                        (prefix == "reticles." && (key == "soft_lock" || key == "hard_lock" || key == "interact" ||
+                                                   key == "chain" || key == "error")) ||
                         (prefix == "party." && (key == "slots" || label)) ||
                         (prefix == "party.slots." && (key == "1" || key == "2" || key == "3")) ||
                         ((prefix == "party.slots.1." || prefix == "party.slots.2." || prefix == "party.slots.3.") &&
@@ -277,6 +281,8 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
         return result;
     };
     extract("enemy.");
+    extract("reticles.");
+    extract("information.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
         overrides[i] = extract("party.slots." + std::to_string(i + 1) + '.');
@@ -368,6 +374,105 @@ EnemyGaugeConfig load_enemy_gauge_config(const std::filesystem::path &path)
         *field = float(number(o, key, *field, -4096, 4096));
     if (!o.empty())
         throw std::runtime_error("gauge JSON: unknown enemy key " + o.begin()->first);
+    return c;
+}
+
+std::array<ReticleConfig, 5> load_reticle_configs(const std::filesystem::path &path)
+{
+    const auto root = load_hp_gauge_config(path);
+    const auto all = read_file(path);
+    Object shared;
+    std::array<Object, 5> selected;
+    constexpr const char *names[]{"soft_lock", "hard_lock", "interact", "chain", "error"};
+    for (const auto &[key, value] : all) {
+        if (!key.starts_with("reticles."))
+            continue;
+        auto tail = key.substr(9);
+        const auto dot = tail.find('.');
+        if (dot == std::string::npos) {
+            shared.emplace(tail, value);
+            continue;
+        }
+        for (int i = 0; i < 5; ++i)
+            if (tail.substr(0, dot) == names[i])
+                selected[i].emplace(tail.substr(dot + 1), value);
+    }
+    auto parse = [](Object o, ReticleConfig c) {
+        c.enabled = get(o, "enabled", c.enabled);
+        for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
+            *field = get(o, key, *field);
+            if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
+                throw std::runtime_error("gauge JSON: reticle resources must be local file names");
+        }
+        c.animation = int(number(o, "animation", c.animation, -1, 65535, true));
+        c.end_animation = int(number(o, "end_animation", c.end_animation, -1, 65535, true));
+        c.offset_x = float(number(o, "offset_x", c.offset_x, -512, 512));
+        c.offset_y = float(number(o, "offset_y", c.offset_y, -512, 512));
+        c.scale = float(number(o, "scale", c.scale, 0.01, 4));
+        c.source_origin_x = float(number(o, "source_origin_x", c.source_origin_x, -4096, 4096));
+        c.source_origin_y = float(number(o, "source_origin_y", c.source_origin_y, -4096, 4096));
+        c.frames_per_tick = float(number(o, "frames_per_tick", c.frames_per_tick, 0.01, 8));
+        if (!o.empty())
+            throw std::runtime_error("gauge JSON: unknown reticle key " + o.begin()->first);
+        return c;
+    };
+    ReticleConfig defaults;
+    defaults.archive = root.archive;
+    defaults.scale = root.scale;
+    defaults.enabled =
+        !shared.empty() || std::any_of(selected.begin(), selected.end(), [](const auto &o) { return !o.empty(); });
+    defaults = parse(shared, defaults);
+    std::array<ReticleConfig, 5> result;
+    constexpr int clips[]{5, 27, 50, -1, -1}, ends[]{4, 26, 49, -1, -1};
+    for (int i = 0; i < 5; ++i) {
+        auto c = defaults;
+        c.animation = clips[i];
+        c.end_animation = ends[i];
+        c.enabled = defaults.enabled && i < 3;
+        result[i] = parse(selected[i], c);
+        result[i].enabled &= defaults.enabled;
+    }
+    return result;
+}
+InformationConfig load_information_config(const std::filesystem::path &path)
+{
+    const auto root = load_hp_gauge_config(path);
+    Object o;
+    for (const auto &[key, value] : read_file(path))
+        if (key.starts_with("information."))
+            o.emplace(key.substr(12), value);
+    InformationConfig c;
+    c.enabled = !o.empty();
+    c.archive = root.archive;
+    c.texture = root.texture;
+    c.entry = root.entry;
+    c.scale = root.scale;
+    c.enabled = get(o, "enabled", c.enabled);
+    for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
+        *field = get(o, key, *field);
+        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
+            throw std::runtime_error("gauge JSON: information resources must be local file names");
+    }
+    for (auto [key, field] :
+         {std::pair{"intro", &c.intro}, {"loop", &c.loop}, {"reveal", &c.reveal}, {"outro", &c.outro}})
+        *field = int(number(o, key, *field, 0, 65535, true));
+    for (auto [key, field] : {std::pair{"offset_x", &c.offset_x},
+                              {"offset_y", &c.offset_y},
+                              {"source_origin_x", &c.source_origin_x},
+                              {"source_origin_y", &c.source_origin_y},
+                              {"text_offset_x", &c.text_offset_x},
+                              {"text_offset_y", &c.text_offset_y}})
+        *field = float(number(o, key, *field, -4096, 4096));
+    c.scale = float(number(o, "scale", c.scale, 0.01, 4));
+    c.text_scale = float(number(o, "text_scale", c.text_scale, 0.1, 4));
+    c.frames_per_tick = float(number(o, "frames_per_tick", 1, 0.01, 8));
+    c.clip_width = float(number(o, "clip_width", c.clip_width, 0, 2048));
+    c.clip_height = float(number(o, "clip_height", c.clip_height, 1, 512));
+    c.hold_frames = float(number(o, "hold_frames", c.hold_frames, 30, 36000));
+    c.scroll_wait_frames = float(number(o, "scroll_wait_frames", c.scroll_wait_frames, 0, 36000));
+    c.scroll_speed = float(number(o, "scroll_speed", c.scroll_speed, 0, 32));
+    if (!o.empty())
+        throw std::runtime_error("gauge JSON: unknown information key " + o.begin()->first);
     return c;
 }
 } // namespace khdays::ui::kh2

@@ -57,6 +57,15 @@ static uint32_t pixel(void *ctx, int screen, int x, int y)
     const int engine = screen == 0 ? px->p->upper : !px->p->upper;
     return khdays_gfx_pixel_cpu(px->desc[engine], &px->memory[engine], x, y);
 }
+/* Information visibility follows native text changes, independently of animated replacement pixels. */
+static uint32_t information_pixel(int screen, int x, int y)
+{
+    const int engine = screen == 0 ? pixels.p->upper : !pixels.p->upper;
+    uint32_t desc[KHDAYS_DESC_WORDS];
+    memcpy(desc, pixels.desc[engine], sizeof(desc));
+    desc[KD_ELEMENTS] = desc[KD_LEFT_OUT] = 0;
+    return khdays_gfx_pixel_cpu(desc, &pixels.memory[engine], x, y);
+}
 
 /* Sets up `pixels` so the CPU can read package `p`'s 2D: its memory pages and
  * each engine's description. */
@@ -194,12 +203,12 @@ static void info_lower(KhdaysSituation *s)
         return;
     }
     for (int i = 0; i < (int)(sizeof(below) / sizeof(below[0])); ++i) {
-        if (!near_white(pixel(&pixels, 1, below[i], 23))) {
+        if (!near_white(information_pixel(1, below[i], 23))) {
             return;
         }
     }
     for (int i = 0; i < (int)(sizeof(above) / sizeof(above[0])); ++i) {
-        if (!near_white(pixel(&pixels, 1, above[i], 8))) {
+        if (!near_white(information_pixel(1, above[i], 8))) {
             return;
         }
     }
@@ -216,10 +225,10 @@ static void info_lower(KhdaysSituation *s)
  * (the line's left end), dimmed or not -- a fade darkens both (white 255 or grey 134 text over black). */
 static int info_has_text(void)
 {
-    const uint32_t ground = pixel(&pixels, 1, 6, 15);
+    const uint32_t ground = information_pixel(1, 6, 15);
     for (int y = 11; y <= 19; ++y) {
         for (int x = 8; x < 224; ++x) {
-            const uint32_t c = pixel(&pixels, 1, x, y);
+            const uint32_t c = information_pixel(1, x, y);
             for (int n = 0; n < 3; ++n) {
                 const int d = (int)((c >> (8 * n)) & 0xffu) - (int)((ground >> (8 * n)) & 0xffu);
                 if (d > 40 || d < -40) {
@@ -236,6 +245,7 @@ static void info_new(const KhdaysFramePackage *p, KhdaysSituation *s)
     static uint32_t last_sum, changed, still_since;
     static int seen, after_start;
     uint32_t sum = 2166136261u; /* FNV-1a */
+    const unsigned duration = p->information_hold_frames ? p->information_hold_frames : INFO_FRAMES;
     if (s->states & (1u << KHDAYS_ST_INFO_UPPER)) {
         /* a mission's start shows its information (info-upper): the lower screen's first message
          * after it -- once its line stands still, the game drawing it over a frame or two -- is
@@ -249,12 +259,12 @@ static void info_new(const KhdaysFramePackage *p, KhdaysSituation *s)
     if (!info_has_text()) {
         /* the line emptied (a message over): no banner, and the next message is a new one */
         seen = 0;
-        changed = p->frame - INFO_FRAMES;
+        changed = p->frame - duration;
         return;
     }
     for (int y = 10; y <= 20; y += 2) {
         for (int x = 4; x < 252; ++x) {
-            sum = (sum ^ (pixel(&pixels, 1, x, y) & 0xffffffu)) * 16777619u;
+            sum = (sum ^ (information_pixel(1, x, y) & 0xffffffu)) * 16777619u;
         }
     }
     if (after_start) {
@@ -263,14 +273,14 @@ static void info_new(const KhdaysFramePackage *p, KhdaysSituation *s)
             last_sum = sum;
             still_since = p->frame;
         }
-        changed = p->frame - INFO_FRAMES;
+        changed = p->frame - duration;
         after_start = p->frame - still_since < INFO_SETTLE_FRAMES;
     } else if (!seen || sum != last_sum) {
         seen = 1;
         last_sum = sum;
         changed = p->frame;
     }
-    if (p->frame - changed < INFO_FRAMES) {
+    if (p->frame - changed < duration) {
         s->states |= 1u << KHDAYS_ST_INFO_NEW;
     }
 }
@@ -547,12 +557,14 @@ void khdays_onescreen_prepare(const KhdaysFramePackage *p, int columns, KhdaysCo
         f.ctx = &pixels;
         memset(&now, 0, sizeof(now));
         khdays_situation_decide(&f, &now);
+        const int information_mod = khdays_onescreen_information(p, &now);
         title_menu(&p->situation, &now);
         trace_title(p, &now);
         if (khdays_situation_hud_mode() == KHDAYS_HUD_COMPLETE) {
             /* the HUD's exploration mode leaves the INFORMATION banner out */
             info_lower(&now);
-            info_new(p, &now);
+            if (!information_mod)
+                info_new(p, &now);
         }
         mission_panel(&now);
         lower_shown(&p->situation, &now);

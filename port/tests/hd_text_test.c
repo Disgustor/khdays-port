@@ -1,6 +1,45 @@
 /* Synthetic operation/VRAM tests; no game assets. Includes the implementation
  * to exercise canvas lifetime and transfers with a small fake DS memory. */
 #include "../ui/text.c"
+static int information_enabled, information_calls;
+static int information_engine, information_bg;
+static uint32_t information_ink;
+static int information_right;
+static unsigned information_epoch = 1;
+unsigned khdays_ui_information_epoch(void)
+{
+    return information_epoch;
+}
+void khdays_ui_information_begin(void) {}
+void khdays_ui_information_end(void) {}
+int khdays_ui_information_wants(void)
+{
+    return information_enabled;
+}
+int khdays_ui_information_active(int engine)
+{
+    (void)engine;
+    return information_enabled;
+}
+int khdays_ui_information_text(const KhdaysUiElement *e, const unsigned *rgba, int w, int h, unsigned version,
+                               float first_x, float first_y, unsigned coverage)
+{
+    information_engine = e->screen;
+    information_bg = (int)(e->slot & KES_NUMBER_MASK);
+    (void)version;
+    (void)first_x;
+    (void)first_y;
+    (void)coverage;
+    ++information_calls;
+    information_ink = 0;
+    information_right = 0;
+    for (int i = 0; i < w * h; ++i) {
+        information_ink |= rgba[i];
+        if ((rgba[i] >> 24) && i % w >= information_right)
+            information_right = i % w + 1;
+    }
+    return 1;
+}
 
 static unsigned char small_ram[65536], vram[65536];
 static unsigned char *ram = small_ram;
@@ -1198,6 +1237,79 @@ static void fitted_duplicate_tail_tests(void)
     fit_widths[0] = 0;
 }
 
+static void information_planes(void)
+{
+    for (int variation = 0; variation < 4; ++variation) {
+        const int native = variation & 1, engine = variation >> 1, bg = engine ? 0 : 1;
+        setup(4);
+        test_map_bg = bg;
+        const int base_vofs = engine ? 216 : 0;
+        test_vofs = base_vofs;
+        if (engine) {
+            // SetCaptionText builds at tile row 28 of sub BG0, scrolled to y=8 on screen.
+            map_width = map_height = 32;
+            memset(map_cells, 0, sizeof(map_cells));
+            map_cells[28 * 32] = 1;
+            map_cells[28 * 32 + 1] = 2;
+        }
+        test_mappings = !native;
+        mapping_ready = !native;
+        available_glyphs = native ? 0 : 1;
+        khdays_ui_text_scope_push("field.hud.information");
+        draw(0);
+        draw(8);
+        khdays_ui_text_scope_pop();
+        CHECK(c->op_count == 2 && c->ops[0].native_glyph == native);
+        const unsigned bytes = c->bytes;
+        memcpy(ram + 4096, ram + 1024, bytes);
+        khdays_ui_text_memory_copy(ram + 1024, ram + 4096, bytes, 4096);
+        CHECK(canvas_count == 2 && canvases[1].information);
+        memcpy(vram + 32, ram + 4096, bytes);
+        chars_loaded(engine, bg, ram + 4096, 32, bytes);
+        c = &canvases[0];
+        map_cells[(engine ? 28 * 32 : 0) + 1] = 0; // Retain offscreen glyphs for the KH2 marquee.
+        information_enabled = 1;
+        information_calls = 0;
+        emit();
+        CHECK(c->information && information_calls == 1 && information_ink);
+        CHECK(information_right > 8 && canvases[1].engine == engine && canvases[1].bg == bg);
+        CHECK(information_engine == engine && information_bg == bg);
+        const int paints = paint_calls;
+        emit();
+        CHECK(information_calls == 2 && paint_calls == paints);
+        // Canvas placement wraps with the tilemap, including the upper crawl's saved rows.
+        test_hofs = 512;
+        test_vofs = base_vofs + 256;
+        emit();
+        CHECK(information_calls == 3);
+        test_hofs = 0;
+        test_vofs = base_vofs;
+        ++information_epoch;
+        emit();
+        CHECK(information_calls == 3); // Retained glyphs from an old map cannot supply the new caption.
+        khdays_ui_text_scope_push("field.hud.information");
+        draw(0);
+        draw(8);
+        khdays_ui_text_scope_pop();
+        memcpy(ram + 4096, ram + 1024, bytes);
+        khdays_ui_text_memory_copy(ram + 1024, ram + 4096, bytes, 4096);
+        memcpy(vram + 32, ram + 4096, bytes);
+        chars_loaded(engine, bg, ram + 4096, 32, bytes);
+        emit();
+        CHECK(information_calls == 4);
+        memcpy(ram + 4096, ram + 8192, bytes);
+        khdays_ui_text_memory_copy(ram + 8192, ram + 4096, bytes, 4096);
+        CHECK(!canvases[1].information && canvases[1].display_information);
+        emit();
+        CHECK(information_calls == 5); // Unpublished RAM reuse must not turn the on-screen caption back into DS art.
+        memcpy(vram + 32, ram + 4096, bytes);
+        chars_loaded(engine, bg, ram + 4096, 32, bytes);
+        CHECK(!canvases[1].display_information);
+        information_enabled = 0;
+        test_mappings = mapping_ready = 1;
+    }
+}
+
 int main(int argc, char **argv)
 {
     graphics_replacements();
@@ -1209,6 +1321,7 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
     obtained_popup();
+    information_planes();
     button_icon_tests();
     fitted_capture_tests();
     fitted_duplicate_tail_tests();

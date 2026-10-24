@@ -35,6 +35,8 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
             schema = defaults
         elif prefix.endswith("player_icon") or prefix.endswith("limit_text"):
             schema = defaults["player_icon"]
+        elif prefix in (f"reticles.{name}" for name in ("soft_lock", "hard_lock", "interact", "chain", "error")):
+            schema = {key: value for key, value in defaults["reticles"].items() if not isinstance(value, dict)} | base
         for key, value in custom.items():
             if key not in schema:
                 raise ValueError(f"unsupported gauge setting: {prefix}.{key}")
@@ -49,11 +51,17 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         region = LANGUAGES[language]
         entry = f"field2d/{region}/zz0field.2dd"
         texture = f"{region.upper()}_zz0field_2dd1.png"
+        reticle_texture = f"{region.upper()}_zz0field_2dd0.png"
         original = (source / "original" / entry).read_bytes()
         image = source / "remastered" / entry / texture
         with Image.open(image) as picture:
             if picture.format != "PNG":
                 raise ValueError(f"expected the gauge's remastered PNG: {image}")
+            picture.verify()
+        reticle_image = source / "remastered" / entry / reticle_texture
+        with Image.open(reticle_image) as picture:
+            if picture.format != "PNG":
+                raise ValueError(f"expected the reticles' remastered PNG: {reticle_image}")
             picture.verify()
         converted, limit = add_limit_gauge(recenter_gauge(original))
         converted, marker = add_limit_marker(converted)
@@ -62,6 +70,8 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         config.update(archive="zz0field.2dd", texture=texture, source_origin_x=0, source_origin_y=0)
         for name in ("player_icon", "limit_text", "enemy"):
             config[name].update(archive="zz0field.2dd", texture=texture, entry="gaug")
+        config["reticles"].update(archive="zz0field.2dd", texture=reticle_texture, entry="fiel")
+        config["information"].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config.update(limit_circle=limit[0], limit_bar=limit[1], limit_marker=marker)
         party = party_config(config, party_clips)
         party["slots"] = json.loads(json.dumps(defaults["party"]["slots"]))
@@ -90,12 +100,15 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         # Party members never have a Days limit layer, even with a copied player configuration.
         party.update(limit_circle=-1, limit_bar=-1, limit_marker=-1)
         config["party"] = party
-        prepared.append((language, converted, texture, image.read_bytes(), config))
-    for language, archive, texture, pixels, config in prepared:
+        prepared.append(
+            (language, converted, texture, image.read_bytes(), reticle_texture, reticle_image.read_bytes(), config)
+        )
+    for language, archive, texture, pixels, reticle_texture, reticle_pixels, config in prepared:
         folder = output / language
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "zz0field.2dd").write_bytes(archive)
         (folder / texture).write_bytes(pixels)
+        (folder / reticle_texture).write_bytes(reticle_pixels)
         (folder / "gauge.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         (folder / "party.json").unlink(missing_ok=True)
         print(

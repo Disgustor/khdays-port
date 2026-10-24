@@ -48,7 +48,7 @@ typedef struct ComposeParams {
 
 static SDL_GPUDevice *device;
 static SDL_GPUComputePipeline *raster, *compose;
-static SDL_GPUBuffer *polys, *verts, *tiles, *vram, *records;
+static SDL_GPUBuffer *polys, *verts, *tiles, *vram, *records, *sequences;
 static uint32_t polys_capacity, verts_capacity; /* entries in `polys` and `verts`: the most any list has had */
 static int fine;                                /* draw the 3D in 8 bits per channel (khdays_raster3d_set_fine) */
 static uint32_t tiles_capacity;                 /* entries in `tiles` */
@@ -155,7 +155,7 @@ int khdays_raster3d_open(SDL_GPUDevice *d)
 {
     device = d;
     raster = make_pipeline(raster3d_cs_dxil, raster3d_cs_dxil_size, raster3d_cs_spirv, raster3d_cs_spirv_size,
-                           raster3d_cs_msl, raster3d_cs_msl_size, RASTER3D_CS_ENTRY, 0, 5, 2);
+                           raster3d_cs_msl, raster3d_cs_msl_size, RASTER3D_CS_ENTRY, 0, 6, 2);
     compose = make_pipeline(compose_cs_dxil, compose_cs_dxil_size, compose_cs_spirv, compose_cs_spirv_size,
                             compose_cs_msl, compose_cs_msl_size, COMPOSE_CS_ENTRY, 0, 1, 3);
     polys_capacity = KHDAYS_G3D_DS_POLYS;
@@ -164,6 +164,7 @@ int khdays_raster3d_open(SDL_GPUDevice *d)
     verts = make_buffer(verts_capacity * (Uint32)sizeof(KhdaysG3dVertex));
     vram = make_buffer(VRAM_BYTES);
     records = make_buffer((Uint32)RECORD_BYTES);
+    sequences = make_buffer((Uint32)sizeof(((KhdaysFramePackage *)0)->reticle_images));
     tiles_capacity = 1u << 18;
     tiles = make_buffer(tiles_capacity * 4u);
     vram_valid = 0;
@@ -173,7 +174,7 @@ int khdays_raster3d_open(SDL_GPUDevice *d)
         target_usage |= SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE;
     }
     if (raster == NULL || compose == NULL || polys == NULL || verts == NULL || vram == NULL || records == NULL ||
-        tiles == NULL || !khdays_gpu_hd_open(device)) {
+        tiles == NULL || sequences == NULL || !khdays_gpu_hd_open(device)) {
         char why[256];
         SDL_strlcpy(why, SDL_GetError(), sizeof(why));
         khdays_raster3d_close();
@@ -221,10 +222,12 @@ void khdays_raster3d_close(void)
         SDL_ReleaseGPUBuffer(device, vram);
     if (records != NULL)
         SDL_ReleaseGPUBuffer(device, records);
+    if (sequences != NULL)
+        SDL_ReleaseGPUBuffer(device, sequences);
     if (upload != NULL)
         SDL_ReleaseGPUTransferBuffer(device, upload);
     raster = compose = NULL;
-    polys = verts = tiles = vram = records = NULL;
+    polys = verts = tiles = vram = records = sequences = NULL;
     upload = NULL;
     upload_size = 0;
     SDL_free(tile_list);
@@ -827,7 +830,9 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
         }
     }
     vram_valid = 1;
-    size = poly_bytes + vert_bytes + tile_bytes + record_bytes + (uint32_t)nchanged * KHDAYS_FRAME_VRAM_PAGE;
+    const uint32_t sequence_bytes = (uint32_t)sizeof(p->reticle_images);
+    size = poly_bytes + vert_bytes + tile_bytes + record_bytes + sequence_bytes +
+           (uint32_t)nchanged * KHDAYS_FRAME_VRAM_PAGE;
     if (size > upload_size) {
         SDL_GPUTransferBufferCreateInfo info;
         if (upload != NULL) {
@@ -860,6 +865,8 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
                record_bytes);
     }
     at += record_bytes;
+    memcpy(mapped + at, p->reticle_images, sequence_bytes);
+    at += sequence_bytes;
     for (int k = 0; k < nchanged; ++k) {
         const int n = changed[k];
         const uint8_t *page = n < TEX_PAGES ? p->tex + (size_t)n * KHDAYS_FRAME_VRAM_PAGE
@@ -897,6 +904,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
         UPLOAD(verts, vert_bytes, true)
         UPLOAD(tiles, tile_bytes, true)
         UPLOAD(records, record_bytes, true)
+        UPLOAD(sequences, sequence_bytes, true)
 #undef UPLOAD
         for (int k = 0; k < nchanged; ++k) {
             /* the pages that changed, into the card's copy of the memory */
@@ -912,7 +920,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
     {
         RasterParams rp;
         SDL_GPUStorageTextureReadWriteBinding out[2];
-        SDL_GPUBuffer *in[5] = {polys, verts, tiles, vram, khdays_gpu_hd_buffer()};
+        SDL_GPUBuffer *in[6] = {polys, verts, tiles, vram, khdays_gpu_hd_buffer(), sequences};
         SDL_GPUComputePass *pass;
         SDL_zero(rp);
         rp.scale = (uint32_t)scale;
@@ -953,7 +961,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
         out[1].cycle = true;
         pass = SDL_BeginGPUComputePass(cmd, out, 2, NULL, 0);
         SDL_BindGPUComputePipeline(pass, raster);
-        SDL_BindGPUComputeStorageBuffers(pass, 0, in, 5);
+        SDL_BindGPUComputeStorageBuffers(pass, 0, in, 6);
         SDL_PushGPUComputeUniformData(cmd, 0, &rp, sizeof(rp));
         SDL_DispatchGPUCompute(pass, (Uint32)(w + 7) / 8, (Uint32)(h + 7) / 8, 1);
         SDL_EndGPUComputePass(pass);

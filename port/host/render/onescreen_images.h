@@ -5,6 +5,8 @@
 #include "../../ui/composition.h"
 
 typedef struct KhdaysFramePackage KhdaysFramePackage;
+/* Nonzero disables native banner crops/timing; native HUD visibility and placement stay the game's. */
+int khdays_onescreen_information(const KhdaysFramePackage *package, KhdaysSituation *situation);
 
 /* The resulting shapes stay valid until the next call; input is a fresh composition. */
 void khdays_onescreen_images(const KhdaysFramePackage *package, const KhdaysSituation *situation,

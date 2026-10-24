@@ -960,6 +960,178 @@ static int image_shapes(const KhdaysComposition *comp)
     return count;
 }
 
+static int information_crops(const KhdaysComposition *comp)
+{
+    int count = 0;
+    for (int i = 0; i < comp->shape_count; ++i) {
+        const uint32_t *w = comp->shapes[i].words;
+        const float width = word_float(w, KO_SRC_W);
+        if (!(w[KO_FLAGS] & (KOF_3D | KOF_IMAGE)) && word_float(w, KO_SRC_X) == 0 && word_float(w, KO_SRC_Y) == 0 &&
+            word_float(w, KO_SRC_H) == 24 && (width == 224 || width == 232 || width == 256))
+            ++count;
+    }
+    return count;
+}
+
+static void test_information_image(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    uint32_t record[KE_WORDS] = {0};
+    record[KE_SLOT] = KES_DIRECT | KES_FINE | KES_PICTURE | KES_NATIVE_FADE | 1;
+    record[KE_IMAGE] = 25;
+    record[KE_IW] = 1200;
+    record[KE_IH] = 120;
+    put_float(record, KE_X, -70);
+    put_float(record, KE_Y, -6);
+    put_float(record, KE_W, 300);
+    put_float(record, KE_H, 30);
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    for (int source = 0; source < 2; ++source) {
+        p->elements[source].records = record;
+        p->elements[source].count = 1;
+        p->information_images[source].words[KSI_OUTPUT] = 25;
+        p->information_images[source].words[KSI_ANCHORED] = 1;
+        // Neither a moving native text anchor nor an invisible offscreen BG may move/hide the banner.
+        put_float(p->information_images[source].words, KSI_ANCHOR_X, 999);
+        put_float(p->information_images[source].words, KSI_ANCHOR_Y, 999);
+        p->desc2d[source][KD_BLEND] = 2u | (0x21u << 8) | (1u << 16);
+        p->desc2d[source][KD_COEF] = 16u << 8;
+        for (int size = 1; size <= 8; size += size == 1 ? 3 : 4) {
+            khdays_composition_set_hud_size(size);
+            const float factor = khdays_composition_hud_factor();
+            const float gauge_scale = .766667f * factor;
+            for (int upper = 0; upper < 2; ++upper) {
+                p->upper = (uint8_t)upper;
+                p->information_state = KHDAYS_INFORMATION_AVAILABLE | (0x101u << source);
+                KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+                KhdaysComposition comp;
+                CHECK(khdays_onescreen_information(p, &s));
+                CHECK(s.states & (1u << KHDAYS_ST_INFORMATION_MOD));
+                khdays_composition_for(&s, 342, &comp);
+                CHECK(information_crops(&comp) == 0);
+                float player_scale = 0;
+                for (int n = 0; n < comp.shape_count; ++n) {
+                    const uint32_t *native = comp.shapes[n].words;
+                    if (!(native[KO_FLAGS] & (KOF_IMAGE | KOF_3D | KOF_LOWER)) && word_float(native, KO_SRC_X) == 128 &&
+                        word_float(native, KO_SRC_W) == 128)
+                        player_scale = word_float(native, KO_SCALE_X);
+                }
+                khdays_onescreen_images(p, &s, &comp);
+                CHECK(image_shapes(&comp) == 1);
+                const uint32_t *image = comp.shapes[0].words;
+                CHECK(image[KO_FLAGS] & KOF_IMAGE);
+                CHECK(!(image[KO_FLAGS] & KOF_NATIVE_FADE));
+                CHECK(fabsf(word_float(image, KO_DST_X1) - -70 * gauge_scale) < .001f);
+                CHECK(fabsf(word_float(image, KO_DST_Y1) - (5 * factor - 6 * gauge_scale)) < .001f);
+                CHECK(fabsf(word_float(image, KO_DST_X2) - 230 * gauge_scale) < .001f);
+                const float image_scale = word_float(image, KO_SCALE_X) * record[KE_IW] / 300;
+                CHECK(fabsf(image_scale - gauge_scale) < .001f);
+                CHECK(player_scale > 0 && fabsf(image_scale - player_scale) < .001f);
+                // Rendering does not require any source-screen crop, including a custom composition.
+                comp.shapes = NULL;
+                comp.shape_count = 0;
+                khdays_onescreen_images(p, &s, &comp);
+                CHECK(image_shapes(&comp) == 1);
+
+                // End of exit: no replacement image and no one-frame return to the DS crop.
+                p->information_state &= ~0x300u;
+                khdays_onescreen_information(p, &s);
+                khdays_composition_for(&s, 342, &comp);
+                khdays_onescreen_images(p, &s, &comp);
+                CHECK(image_shapes(&comp) == 0 && information_crops(&comp) == 0);
+            }
+        }
+        p->elements[source].count = 0;
+        p->information_images[source] = (KhdaysSequenceImage){0};
+    }
+    khdays_composition_set_hud_size(4);
+    p->elements[1].records = record;
+    p->elements[1].count = 1;
+    p->information_images[1].words[KSI_OUTPUT] = 25;
+    p->information_images[1].words[KSI_ANCHORED] = 1;
+    p->information_state = KHDAYS_INFORMATION_AVAILABLE | 0x202u;
+    p->upper = 0;
+    // One visual window during an upper/lower handoff, with the native upper image on top.
+    uint32_t upper_record[KE_WORDS];
+    memcpy(upper_record, record, sizeof(upper_record));
+    upper_record[KE_IMAGE] = 26;
+    p->elements[0].records = upper_record;
+    p->elements[0].count = 1;
+    p->information_images[0].words[KSI_OUTPUT] = 26;
+    p->information_images[0].words[KSI_ANCHORED] = 1;
+    p->information_state |= 0x101u;
+    KhdaysSituation handoff = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+    KhdaysComposition comp;
+    khdays_onescreen_information(p, &handoff);
+    khdays_composition_for(&handoff, 342, &comp);
+    khdays_onescreen_images(p, &handoff, &comp);
+    CHECK(image_shapes(&comp) == 1 && comp.shapes[0].words[KO_KEYS] == 26);
+    CHECK(!(handoff.states & (1u << KHDAYS_ST_INFO_UPPER)));
+    CHECK(comp.shape3d_count > 0); // The heart counter must retain its composition transform during the exit.
+    // The native game can still be showing its upper panel after the sequence's last frame.
+    KhdaysSituation native_upper = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_INFO_UPPER};
+    p->information_state &= ~0x100u;
+    khdays_onescreen_information(p, &native_upper);
+    CHECK(native_upper.states & (1u << KHDAYS_ST_INFO_UPPER));
+    CHECK(!(native_upper.states & (1u << KHDAYS_ST_HUD)));
+    khdays_composition_for(&native_upper, 342, &comp);
+    CHECK(comp.shape3d_count == 1 && comp.shapes3d[0].hide);
+    // Pause uses the retained lower caption even if the upper exit was still running.
+    p->information_state |= 0x100u;
+    KhdaysSituation paused_handoff = {KHDAYS_SIT_PAUSE, 0};
+    khdays_onescreen_information(p, &paused_handoff);
+    khdays_composition_for(&paused_handoff, 342, &comp);
+    khdays_onescreen_images(p, &paused_handoff, &comp);
+    CHECK(image_shapes(&comp) == 1 && comp.shapes[0].words[KO_KEYS] == 25);
+    p->elements[0].count = 0;
+    p->information_images[0] = (KhdaysSequenceImage){0};
+    p->information_state = KHDAYS_INFORMATION_AVAILABLE | 0x202u;
+    KhdaysSituation dialog = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_DIALOG};
+    khdays_onescreen_information(p, &dialog);
+    khdays_composition_for(&dialog, 342, &comp);
+    khdays_onescreen_images(p, &dialog, &comp);
+    CHECK(image_shapes(&comp) == 0);
+    p->upper = 0;
+    KhdaysSituation pause = {KHDAYS_SIT_PAUSE, 0};
+    khdays_onescreen_information(p, &pause);
+    khdays_composition_for(&pause, 342, &comp);
+    CHECK(information_crops(&comp) == 0);
+    khdays_onescreen_images(p, &pause, &comp);
+    CHECK(image_shapes(&comp) == 1);
+    pause.states |= 1u << KHDAYS_ST_EVENT;
+    khdays_composition_for(&pause, 342, &comp);
+    khdays_onescreen_images(p, &pause, &comp);
+    CHECK(image_shapes(&comp) == 0);
+    const int hidden[] = {KHDAYS_SIT_CAMP_MENU, KHDAYS_SIT_MOVIE, KHDAYS_SIT_TUTORIAL, KHDAYS_SIT_SHOP};
+    for (size_t i = 0; i < sizeof(hidden) / sizeof(hidden[0]); ++i) {
+        KhdaysSituation s = {hidden[i], 0};
+        khdays_onescreen_information(p, &s);
+        khdays_composition_for(&s, 342, &comp);
+        khdays_onescreen_images(p, &s, &comp);
+        CHECK(image_shapes(&comp) == 0);
+    }
+    // Availability remains set even before the first caption or after resetting its context.
+    p->information_state = KHDAYS_INFORMATION_AVAILABLE;
+    pause.states = 0;
+    CHECK(khdays_onescreen_information(p, &pause));
+    khdays_composition_for(&pause, 342, &comp);
+    CHECK(information_crops(&comp) == 0);
+    // No mod: preserve the original crop and the native timer's ownership.
+    p->information_state = 0;
+    p->elements[1].count = 0;
+    CHECK(!khdays_onescreen_information(p, &pause));
+    khdays_composition_for(&pause, 342, &comp);
+    CHECK(information_crops(&comp) == 1);
+    KhdaysSituation fallback = {KHDAYS_SIT_FIELD, (1u << KHDAYS_ST_HUD) | (1u << KHDAYS_ST_INFO_NEW)};
+    CHECK(!khdays_onescreen_information(p, &fallback));
+    khdays_composition_for(&fallback, 342, &comp);
+    CHECK(information_crops(&comp) == 1);
+    free(p);
+}
 static void test_native_hud_fade(void)
 {
     memset(upper_src, 0, sizeof(upper_src));
@@ -1286,6 +1458,7 @@ int main(void)
     test_steps();
     test_independent_image();
     test_native_hud_fade();
+    test_information_image();
     test_hud_image_layers();
     test_split();
     test_split_under_3d();

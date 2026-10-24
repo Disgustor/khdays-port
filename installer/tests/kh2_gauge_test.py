@@ -71,6 +71,7 @@ def sources(folder: Path) -> bytes:
         texture = folder / "remastered" / entry / f"{region.upper()}_zz0field_2dd1.png"
         texture.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGBA", (4, 2), (128, 128, 128, 255)).save(texture)
+        Image.new("RGBA", (4, 4), (255, 255, 255, 255)).save(texture.with_name(f"{region.upper()}_zz0field_2dd0.png"))
     return original
 
 
@@ -196,7 +197,20 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual(source.read_bytes(), original)
                 texture = root / "source/remastered" / f"field2d/{region}/zz0field.2dd" / config["texture"]
                 self.assertEqual((folder / config["texture"]).read_bytes(), texture.read_bytes())
-                self.assertEqual(len(list(folder.iterdir())), 3)
+                self.assertEqual(len(list(folder.iterdir())), 4)
+                self.assertEqual(config["reticles"]["entry"], "fiel")
+                self.assertEqual(config["reticles"]["texture"], f"{region.upper()}_zz0field_2dd0.png")
+                self.assertEqual(config["reticles"]["soft_lock"]["animation"], 5)
+                self.assertEqual(config["reticles"]["interact"]["end_animation"], 49)
+                self.assertFalse(config["reticles"]["chain"]["enabled"])
+                self.assertFalse(config["reticles"]["error"]["enabled"])
+                self.assertTrue(config["information"]["enabled"])
+                self.assertEqual(config["information"]["texture"], texture.name)
+                self.assertEqual([config["information"][k] for k in ("intro", "loop", "reveal", "outro")], [0, 1, 2, 3])
+                self.assertEqual(config["information"]["scroll_wait_frames"], 180)
+                self.assertEqual(config["information"]["scroll_speed"], 1)
+                self.assertEqual(config["information"]["clip_width"], 0)
+                self.assertEqual(config["information"]["scale"], 0.65)
 
     def test_missing_input_does_not_publish_half_a_gauge(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -221,6 +235,8 @@ class GaugeImport(unittest.TestCase):
                 "texture": "old.png",
                 "source_origin_x": 455,
                 "enemy": {"offset_x": -4, "scale": 0.75, "fill": 43, "enabled": False},
+                "reticles": {"soft_lock": {"scale": 0.8, "offset_y": 6, "end_animation": -1}},
+                "information": {"clip_width": 280, "text_offset_x": 3, "scale": 0.65},
             }
             (previous / "gauge.json").write_text(json.dumps(custom))
             (previous / "party.json").write_text(json.dumps({"offset_y": 9, "center_override": 156, "limit_bar": 140}))
@@ -232,6 +248,10 @@ class GaugeImport(unittest.TestCase):
             self.assertEqual(config["source_origin_x"], 0)
             for key, value in custom["enemy"].items():
                 self.assertEqual(config["enemy"][key], value)
+            for key, value in custom["reticles"]["soft_lock"].items():
+                self.assertEqual(config["reticles"]["soft_lock"][key], value)
+            for key, value in custom["information"].items():
+                self.assertEqual(config["information"][key], value)
             party = config["party"]
             self.assertEqual((party["offset_y"], party["center_override"], party["limit_bar"]), (9, 156, -1))
             self.assertEqual(json.loads((previous / "gauge.json").read_text()), custom)

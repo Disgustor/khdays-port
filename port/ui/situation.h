@@ -37,18 +37,19 @@ enum {
     KHDAYS_ST_CHALLENGE,
     KHDAYS_ST_INFO_UPPER,
     KHDAYS_ST_INFO_LOWER,
-    KHDAYS_ST_LOWER_3D,      /* the 3D on the lower screen alone */
-    KHDAYS_ST_PARTY_4,       /* four members in the battle's party */
-    KHDAYS_ST_INFO_NEW,      /* the lower screen's INFORMATION line changed a moment ago (host/render/onescreen.c) */
-    KHDAYS_ST_MISSION_PANEL, /* the lower screen shows the mission's panel (host/render/onescreen.c) */
-    KHDAYS_ST_TITLE_LIT,     /* the title's lower-screen fades not shown -- NEW GAME's way into its
+    KHDAYS_ST_LOWER_3D,        /* the 3D on the lower screen alone */
+    KHDAYS_ST_PARTY_4,         /* four members in the battle's party */
+    KHDAYS_ST_INFO_NEW,        /* the lower screen's INFORMATION line changed a moment ago (host/render/onescreen.c) */
+    KHDAYS_ST_MISSION_PANEL,   /* the lower screen shows the mission's panel (host/render/onescreen.c) */
+    KHDAYS_ST_TITLE_LIT,       /* the title's lower-screen fades not shown -- NEW GAME's way into its
                            * dialogs, the dialogs, the way back from them (host/render/onescreen.c) */
-    KHDAYS_ST_EVENT,         /* the pause opened in an event of the field (its scene, ov023, running) */
-    KHDAYS_ST_HOLO,          /* a mission played again: the Holo-Missions, a challenge or Mission Mode
+    KHDAYS_ST_EVENT,           /* the pause opened in an event of the field (its scene, ov023, running) */
+    KHDAYS_ST_HOLO,            /* a mission played again: the Holo-Missions, a challenge or Mission Mode
                               * (data_0204c240's bits 0-2); its events show their label at the upper
                               * screen's top left ("HOLOMEMORIA", a challenge's "RELOJ PARADO") */
-    KHDAYS_ST_LOWER_SHOWN,   /* with the 3D on both screens, the lower screen shows a picture: Sora's
+    KHDAYS_ST_LOWER_SHOWN,     /* with the 3D on both screens, the lower screen shows a picture: Sora's
                               * memories under the game's noise (host/render/onescreen.c) */
+    KHDAYS_ST_INFORMATION_MOD, /* a sequence replaces the native information crops */
     KHDAYS_STATES
 };
 

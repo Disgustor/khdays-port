@@ -22,6 +22,8 @@
 #include "../../ui/kh2_party_hud.h"
 #include "../../ui/kh2_hud_labels.h"
 #include "../../ui/kh2_enemy_hud.h"
+#include "../../ui/kh2_reticles.h"
+#include "../../ui/kh2_information.h"
 #include "../../ui/pause.h"
 #include "../../ui/text.h"
 #include "../../ui/situation.h"
@@ -665,6 +667,7 @@ static void capture_3d(KhdaysFramePackage *p)
         }
     }
     khdays_textures_mark(&p->list3d); /* the textures drawn instead (HD graphics) */
+    khdays_reticles_commands(&p->list3d, p->reticle_images);
     p->list3d_serial = list3d_serial;
     p->list3d_time = list3d_time;
     p->list3d_cut = (uint8_t)list3d_cut;
@@ -897,6 +900,9 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_kh2_party_commands(p->party_images);
     khdays_ui_kh2_labels_commands(p->label_images);
     khdays_ui_kh2_enemy_commands(&p->enemy_image);
+    khdays_ui_information_commands(p->information_images);
+    p->information_hold_frames = khdays_ui_information_hold_frames();
+    p->information_state = khdays_ui_information_state();
     for (int e = 0; e < 2; ++e) {
         KhdaysFrameElements *fe = &p->elements[e];
         uint32_t n;
@@ -1111,6 +1117,9 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     }
     p->frame = frame;
     p->sequence_image.words[KSI_COUNT] = 0;
+    memset(p->information_images, 0, sizeof(p->information_images));
+    p->information_hold_frames = 0;
+    p->information_state = 0;
     p->enemy_image.words[KSI_COUNT] = p->enemy_image.words[KSI_CLEAR] = p->enemy_image.words[KSI_ANCHORED] = 0;
     for (int i = 0; i < 4; ++i) {
         p->portrait_images[i].words[KSI_COUNT] = p->portrait_images[i].words[KSI_CLEAR] = 0;
@@ -1517,6 +1526,8 @@ void khdays_display_vblank(u32 frame)
         khdays_g3d_set_widen(widen);
     }
     khdays_ui_kh2_hp_frame(frame);
+    khdays_ui_information_frame(frame);
+    khdays_reticles_frame(frame);
     khdays_ui_kh2_enemy_frame(frame);
     khdays_ui_kh2_party_frame(frame);
     khdays_ui_kh2_labels_frame(frame);

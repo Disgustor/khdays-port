@@ -27,8 +27,28 @@ struct EnemyGaugeConfig final {
     float offset_x = 0, offset_y = 0, scale = 0.65f, frames_per_tick = 1;
     EnemyGaugeStyle style;
 };
+struct ReticleConfig final {
+    bool enabled = false;
+    std::string archive = "zz0field.2dd", texture = "US_zz0field_2dd0.png", entry = "fiel";
+    int animation = -1, end_animation = -1;
+    float offset_x = 0, offset_y = 0, scale = 0.65f;
+    float source_origin_x = 0, source_origin_y = 0, frames_per_tick = 1;
+};
+struct InformationConfig final {
+    bool enabled = false;
+    std::string archive = "zz0field.2dd", texture = "US_zz0field_2dd1.png", entry = "gaug";
+    int intro = 0, loop = 1, reveal = 2, outro = 3;
+    float scale = 0.65f, offset_x = 0, offset_y = 0;
+    float source_origin_x = 0, source_origin_y = 15, frames_per_tick = 1;
+    float text_offset_x = 0, text_offset_y = 0, text_scale = 1;
+    float clip_width = 0, clip_height = 64, hold_frames = 300; // 0 width: use the PC sequence's Ex parameter
+    float scroll_wait_frames = 180, scroll_speed = 1;
+};
+InformationConfig load_information_config(const std::filesystem::path &path);
 // Player settings at the root; shared party settings and per-slot overrides below party.
 std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &path);
 HpGaugeConfig load_hp_gauge_config(const std::filesystem::path &path);
 EnemyGaugeConfig load_enemy_gauge_config(const std::filesystem::path &path);
+// Soft lock, hard lock, interact, chain, error; each can fail independently.
+std::array<ReticleConfig, 5> load_reticle_configs(const std::filesystem::path &path);
 } // namespace khdays::ui::kh2

@@ -14,6 +14,7 @@
 #include "khdays_data_area.h" /* the data area's bounds (build/port/gen-x64) */
 #include "../sound/sound_dump.h"
 #include "../mods/names.h"
+#include "../missions/missions.h"
 #include "session_log.h"
 #include "window.h"
 
@@ -220,6 +221,7 @@ int main(int argc, char **argv)
     }
     khdays_log_open();
     khdays_log("%s", working_folder_note);
+    khdays_missions_report();
     khdays_log("the game's memory at %p (its references from there)", (void *)khdays_window);
     {
         /* The game runs on a context whose stack is in its memory (memory.c), so its locals are reached

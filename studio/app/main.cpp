@@ -213,9 +213,11 @@ int run_window(App& app) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
-            if (event.type == SDL_EVENT_QUIT)
-                done = true;
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(app.window))
+            const bool closing = event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+                                                                  event.window.windowID == SDL_GetWindowID(app.window));
+            if (closing && new_missions_unsaved())
+                app.quit_asked = true;  // asked first (draw_unsaved_quit)
+            else if (closing)
                 done = true;
             if (event.type == SDL_EVENT_DROP_FILE && event.drop.data != nullptr)
                 app.offer(path_u8(event.drop.data));
@@ -232,6 +234,7 @@ int run_window(App& app) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         draw_frame(app, &settings_open, &themes_open, &console_open);
+        done = draw_unsaved_quit(app) || done;
         ImGui::Render();
 
         ImDrawData* draw = ImGui::GetDrawData();

@@ -5080,3 +5080,59 @@ the port restores it (`runtime/battle/`).
   plays without it, or, its own off, that the host plays with it. Seen on the walk `stop` with it off: the session
   log's `stop: off`, the test mod's three panels refused (`unknown panel`), mission 94 played to its time with no
   fault.
+
+## 29. Missions and worlds of mods
+
+Read in the decompilation and seen with the test mod `port/tests/mods_v2/missions` (the walk `missions`), 2026-10-24.
+The port adds a mod's missions to the game's own list and plays them as the game's (`runtime/missions/`).
+
+- **The missions' list** (`UI/cm/msl_<lang>.msi.z`, 273 records in each language): a u16 count, then records led by
+  their u16 size (72-1,076 bytes). `Ov008_BuildRecordNode` makes a 0x58-byte node of each: `+2` the mission file's
+  number, `+4` the mission's number, `+6`/`+8` the first and last day of the story it is listed on, `+0xa` its
+  category (the world picker's: a mission's world, `tt` 0 ... `bb` 9), `+0xc` 1 for the story's hidden "next day"
+  rows (900-916), `+0xe` the number the row shows, `+0x10` a tier, `+0x14`-`+0x17` bytes, `+0x18` the time limit the
+  info shows (seconds), `+0x1a` its enemies, `+0x1c`-`+0x2e` the info's further lines (`+0x28` the results' reward
+  kind), `+0x23` its kind; then four UTF-16 texts: its name, a briefing, the objective the info shows last, a format.
+- **A record's kind**: 0 is a mission's row in the story's lists (`Ov008_RecordFilter_InRange` and its kin, by the
+  day: 108 rows), 4 its row in Mission Mode's (80), 1 and 2 its other entries there (65, 20). A mission has a row of
+  each kind it takes, all with its file and number; Mission Mode's tutorial is mission 94 on file 0010, a kind-4 row
+  alone, shown as 00.
+- **Mission Mode's list** (scene 19, `Ov008_MainMenu_StateTick`) is built a category at a time from the rows
+  `Ov008_IsEncounterEligible` takes for the list's flags (its category << 8, bit 3 the kind-4 rows): a row of
+  another kind or category is left out, one whose number is 900 or more too, then one whose last day is not past in
+  the story (`GameState_GetField(0, 9)`, 401 once field 0x44e reaches 6), and one whose mission's 4 bits at
+  `0x92b + 4n` lack its kind's bit. When the camp has no entry flagged (`Ov008_AnyEntryFlagged`: the words from its
+  context's +0x9758, as many as +0x9750 says), the list is the tutorial's row alone (list kind 7,
+  `Ov008_RecordFilter_Kind4Id10`). Seen: the walks' guest game (a level-1 Roxas, no file) lists 00, the tutorial, in
+  every world.
+  The list's rows of a world go by DOWN and UP; UP on its first row goes to its last. L and R change the world.
+- **What counts the game's missions**: `Ov008_CalcMissionCompletionPercent` (the camp's percentage) counts the
+  rows of kinds 1 and 2 (`kind & 3`), not Mission Mode's own (kind 4); `Ov005_UpdateAllMissionsClearedFlag` asks
+  missions 1-93 by number. A row of kind 4 alone never changes either.
+- **A mission's progress fields** (the game state's flag array, `gGameState` + 0x10, 0x4000 bits): status
+  `0x28e4 + 3n` (1 seen, 2 cleared, 3 complete: the story's results), crown `0x2a4c + 3n`, Mission Mode's rank
+  `0x2ca4 + 3n` (the only one Mission Mode's results write: its rows' reward kind is 8), the 4 bits at `0x92b + 4n`,
+  and the best result `gGameState` + 0x198c + 4n for n below 200 (`Ov005_CommitMissionResults`, three reads in
+  `Ov005_InitializeResultConfiguration`, the two camps' `*_MissionMenu_DrawInfo`). Each block holds 120 missions;
+  the game reaches no field past the array: the port says so in the session log when one is asked for (`missions:
+  the game reached field ...`), and no run here has said it.
+- **The port's new missions** (`runtime/missions/`): a mod's `missions/missions.txt` gives each mission a number
+  whose four fields all lie past the array (from 3510: 0x92b + 4 x 3510 = 0x4003), its number's last two digits the
+  ones it is shown with (95 on, after the tutorial's 94), and a file number from 20000; `GameState_GetField`,
+  `_SetField`, `_IsFlagSet`, `_SetFlag` and `_ClearFlag` answer its fields from the port's store, and the best result
+  joins answer for numbers past 200, so the game's own code shows, starts, ranks and records it. As
+  `UI/cm/msl_<lang>.msi.z` and `mi/mi/mdb.z` load (`Archive_LoadFile`) the port hands them back with the new
+  missions' rows after the game's: in the list a Mission Mode row made from its template's (its days past the
+  story's, so no story list takes it), its texts in that language (English where it has none); in `mdb.z` its
+  template's row. `Ov008_IsEncounterEligible` takes a new mission's row by the port's own test (its category, the
+  kinds the list asks for, its unlock) since its number is past 900; `FS_OpenFile` opens `mi/mi/<its file>` where
+  the port placed the mod's file in the ROM's image (or its template's file, for a mission without its own), the
+  file table not naming it. Its progress is kept in `saves/missions/fileNN.txt` beside the save file (read when the
+  title loads file NN, written after each save action of file NN), never in the DS's save.
+- **Seen** (the walk `missions`, the test mod `port/tests/mods_v2/missions`: a mission on 1354's file, "survive for
+  60 seconds", listed in Twilight Town's category; the maintainer's save, file 1): its row last of Twilight Town's
+  (95, "El reloj perdido"); started, the game opened `mi/mi/20000`, the mod heard mission 3595; cleared when the
+  clock ran out (rank 0); the autosave wrote file 99 and the port `saves/missions/file99.txt` (`test.missions/clock 0
+  0 4 0 -1`: Mission Mode's rank 4, no status, no best result, as the game records a Mission Mode mission). With the
+  autosave into the file played: file 1 loaded again with the mod showed the row with its crown; without the mod the
+  list ended at 92 as the game's, and the save's every mission field (1-119, the four kinds) was as before the run.

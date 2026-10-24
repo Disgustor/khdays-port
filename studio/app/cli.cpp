@@ -7,6 +7,7 @@
 #include "core/missions/command_names.h"
 #include "core/missions/missions.h"
 #include "core/missions/mission_db.h"
+#include "core/missions/mod_missions.h"
 #include "core/mods/mods.h"
 #include "core/files/paths.h"
 #include "core/mods/settings.h"
@@ -613,6 +614,87 @@ int check_missions(const fs::path& root) {
         return 1;
     }
     const bool ok = check_all_missions(nitrofs, [](const std::string& line) { std::printf("%s\n", line.c_str()); });
+    return ok ? 0 : 1;
+}
+
+// The game's files and a mod's folder for the new missions' commands (the mod made when `make`).
+bool mission_command_paths(const fs::path& root, const std::string& mod, bool make, fs::path* nitrofs,
+                           fs::path* mod_dir) {
+    *nitrofs = nitrofs_of(root);
+    if (nitrofs->empty()) {
+        std::fprintf(stderr, "khdays-studio: no extracted game files under %s\n",
+                     u8(root / "data" / "extracted").c_str());
+        return false;
+    }
+    *mod_dir = root / "mods" / path_u8(mod);
+    std::error_code ec;
+    std::string why;
+    if (!fs::is_directory(*mod_dir, ec) && !(make && create_mod(root / "mods", mod, &why))) {
+        std::fprintf(stderr, "khdays-studio: no mod %s in %s%s%s\n", mod.c_str(), u8(root / "mods").c_str(),
+                     why.empty() ? "" : ": ", why.c_str());
+        return false;
+    }
+    return true;
+}
+
+// --new-mission <Mod> <key> <template> <world> <room>: a new mission made from a game mission's file, in
+// Mission Mode's list after the game's.
+int new_mission(const fs::path& root, const std::vector<std::string>& args) {
+    fs::path nitrofs, mod_dir;
+    if (!mission_command_paths(root, args[1], true, &nitrofs, &mod_dir))
+        return 1;
+    if (args[3] == "blank") {
+        std::fprintf(stderr, "khdays-studio: a blank mission comes with the waves' editor; give a game mission's "
+                             "number to start from (0010, the tutorial's square)\n");
+        return 1;
+    }
+    std::string why;
+    if (!new_mod_mission(nitrofs, mod_dir, args[2], std::atoi(args[3].c_str()), args[4], std::atoi(args[5].c_str()),
+                         &why)) {
+        std::fprintf(stderr, "khdays-studio: %s\n", why.c_str());
+        return 1;
+    }
+    std::printf("mission %s made in %s (mi/mi/%04d's file, %s room %s); name it with --mission-set\n", args[2].c_str(),
+                u8(mod_dir / "missions").c_str(), std::atoi(args[3].c_str()), args[4].c_str(), args[5].c_str());
+    return 0;
+}
+
+// --mission-set <Mod> <key> <setting> [<language>] <value...>
+int mission_set(const fs::path& root, const std::vector<std::string>& args) {
+    fs::path nitrofs, mod_dir;
+    if (!mission_command_paths(root, args[1], false, &nitrofs, &mod_dir))
+        return 1;
+    bool language = false;
+    for (const MissionSetting& s : mission_settings())
+        language = language || (args[3] == s.name && s.language);
+    const std::size_t first = language ? 5 : 4;
+    if (args.size() <= first) {
+        std::fprintf(stderr, "khdays-studio: %s needs %sa value\n", args[3].c_str(),
+                     language ? "a language (en, fr, de, it, es) and " : "");
+        return 1;
+    }
+    std::string value;
+    for (std::size_t i = first; i < args.size(); ++i)
+        value += (i > first ? " " : "") + args[i];
+    std::string why;
+    if (!set_mod_mission(mod_dir, args[2], args[3], language ? args[4] : std::string(), value, &why)) {
+        std::fprintf(stderr, "khdays-studio: %s\n", why.c_str());
+        return 1;
+    }
+    std::printf("mission %s: %s%s%s = %s (missions/missions.txt read back)\n", args[2].c_str(), args[3].c_str(),
+                language ? " " : "", language ? args[4].c_str() : "", value.c_str());
+    return 0;
+}
+
+// --check-mod-missions <Mod>: every new mission of the mod read as the port reads it.
+int check_mod_missions_command(const fs::path& root, const std::string& mod) {
+    fs::path nitrofs, mod_dir;
+    if (!mission_command_paths(root, mod, false, &nitrofs, &mod_dir))
+        return 1;
+    std::vector<std::string> lines;
+    const bool ok = check_mod_missions(nitrofs, mod_dir, &lines);
+    for (const std::string& line : lines)
+        std::printf("%s\n", line.c_str());
     return ok ? 0 : 1;
 }
 
@@ -1290,6 +1372,12 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         return mission_info(root, args);
     if (args.size() == 1 && args[0] == "--mission-commands")
         return mission_commands(root);
+    if (args.size() == 6 && args[0] == "--new-mission")
+        return new_mission(root, args);
+    if (args.size() >= 5 && args[0] == "--mission-set")
+        return mission_set(root, args);
+    if (args.size() == 2 && args[0] == "--check-mod-missions")
+        return check_mod_missions_command(root, args[1]);
     if ((args.size() >= 4 && args.size() <= 6) && args[0] == "--replace-room")
         return replace_room(root, args);
     if (args.size() == 4 && args[0] == "--revert-room")
@@ -1346,6 +1434,12 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         "                                                  a mission's scripts, or one script's steps\n"
         "       khdays-studio [--port <dir>] --mission-commands\n"
         "                                                  every script command the missions use, by its handler\n"
+        "       khdays-studio [--port <dir>] --new-mission <Mod> <key> <game mission> <world> <room>\n"
+        "                                                  a new mission in Mission Mode's list, from a game mission\n"
+        "       khdays-studio [--port <dir>] --mission-set <Mod> <key> <setting> [<language>] <value...>\n"
+        "                                                  a new mission's name, objective, category, unlock...\n"
+        "       khdays-studio [--port <dir>] --check-mod-missions <Mod>\n"
+        "                                                  a mod's new missions read as the port reads them\n"
         "       khdays-studio [--port <dir>] --assemble <sheet> screen:N|cells:N|sheet... [row:N] [palette:N] [scale:K]\n"
         "                                               [mod:<Mod>] <out.png>\n"
         "                                                  a 2D sheet assembled as a picture to edit\n"

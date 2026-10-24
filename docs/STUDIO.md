@@ -148,6 +148,30 @@ takes `from`'s content (world, rooms, enemies, starts, texts) as mission
 saved progress stay the target's (kept by its number); its chests and emblems
 are copied when the target's sets have as many rows.
 
+### New missions
+
+A mission of the mod's own (`core/missions/mod_missions.h`) is listed in Mission
+Mode after the game's, in its world's category: `missions/missions.txt` holds a
+block for each (`[mission <key>]`: `name <lang>`, `objective <lang>`,
+`description <lang>`, `category`, `world`, `room`, `level`, `time`, `unlock`,
+`template`), and `missions/<key>/mission.p2` its file, a game mission
+file; without one the template's file is played as the game has it. The tool
+writes both and reads them back with the port's own reader
+(`port/runtime/missions/registry.c`) before it says they are saved. In the
+window: a mission's **New mission from this one** (a key, a world, a room) and
+the tab **The mod's new missions** (each one's words in the five languages, where
+it is listed, when it opens; **Save to the mod**
+writes and reads back each change; another mission chosen, or the window closed,
+with changes not saved asks first). From the command line:
+
+    khdays-studio --new-mission <Mod> <key> <game mission> <world> <room>
+    khdays-studio --mission-set <Mod> <key> <setting> [<language>] <value...>
+    khdays-studio --check-mod-missions <Mod>
+
+`--check-mod-missions` reads every new mission as the port does, its world and
+room, its file, and the rows the port adds to the list in each language; it exits
+1 with a line for each problem.
+
 ## 2D sheets
 
 A 2D tile sheet is seen assembled and edited as a picture

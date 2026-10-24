@@ -416,6 +416,12 @@ add_executable(khdays-native
     runtime/battle/stop_data.c         # the Stop magic: its data file
     runtime/battle/stop_hold.c         # ... the enemies it holds and the damage they keep
     runtime/battle/stop_magic.c        # ... and its records, words and hold in the game
+    runtime/missions/registry.c        # the mods' new missions: read and numbered,
+    runtime/missions/field_store.c     # ... their progress where the game keeps a mission's,
+    runtime/missions/save_part.c       # ... kept beside each save file,
+    runtime/missions/tables.c          # ... their rows in the game's tables,
+    runtime/missions/worlds.c          # ... the worlds they are played in
+    runtime/missions/missions.c        # ... and all of it in the game
     runtime/core/sha256.c             # SHA-256: the mods' fingerprints
     runtime/core/io_regs.c
     runtime/core/threads.c
@@ -585,6 +591,16 @@ add_executable(khdays-stop-magic-test tests/stop_magic_test.c runtime/battle/sto
                "${CMAKE_CURRENT_BINARY_DIR}/stop_magic_text.c")
 target_compile_options(khdays-stop-magic-test PRIVATE /W4 /std:c17)
 add_test(NAME khdays-stop-magic COMMAND khdays-stop-magic-test)
+# The mods' new missions (runtime/missions/): descriptions, numbers, progress, the save part, the tables' rows.
+add_executable(khdays-missions-test tests/missions_test.c runtime/missions/registry.c runtime/missions/field_store.c
+               runtime/missions/save_part.c runtime/missions/tables.c runtime/missions/worlds.c)
+target_compile_options(khdays-missions-test PRIVATE /W4 /std:c17)
+# ... with the game's own list and table when the player's data is extracted (decompressed/ of data/).
+file(GLOB KHDAYS_DECOMPRESSED "${CMAKE_CURRENT_SOURCE_DIR}/../data/extracted/*/decompressed")
+if(KHDAYS_DECOMPRESSED)
+    list(GET KHDAYS_DECOMPRESSED 0 KHDAYS_DECOMPRESSED_FIRST)
+endif()
+add_test(NAME khdays-missions COMMAND khdays-missions-test "${KHDAYS_DECOMPRESSED_FIRST}")
 # A replaced room's own animation (runtime/mods/room_animation.cpp): keys, loops, scrolls, frames.
 add_executable(khdays-room-animation-test tests/room_animation_test.cpp runtime/mods/room_animation.cpp)
 target_include_directories(khdays-room-animation-test PRIVATE ../assets/include)

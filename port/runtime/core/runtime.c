@@ -15,6 +15,7 @@
 #include "runtime.h"
 #include "session_log.h"
 #include "../movies/scene_trace.h"
+#include "../missions/missions.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,7 @@ int khdays_runtime_init(int argc, char **argv)
     if (!khdays_rom_init()) {
         return 0;
     }
+    khdays_missions_start(); /* the mods' new missions: their files in the ROM before anything reads it */
     khdays_input_init();
     khdays_display_init();
     if (!khdays_host_start()) {

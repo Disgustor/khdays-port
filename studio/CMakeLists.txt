@@ -102,7 +102,11 @@ add_library(khdays-studio-port STATIC
     "${ROOT}/port/host/movies/movie_hd_win.c"        # videos played as the port plays them (Media Foundation)
     "${ROOT}/port/host/movies/theater_music.c"       # ... with the theater's music
     "${ROOT}/port/host/movies/music_schedule.c"
-    "${ROOT}/port/runtime/mods/room_animation.cpp")  # a room that moves by itself, as the port moves it
+    "${ROOT}/port/runtime/mods/room_animation.cpp"   # a room that moves by itself, as the port moves it
+    "${ROOT}/port/runtime/missions/registry.c"       # a mod's new missions, as the port reads them
+    "${ROOT}/port/runtime/missions/field_store.c"
+    "${ROOT}/port/runtime/missions/tables.c"         # ... and the rows it adds for them
+    "${ROOT}/port/runtime/missions/worlds.c")
 target_include_directories(khdays-studio-port PUBLIC "${ROOT}/assets/include")
 target_include_directories(khdays-studio-port PUBLIC "${cgltf_SOURCE_DIR}" "${ufbx_SOURCE_DIR}")
 target_include_directories(khdays-studio-port PRIVATE "${stb_SOURCE_DIR}" "${dr_libs_SOURCE_DIR}")
@@ -140,6 +144,7 @@ add_library(khdays-studio-core STATIC
     core/missions/mission_db.cpp
     core/missions/missions.cpp
     core/missions/mission_edit.cpp
+    core/missions/mod_missions.cpp
     core/missions/enemy_names.cpp
     core/texts/texts.cpp
     core/models/texture_export.cpp

@@ -266,6 +266,26 @@ Taken up (for the record of what the old names were):
   halfword (`GetLanguage`, `Msg_BuildLangPath`'s `&`, 1..5 the firmware's
   English .. Spanish). It is `Msg_SetLanguage(int language, int unused)` now,
   declared as defined. Found 2026-10-07 (`docs/RUNTIME_MAP.md` 8.1).
+- The missions' list (`UI/cm/msl_&.msi.z`) and what reads it, found for the port's new missions, 2026-10-24
+  (`docs/RUNTIME_MAP.md` 29), with names proposed:
+  - `Ov008_IsEncounterEligible` (and its copies `Ov004_`, `Ov005_`, `Ov302_IsEncounterEligible`) is no spawn
+    test: it is the row test of Mission Mode's list (`Ov008_AppendEligibleRecords`, list kind 3) --
+    `IsMissionModeRowListed(record, flags)`, its flags the kinds of rows the list takes (a bit each, `1 << (kind
+    - 1)`; bit 3, the kind-4 rows, takes the tutorial's row too), bits 0-1 the day test, the category in
+    bits 8-15.
+  - `Ov008_BuildRecordNode`'s source is a list record (`MissionListRecord`: `+2` fileNumber, `+4` missionNumber,
+    `+6` firstDay, `+8` lastDay, `+0xa` category, `+0xc` hidden, `+0xe` shownNumber, `+0x10` tier, `+0x18`
+    timeLimitSeconds, `+0x23` kind, `+0x28` rewardKind, then four texts: name, briefing, objective, format), its
+    node `MissionListEntry` (`+0` fileNumber, `+2` missionNumber, `+4` category, `+6` shownNumber, `+0x18` kind,
+    `+0x3c`-`+0x48` the texts). The decomp's `Ov008MissionListEntry` calls `+4` `nTextSlot`/`nSlot` and `+6`
+    `nRank`; `Ov008_CalcMissionCompletionPercent`'s `statusFlags` at `+0x18` is the kind (`& 3`: kinds 1 and 2).
+  - A record's kind: 0 the story's row of a mission (`Ov008_RecordFilter_KindZero`, by its days), 4 its Mission
+    Mode row, 1 and 2 its other Mission Mode entries; `Ov008_RecordFilter_Kind4Id10` is the tutorial's row (file
+    0010, mission 94, shown 00).
+  - The game state's 4 bits at `0x92b + 4n` (`FIELD_MISSION_REWARDS` in `Ov008_DrawMissionRow`) open mission n's
+    rows, a bit for each kind; status `0x28e4 + 3n`, crown `0x2a4c + 3n`, Mission Mode rank `0x2ca4 + 3n`.
+  - `data_02046334` is NitroSDK's `fsi_arc_rom` (named only by a `#define` in `func_0200afb8.c`, which is
+    NitroSDK's `FSi_InitRom`); `Ov008_AnyEntryFlagged` decides between the list of rows and the tutorial's alone.
 
 ### 1.5 What agrees with the ROM only in the DS's frame or names
 

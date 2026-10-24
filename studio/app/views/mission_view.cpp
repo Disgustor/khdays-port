@@ -10,6 +10,7 @@
 #include "core/missions/mission_db.h"
 #include "core/missions/mission_edit.h"
 #include "core/missions/missions.h"
+#include "core/missions/mod_missions.h"
 #include "core/rooms/room_collision.h"
 #include "core/rooms/worlds.h"
 #include "core/files/paths.h"
@@ -942,7 +943,233 @@ void draw_scripts(App& app) {
     ImGui::EndChild();
 }
 
+// ---- The mod's new missions (missions/missions.txt) -------------------------------------------------
+
+struct NewMissions {
+    std::string mod;  // whose were read
+    bool stale = true;
+    std::vector<ModMission> missions;
+    std::vector<std::string> problems;
+    int chosen = -1;
+    int wanted = -2;  // another mission (or none, -1) asked for while the chosen one has changes
+    ModMission edit;  // the chosen one as edited
+    int language = 0;
+};
+
+NewMissions nm;
+
+// The settings of the chosen mission that differ from the mod's, as (setting, language, value).
+std::vector<std::tuple<std::string, std::string, std::string>> new_mission_changes() {
+    std::vector<std::tuple<std::string, std::string, std::string>> out;
+    if (nm.chosen < 0 || nm.chosen >= static_cast<int>(nm.missions.size()))
+        return out;
+    const ModMission& was = nm.missions[static_cast<std::size_t>(nm.chosen)];
+    const ModMission& e = nm.edit;
+    const auto& languages = mission_languages();
+    for (std::size_t l = 0; l < languages.size(); ++l) {
+        if (e.name[l] != was.name[l])
+            out.emplace_back("name", languages[l], e.name[l]);
+        if (e.objective[l] != was.objective[l])
+            out.emplace_back("objective", languages[l], e.objective[l]);
+        if (e.description[l] != was.description[l])
+            out.emplace_back("description", languages[l], e.description[l]);
+    }
+    if (e.category != was.category)
+        out.emplace_back("category", "", std::to_string(e.category));
+    if (e.world != was.world)
+        out.emplace_back("world", "", e.world);
+    if (e.room != was.room)
+        out.emplace_back("room", "", std::to_string(e.room));
+    if (e.level != was.level && e.level > 0)
+        out.emplace_back("level", "", std::to_string(e.level));
+    if (e.time_ms != was.time_ms && e.time_ms > 0)
+        out.emplace_back("time", "", std::to_string(e.time_ms));
+    if (e.unlock != was.unlock)
+        out.emplace_back("unlock", "", e.unlock);
+    return out;
+}
+
+void read_new_missions(const Mod* m) {
+    const std::string chosen_key = nm.chosen >= 0 && nm.chosen < static_cast<int>(nm.missions.size())
+                                       ? nm.missions[static_cast<std::size_t>(nm.chosen)].key
+                                       : "";
+    nm.mod = m != nullptr ? m->name : std::string();
+    nm.missions = m != nullptr ? read_mod_missions(m->dir, &nm.problems) : std::vector<ModMission>{};
+    if (m == nullptr)
+        nm.problems.clear();
+    nm.chosen = -1;
+    for (std::size_t i = 0; i < nm.missions.size(); ++i)
+        if (nm.missions[i].key == chosen_key)
+            nm.chosen = static_cast<int>(i);
+    if (nm.chosen < 0 && !nm.missions.empty())
+        nm.chosen = 0;
+    if (nm.chosen >= 0)
+        nm.edit = nm.missions[static_cast<std::size_t>(nm.chosen)];
+    nm.stale = false;
+}
+
+void choose_new_mission(int i) {
+    nm.chosen = i;
+    if (i >= 0)
+        nm.edit = nm.missions[static_cast<std::size_t>(i)];
+}
+
+// A text of the chosen language: a line, or several for the longer ones.
+void language_text(const char* label, std::vector<std::string>& texts, bool lines) {
+    std::string& t = texts[static_cast<std::size_t>(nm.language)];
+    const std::string id = std::string(label) + "##" + std::to_string(nm.language);
+    if (lines)
+        ImGui::InputTextMultiline(id.c_str(), &t, ImVec2(-1, 4 * ImGui::GetTextLineHeightWithSpacing()));
+    else
+        ImGui::InputText(id.c_str(), &t);
+}
+
+void draw_new_missions(App& app) {
+    const auto lang = app.language;
+    const Mod* m = app.current_mod();
+    if (m == nullptr) {
+        ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.35f, 1), "%s", tr(lang, S::choose_mod_first));
+        return;
+    }
+    if (nm.stale || nm.mod != m->name) {
+        if (nm.mod != m->name && !nm.mod.empty() && !new_mission_changes().empty())
+            app.tell(fmt(lang, S::new_missions_unsaved, {nm.edit.key}) + " (" + nm.mod + ")", false);
+        read_new_missions(m);
+    }
+    if (!nm.problems.empty()) {
+        ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.4f, 1), "%s", tr(lang, S::new_missions_problems));
+        for (const std::string& p : nm.problems)
+            ImGui::BulletText("%s", p.c_str());
+    }
+    if (nm.missions.empty()) {
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextUnformatted(tr(lang, S::new_missions_none));
+        ImGui::PopTextWrapPos();
+        return;
+    }
+    const auto changes = new_mission_changes();
+    // the list of the mod's missions; another one chosen with changes waiting asks first
+    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo(tr(lang, S::new_missions_list), nm.edit.key.c_str())) {
+        for (std::size_t i = 0; i < nm.missions.size(); ++i) {
+            if (ImGui::Selectable(nm.missions[i].key.c_str(), static_cast<int>(i) == nm.chosen) &&
+                static_cast<int>(i) != nm.chosen) {
+                if (changes.empty())
+                    choose_new_mission(static_cast<int>(i));
+                else
+                    nm.wanted = static_cast<int>(i);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (nm.wanted != -2)
+        ImGui::OpenPopup("###unsavedmission");
+    if (ImGui::BeginPopupModal("###unsavedmission", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted(fmt(lang, S::new_missions_unsaved, {nm.edit.key}).c_str());
+        if (ImGui::Button(tr(lang, S::new_missions_drop))) {
+            choose_new_mission(nm.wanted);
+            nm.wanted = -2;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(tr(lang, S::new_missions_keep))) {
+            nm.wanted = -2;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    ModMission& e = nm.edit;
+    ImGui::TextUnformatted(e.own_file
+                               ? fmt(lang, S::new_missions_file_own, {e.key}).c_str()
+                               : fmt(lang, S::new_missions_file_template, {mission_path(e.template_file)}).c_str());
+    // saving: each changed setting written and read back as the port reads it
+    ImGui::BeginDisabled(changes.empty());
+    if (ImGui::Button(fmt(lang, S::new_missions_save, {std::to_string(changes.size())}).c_str())) {
+        std::string why;
+        bool ok = true;
+        for (const auto& [setting, language, value] : changes) {
+            if (!set_mod_mission(m->dir, e.key, setting, language, value, &why)) {
+                ok = false;
+                break;
+            }
+        }
+        app.tell(ok ? fmt(lang, S::new_missions_saved, {e.key}) + "  " + tr(lang, S::restart_note)
+                    : fmt(lang, S::save_failed, {why}),
+                 ok);
+        nm.stale = true;
+    }
+    ImGui::EndDisabled();
+    if (!changes.empty()) {
+        same_line_if_room(button_width(tr(lang, S::mission_undo)));
+        if (ImGui::Button(tr(lang, S::mission_undo)))
+            choose_new_mission(nm.chosen);
+    }
+    ImGui::Separator();
+    // its words, a language at a time (empty: the English one)
+    const auto& languages = mission_languages();
+    ImGui::SetNextItemWidth(6 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo(tr(lang, S::new_missions_language),
+                          languages[static_cast<std::size_t>(nm.language)].c_str())) {
+        for (std::size_t l = 0; l < languages.size(); ++l)
+            if (ImGui::Selectable(languages[l].c_str(), static_cast<int>(l) == nm.language))
+                nm.language = static_cast<int>(l);
+        ImGui::EndCombo();
+    }
+    if (nm.language != 0) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", tr(lang, S::new_missions_default));
+    }
+    language_text("name", e.name, false);
+    language_text("objective", e.objective, true);
+    language_text("description", e.description, true);
+    ImGui::Separator();
+    // where it is listed, played and when it opens
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    ImGui::SliderInt("category", &e.category, 0, 11);
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo("world", e.world.c_str())) {
+        for (const char* w : {"tt", "aw", "he", "al", "eh", "nm", "zz", "pp", "bb", "tw"})
+            if (ImGui::Selectable(w, e.world == w))
+                e.world = w;
+        ImGui::EndCombo();
+    }
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    ImGui::InputInt("room", &e.room);
+    e.room = std::clamp(e.room, 0, 254);
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    ImGui::InputInt("level", &e.level);
+    e.level = std::clamp(e.level, 0, 120);
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    ImGui::InputInt("time (ms)", &e.time_ms, 1000, 10000);
+    e.time_ms = std::max(e.time_ms, 0);
+    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
+    ImGui::InputText("unlock", &e.unlock);
+}
+
 }  // namespace
+
+bool new_missions_unsaved() {
+    return !new_mission_changes().empty();
+}
+
+bool draw_unsaved_quit(App& app) {
+    if (!app.quit_asked)
+        return false;
+    bool quit = false;
+    ImGui::OpenPopup("###unsavedquit");
+    if (ImGui::BeginPopupModal("###unsavedquit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted(fmt(app.language, S::new_missions_unsaved, {nm.edit.key}).c_str());
+        if (ImGui::Button(tr(app.language, S::new_missions_quit)))
+            quit = true;
+        ImGui::SameLine();
+        if (ImGui::Button(tr(app.language, S::new_missions_keep))) {
+            app.quit_asked = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    return quit;
+}
 
 MissionOverlay& mission_overlay() {
     static MissionOverlay overlay;
@@ -1044,6 +1271,50 @@ void draw_mission_view(App& app, const Item& item) {
                 ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
+        // a mission of the mod's own made from this one
+        same_line_if_room(button_width(tr(lang, S::mission_new)));
+        if (ImGui::Button(tr(lang, S::mission_new)))
+            ImGui::OpenPopup("###newmission");
+        if (ImGui::BeginPopupModal((std::string(tr(lang, S::mission_new)) + "###newmission").c_str(), nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+            static std::string key;
+            static std::string world = "tt";
+            static int room = 0;
+            ImGui::PushTextWrapPos(40 * ImGui::GetFontSize());
+            ImGui::TextUnformatted(fmt(lang, S::mission_new_note, {mission_path(v.edit.number)}).c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
+            ImGui::InputText(tr(lang, S::mission_new_key), &key);
+            ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+            if (ImGui::BeginCombo(tr(lang, S::mission_new_world), world.c_str())) {
+                for (const char* w : {"tt", "aw", "he", "al", "eh", "nm", "zz", "pp", "bb", "tw"})
+                    if (ImGui::Selectable(w, world == w))
+                        world = w;
+                ImGui::EndCombo();
+            }
+            ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+            ImGui::InputInt(tr(lang, S::mission_new_room), &room);
+            room = std::max(room, 0);
+            ImGui::BeginDisabled(key.empty());
+            if (ImGui::Button(tr(lang, S::mission_copy_do))) {
+                std::string why;
+                if (new_mod_mission(nitrofs(), m->dir, key, v.edit.number, world, room, &why)) {
+                    app.tell(fmt(lang, S::mission_new_made, {key, mission_path(v.edit.number)}) + "  " +
+                                 tr(lang, S::restart_note),
+                             true);
+                    nm.stale = true;
+                    key.clear();
+                    ImGui::CloseCurrentPopup();
+                } else {
+                    app.tell(fmt(lang, S::save_failed, {why}), false);
+                }
+            }
+            ImGui::EndDisabled();
+            same_line_if_room(button_width(tr(lang, S::cancel)));
+            if (ImGui::Button(tr(lang, S::cancel)))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         if (from_mod) {
             same_line_if_room(button_width(tr(lang, S::mission_give_back)));
             if (ImGui::Button(tr(lang, S::mission_give_back))) {
@@ -1064,6 +1335,10 @@ void draw_mission_view(App& app, const Item& item) {
         }
         if (ImGui::BeginTabItem(tr(lang, S::mission_tab_scripts))) {
             draw_scripts(app);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem(tr(lang, S::mission_tab_new))) {
+            draw_new_missions(app);
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();

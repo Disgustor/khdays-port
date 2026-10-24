@@ -7,6 +7,7 @@
 extern "C" {
 #include "../../host/app/host.h" // khdays_host_tell_no_data
 #include "origin.h"
+#include "session_log.h"
 }
 
 #include "khdays/assets/message.h" // lz_decompress
@@ -60,6 +61,22 @@ std::vector<GameFile> files;
 std::vector<std::string> game_paths; // by file id: the FNT's name, or _unnamed/file_NNNNN.bin
 std::map<std::string, u32> file_ids; // the game's paths, as the FNT names them
 std::vector<Region> regions;         // sorted by start
+u32 image_end;                       // past everything placed
+
+// The files the mods add (khdays_rom_add_file), by their paths in lower case: the image's range and id.
+struct Added {
+    u32 top, bottom, id;
+};
+std::map<std::string, Added> added;
+
+std::string lower(std::string_view text)
+{
+    std::string s(text);
+    for (char &c : s) {
+        c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    }
+    return s;
+}
 
 u32 le32(const u8 *p)
 {
@@ -296,6 +313,56 @@ extern "C" int khdays_rom_init(void)
         }
     }
     std::sort(regions.begin(), regions.end(), [](const Region &a, const Region &b) { return a.start < b.start; });
+    image_end = rom_end;
+    return 1;
+}
+
+extern "C" int khdays_rom_add_file(const char *path, const char *disk)
+{
+    const fs::path where = utf8_path(disk);
+    std::error_code ec;
+    const auto bytes = fs::file_size(where, ec);
+    if (ec || bytes == 0 || bytes > 0xffffffffu - image_end - 0x200u) {
+        return 0;
+    }
+    const u32 size = static_cast<u32>(bytes);
+    const u32 placed = (image_end + 0x1ff) & ~0x1ffu;
+    const u32 id = static_cast<u32>(files.size());
+    image_end = placed + size;
+    files.push_back({where, size, {}});
+    game_paths.emplace_back(path);
+    regions.push_back({placed, placed + size, GAME_FILE, static_cast<int>(id)}); // the last: still in order
+    added[lower(path)] = {placed, placed + size, id};
+    return 1;
+}
+
+extern "C" int khdays_rom_add_alias(const char *path, const char *game_path)
+{
+    const auto it = file_ids.find(game_path);
+    if (it == file_ids.end()) {
+        return 0;
+    }
+    const u32 id = it->second;
+    added[lower(path)] = {le32(fat.data() + 8 * id), le32(fat.data() + 8 * id + 4), id};
+    return 1;
+}
+
+extern "C" int khdays_rom_added_file(const char *path, unsigned int *bounds)
+{
+    if (added.empty()) {
+        return 0;
+    }
+    while (*path == '/') {
+        ++path;
+    }
+    const auto it = added.find(lower(path));
+    if (it == added.end()) {
+        return 0;
+    }
+    bounds[0] = it->second.top;
+    bounds[1] = it->second.bottom;
+    bounds[2] = it->second.id;
+    khdays_log("rom: the game opened %s, a mod's (the image's 0x%08x-0x%08x)", path, it->second.top, it->second.bottom);
     return 1;
 }
 
@@ -418,12 +485,12 @@ extern "C" int khdays_rom_find(const char *path, u32 *offset, u32 *size)
 
 extern "C" int khdays_rom_file_count(void)
 {
-    return static_cast<int>(game_paths.size());
+    return static_cast<int>(fat.size() / 8); // the table's files, not the mods' added ones
 }
 
 extern "C" int khdays_rom_file_info(int id, char *path, int size, u32 *offset, u32 *bytes)
 {
-    if (id < 0 || static_cast<std::size_t>(id) >= game_paths.size()) {
+    if (id < 0 || id >= khdays_rom_file_count()) {
         return 0;
     }
     const std::string &name = game_paths[static_cast<std::size_t>(id)];

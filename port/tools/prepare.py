@@ -1344,7 +1344,9 @@ HOOKS = {
     # The engine's three loads: which game file is
     # read into which buffer -- by path or by packed id, raw or decompressed --
     # for the port's names of the graphics the game uploads
-    # (runtime/core/origin.c). Nothing the game does changes.
+    # (runtime/core/origin.c). Nothing the game does changes, but for the
+    # mods' new missions: Archive_LoadFile hands their rows in Mission Mode's
+    # list and the missions' table after the game's (runtime/missions/).
     "main@0201ebdc": [
         (  # Loader_RequestFile
             "    OS_SendMessage(data_0204bc1c, self, 1);\n    return (void *)self[10];\n",
@@ -1373,6 +1375,8 @@ HOOKS = {
             "      khdays_origin_loaded(file.top, file.bottom, buf, buf != 0 ? size : 0, compressed != 0); }\n"
             "    { extern void khdays_stop_file_loaded(unsigned top, void *buffer, unsigned size);\n"
             "      if (buf != 0) khdays_stop_file_loaded(file.top, buf, size); }\n"
+            "    { extern void *khdays_missions_file_loaded(unsigned top, void *buffer, unsigned size, void *heap);\n"
+            "      if (buf != 0) buf = khdays_missions_file_loaded(file.top, buf, size, (void *)gFileLoader[5]); }\n"
             "    gFileLoader[5] = 0;\n    FS_CloseFile(&file);\n    return buf;\n",
         )
     ],
@@ -1988,6 +1992,115 @@ HOOKS["ov107@020c89e8"] = [
         "    return khdays_stop_damage(self, khdays_calc_hit_damage(self, hit));\n"
         "}\n"
         "static int khdays_calc_hit_damage(Actor *self, struct HitEvent *hit)\n{\n",
+    )
+]
+
+# The mods' new missions (runtime/missions/): their progress lies where the game keeps a mission's, by its
+# number, past the flag array's 0x4000 bits; a field or flag there of a new mission is the port's, any other
+# the game's own call as before.
+HOOKS["main@020235d0"] = [
+    (  # GameState_GetField
+        "    return BitArray_GetField(gGameState + 0x10, arg0, arg1);\n",
+        "    if ((unsigned int)arg0 >= 0x4000u) {\n"
+        "        extern long long khdays_missions_field_get(unsigned int field, unsigned int bits);\n"
+        "        long long khdays_value = khdays_missions_field_get((unsigned int)arg0, (unsigned int)arg1);\n"
+        "        if (khdays_value >= 0) return (int)khdays_value;\n"
+        "    }\n"
+        "    return BitArray_GetField(gGameState + 0x10, arg0, arg1);\n",
+    )
+]
+HOOKS["main@020235e8"] = [
+    (  # GameState_SetField
+        "    BitArray_SetField(gGameState + 0x10, arg0, arg1, arg2);\n",
+        "    { extern int khdays_missions_field_set(unsigned int field, unsigned int bits, unsigned int value);\n"
+        "      if (arg0 >= 0x4000u && khdays_missions_field_set(arg0, arg1, arg2)) return; }\n"
+        "    BitArray_SetField(gGameState + 0x10, arg0, arg1, arg2);\n",
+    )
+]
+HOOKS["main@02023588"] = [
+    (  # GameState_IsFlagSet
+        "    if (BitArray_TestBit(gGameState + 0x10, arg) != 0) {\n",
+        "    if (arg >= 0x4000u) {\n"
+        "        extern int khdays_missions_flag_get(unsigned int flag);\n"
+        "        int khdays_value = khdays_missions_flag_get(arg);\n"
+        "        if (khdays_value >= 0) return khdays_value;\n"
+        "    }\n"
+        "    if (BitArray_TestBit(gGameState + 0x10, arg) != 0) {\n",
+    )
+]
+HOOKS["main@020235a8"] = [
+    (  # GameState_SetFlag
+        "    return BitArray_SetBit(*(int *)&gGameState + 0x10, arg0);\n",
+        "    { extern int khdays_missions_flag_set(unsigned int flag, int on);\n"
+        "      if ((unsigned int)arg0 >= 0x4000u && khdays_missions_flag_set((unsigned int)arg0, 1)) return 0; }\n"
+        "    return BitArray_SetBit(*(int *)&gGameState + 0x10, arg0);\n",
+    )
+]
+HOOKS["main@020235bc"] = [
+    (  # GameState_ClearFlag
+        "    BitArray_ClearBit(gGameState + 0x10, flag);\n",
+        "    { extern int khdays_missions_flag_set(unsigned int flag, int on);\n"
+        "      if ((unsigned int)flag >= 0x4000u && khdays_missions_flag_set((unsigned int)flag, 0)) return; }\n"
+        "    BitArray_ClearBit(gGameState + 0x10, flag);\n",
+    )
+]
+# ... the best result the results keep, gGameState's missionResultRecords[200]: a new mission's in the
+# port's store
+HOOKS["ov005@020550e4"] += [
+    (  # Ov005_CommitMissionResults
+        "    if(config->updateMissionRecord)gGameState->missionResultRecords[config->missionIndex]="
+        "config->missionResultValue;\n",
+        "    if(config->updateMissionRecord){ extern void khdays_missions_set_best(int number, int value);\n"
+        "        if(config->missionIndex<200)gGameState->missionResultRecords[config->missionIndex]="
+        "config->missionResultValue;\n"
+        "        else khdays_missions_set_best(config->missionIndex,config->missionResultValue); }\n",
+    )
+]
+HOOKS["ov005@02057c48"] = [
+    (  # Ov005_InitializeResultConfiguration
+        "void Ov005_InitializeResultConfiguration(void) {\n",
+        "extern int khdays_missions_best(int number);\nvoid Ov005_InitializeResultConfiguration(void) {\n",
+    ),
+    (
+        "gGameState->missionResultRecords[config->missionIndex]",
+        "(config->missionIndex<200?gGameState->missionResultRecords[config->missionIndex]:"
+        "(u32)khdays_missions_best(config->missionIndex))",
+    ),
+]
+for _key in ("ov008@02074c40", "ov025@020aa298"):  # Ov008_MissionMenu_DrawInfo, Ov025_MissionMenu_DrawInfo
+    HOOKS[_key] = [
+        (
+            "            nRecord = gGameState->missionResultRecords[nMissionId];\n",
+            "            { extern int khdays_missions_best(int number);\n"
+            "              nRecord = nMissionId < 200 ? gGameState->missionResultRecords[nMissionId]\n"
+            "                                         : khdays_missions_best(nMissionId); }\n",
+        )
+    ]
+# ... their rows in Mission Mode's list: shown by the port's own test (their numbers past the game's 900)
+HOOKS["ov008@02056048"] = [
+    (  # Ov008_IsEncounterEligible
+        "    unsigned int bit;\n    unsigned int m;\n",
+        "    unsigned int bit;\n    unsigned int m;\n"
+        "    { extern int khdays_missions_eligible(const void *record, unsigned int flags);\n"
+        "      int khdays_shown = khdays_missions_eligible((const void *)param_1, param_2);\n"
+        "      if (khdays_shown >= 0) return khdays_shown; }\n",
+    )
+]
+# ... their files ("mi/mi/<file>"), which the ROM's file table does not name: opened where the ROM holds them
+HOOKS["main@0200acb0"] = [
+    (  # FS_OpenFile
+        "int FS_OpenFile(void *file, const char *path) {\n    struct FileID id;\n",
+        "int FS_OpenFile(void *file, const char *path) {\n    struct FileID id;\n"
+        "    {\n"
+        "        extern int khdays_rom_added_file(const char *path, unsigned int *bounds);\n"
+        "        extern int FS_OpenFileDirect(void *file, void *arc, unsigned int top, unsigned int bottom,\n"
+        "                                     unsigned int index);\n"
+        "        extern char data_02046334[]; /* fsi_arc_rom */\n"
+        "        unsigned int khdays_bounds[3];\n"
+        "        if (khdays_rom_added_file(path, khdays_bounds))\n"
+        "            return FS_OpenFileDirect(file, data_02046334, khdays_bounds[0], khdays_bounds[1],\n"
+        "                                     khdays_bounds[2]);\n"
+        "    }\n",
     )
 ]
 

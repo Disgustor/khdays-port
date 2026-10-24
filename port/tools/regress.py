@@ -104,6 +104,24 @@ WALKS = [
         window=True,
         marks=("stop: recipes 101-103 added after the game's 101", "Stop synthesised\t1"),
     ),
+    # a mod's new mission (port/tests/mods_v2/missions): listed in Twilight Town's Mission Mode list after the
+    # game's (the player's save: a file with the missions open), played on mission 1354's file, cleared when its
+    # clock runs out, its progress written beside the save file the autosave writes (file 99: the chip untouched)
+    Walk(
+        "missions",
+        240,
+        player_save=True,
+        mods="port/tests/mods_v2/missions",
+        window=True,
+        marks=(
+            "missions: test.missions/clock is mission 3595",
+            "with the new missions' rows",
+            "rom: the game opened mi/mi/20000",
+            "the mod's mission\t3595",
+            "mission end\tcleared",
+            "missions: file 99's progress written",
+        ),
+    ),
 ]
 
 # The runtime reports the current scene once a second, and at each change,

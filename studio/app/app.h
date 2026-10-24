@@ -129,6 +129,7 @@ struct App {
     };
     std::vector<Notice> notices;
     void tell(const std::string& text, bool ok);
+    bool quit_asked = false;  // the window's close waits for an answer about unsaved work
 };
 
 // The views (each draws into the current ImGui window).
@@ -153,6 +154,9 @@ void movie_view_leave();
 void room_export_to(App& app, const std::filesystem::path& file);
 // A mission: its scripts, step by step.
 void draw_mission_view(App& app, const Item& item);
+// Whether the mod's new missions have changes not saved; asked when the window closes (true: quit anyway).
+bool new_missions_unsaved();
+bool draw_unsaved_quit(App& app);
 // The mods' console: the running game's mods' log as it grows, and their reloads.
 void draw_mods_console(App& app, bool* open);
 

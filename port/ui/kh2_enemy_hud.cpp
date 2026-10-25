@@ -183,9 +183,11 @@ extern "C" void khdays_ui_kh2_enemy_emit(void)
             }
         x0 = std::floor(x0);
         y0 = std::floor(y0);
-        const int w = int(std::ceil(x1) - x0), h = int(std::ceil(y1) - y0), scale = khdays_ui_scale();
-        if (w <= 0 || h <= 0 || w > 2048 || h > 512)
+        const float span_x = std::ceil(x1) - x0, span_y = std::ceil(y1) - y0;
+        if (!std::isfinite(span_x) || !std::isfinite(span_y) || span_x <= 0 || span_y <= 0 || span_x > 2048 ||
+            span_y > 512)
             throw std::runtime_error("enemy sequence has unsupported canvas dimensions");
+        const int w = int(span_x), h = int(span_y), scale = khdays_ui_scale();
         if (image < 0 || width != w || height != h || image_scale != scale) {
             khdays_ui_image_put(image);
             width = w;

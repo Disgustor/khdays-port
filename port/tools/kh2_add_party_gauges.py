@@ -115,7 +115,11 @@ def add_party_gauges(data: bytes) -> tuple[bytes, dict[str, int]]:
 
 
 def party_config(player: dict, mapping: dict[str, int]) -> dict:
-    result = {key: deepcopy(value) for key, value in player.items() if key not in ("party", "slots", "limit_text")}
+    result = {
+        key: deepcopy(value)
+        for key, value in player.items()
+        if key not in ("party", "slots", "limit_text", "enemy", "reticles", "information")
+    }
     result.update(
         offset_x=0,
         offset_y=0,

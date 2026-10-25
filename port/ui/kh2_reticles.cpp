@@ -122,10 +122,12 @@ void load()
                 }
                 m.left = std::floor(x0) - 2;
                 m.top = std::floor(y0) - 2;
-                m.width = int(std::ceil(x1) - m.left + 2);
-                m.height = int(std::ceil(y1) - m.top + 2);
-                if (m.width <= 0 || m.height <= 0 || m.width > 512 || m.height > 512)
+                const float width = std::ceil(x1) - m.left + 2, height = std::ceil(y1) - m.top + 2;
+                if (!std::isfinite(width) || !std::isfinite(height) || width <= 0 || height <= 0 || width > 512 ||
+                    height > 512)
                     throw std::runtime_error("reticle canvas exceeds 512 screen units");
+                m.width = int(width);
+                m.height = int(height);
                 m.resource = r;
                 khdays_log("kh2 reticle %s: %s, clips %d/%d", names[i], found, c.animation, c.end_animation);
             } catch (const std::exception &e) {
@@ -272,7 +274,7 @@ extern "C" void khdays_reticles_end(int cancel)
     previous_frame = frame;
     for (int i = 0; i < KHDAYS_RETICLE_COUNT; ++i) {
         auto &m = markers[i];
-        if (cancel || !observing) {
+        if (cancel) {
             m.active = m.leaving = false;
             continue;
         }

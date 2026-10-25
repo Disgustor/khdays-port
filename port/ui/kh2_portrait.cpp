@@ -1,7 +1,7 @@
 #include "kh2_portrait.h"
 #include <algorithm>
+#include <charconv>
 #include <cmath>
-#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <set>
@@ -147,8 +147,9 @@ class Reader {
             while (digit())
                 ++at;
         }
-        const double n = std::strtod(text.substr(start, at - start).c_str(), nullptr);
-        if (!std::isfinite(n))
+        double n = 0;
+        const auto parsed = std::from_chars(text.data() + start, text.data() + at, n);
+        if (parsed.ec != std::errc{} || parsed.ptr != text.data() + at || !std::isfinite(n))
             fail();
         return n;
     }

@@ -77,13 +77,17 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         party["slots"] = json.loads(json.dumps(defaults["party"]["slots"]))
         previous = settings / language / "gauge.json" if settings else None
         resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
+        # Earlier converters accidentally copied these root-only sections into party settings.
+        party_excluded = resources | {"enemy", "reticles", "information"}
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))
             if not isinstance(custom, dict) or set(custom) - set(defaults):
                 raise ValueError(f"unsupported gauge settings in {previous}")
             merge(config, {key: value for key, value in custom.items() if key not in resources | {"party"}})
             if "party" in custom:
-                merge(party, {key: value for key, value in custom["party"].items() if key not in resources}, "party")
+                merge(
+                    party, {key: value for key, value in custom["party"].items() if key not in party_excluded}, "party"
+                )
         previous_party = settings / language / "party.json" if settings else None
         if (
             previous_party
@@ -96,7 +100,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
             # The old -8 test offset is now the built-in first-party placement.
             if custom.get("offset_y") == -8:
                 custom["offset_y"] = 0
-            merge(party, {key: value for key, value in custom.items() if key not in resources}, "party")
+            merge(party, {key: value for key, value in custom.items() if key not in party_excluded}, "party")
         # Party members never have a Days limit layer, even with a copied player configuration.
         party.update(limit_circle=-1, limit_bar=-1, limit_marker=-1)
         config["party"] = party

@@ -19,7 +19,8 @@ extern "C" {
 
 namespace {
 std::vector<unsigned char> memory(0x02100000);
-int hp = 186, maximum = 186, paused, changed, scene = 2, slot;
+int hp = 186, maximum = 186, paused, changed, scene = 2, slot, hud_mode = KHDAYS_UI_ON;
+khdays::assets::kh2::SequenceAnimation *parent_animation = nullptr;
 int limit_hp = 62;
 KhdaysLinkLimitClock limit_clock{};
 int native_w, native_h;
@@ -128,7 +129,7 @@ int Ov002_GetPanelWord0220Idx(int)
 }
 int khdays_ui_mode(int)
 {
-    return KHDAYS_UI_ON;
+    return hud_mode;
 }
 void khdays_ui_changed(void)
 {
@@ -205,6 +206,7 @@ SequenceAsset load_sequence_asset(const std::filesystem::path &, const std::stri
     a.x = {455, 463};
     a.y = {355, 347};
     d.animations.push_back(a);
+    parent_animation = &d.animations.back();
     d.clips.resize(160);
     for (auto &c : d.clips)
         c.animations = {0, 1};
@@ -305,6 +307,10 @@ int main()
         slot = 0;
         khdays_ui_kh2_hp_frame(114);
         expect(khdays_ui_kh2_hp_ready(), "gauge did not recover");
+        hud_mode = KHDAYS_UI_OFF;
+        khdays_ui_kh2_hp_frame(114);
+        expect(!khdays_ui_kh2_hp_ready(), "disabled HUD retained a live replacement");
+        hud_mode = KHDAYS_UI_ON;
         scene = 1;
         khdays_ui_kh2_hp_frame(115);
         expect(!khdays_ui_kh2_hp_ready(), "gauge persisted outside the field");
@@ -356,7 +362,9 @@ int main()
         expect(changed != 0 && khdays_ui_kh2_hp_compose(&face, nullptr), "ready divider did not refresh paused HUD");
         khdays_ui_kh2_hp_commands(&commands);
         expect(commands.words[KSI_COUNT] == hidden_count + 1, "ready divider missing");
+        const auto saved_parent_animation = parent_animation;
         const auto data = khdays::render::kh2::load_sequence_asset({}, "", {}).sequence;
+        parent_animation = saved_parent_animation;
         khdays::ui::kh2::HpGaugeStyle style;
         style.limit_marker = 159;
         const auto number = [](const KhdaysSequenceImage &p, unsigned at) {
@@ -434,6 +442,11 @@ int main()
         khdays_ui_kh2_hp_commands(&commands);
         expect(commands.words[KSI_COUNT] + 1 == latched.words[KSI_COUNT], "native flags left a stale divider");
         expect(rgba_reads == 0 && uploads == 0, "divider introduced CPU pixel work");
+        parent_animation->flags &= ~2u;
+        expect(!khdays_ui_kh2_hp_parent(0, &parent) && !khdays_ui_kh2_hp_ready(),
+               "invalid animated parent escaped the native fallback");
+        khdays_ui_kh2_hp_commands(&commands);
+        expect(!commands.words[KSI_COUNT], "failed parent left stale GPU commands");
         std::cout << "KH2 HP HUD adapter tests passed\n";
         return 0;
     } catch (const std::exception &e) {

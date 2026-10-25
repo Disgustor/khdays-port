@@ -39,6 +39,12 @@ must be `on`; `hud=off` or `hud=check` retains the normal Days gauge. A bad conf
 or asset is logged once and retains the normal gauge. Set `enabled` to false in
 the JSON to disable it. `KHDAYS_KH2_HUD=0` remains a diagnostic override.
 
+Runtime animation errors also disable the affected replacement and clear its GPU
+commands. A failed party slot leaves other slots working. Registered atlas pixels
+remain owned for the texture registry's lifetime, including failed optional labels.
+The importer keeps enemy, reticle and information settings at the root and removes
+accidental copies of those sections from older generated party settings on rebuild.
+
 Copy [the default config](examples/kh2-gauge.json) beside `zz0field.2dd` and
 `US_zz0field_2dd1.png` in the mod's language folder. Restart after editing.
 
@@ -65,6 +71,10 @@ Copy [the default config](examples/kh2-gauge.json) beside `zz0field.2dd` and
 Player gauge settings remain at the root; party and label settings use the
 objects described below. Unknown keys, duplicate keys, invalid types and
 out-of-range values are errors rather than silently ignored misspellings.
+Decimal JSON values use a period regardless of the process locale. Sequence
+evaluation rejects overflowing active attachments and caps each evaluated frame
+at 65,536 quads to bound repeated sprite-range expansion; the GPU image limit
+remains 128 quads. These are port safety limits, not claims about KH2's original limits.
 
 The visible center quads are drawn behind the HP ring and Days portrait. Original
 `GAUGE_PLAYER::create` creates clip 136; `setDamage` and the three damage wrappers

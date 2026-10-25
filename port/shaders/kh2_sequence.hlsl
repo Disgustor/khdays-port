@@ -7,6 +7,7 @@ uint seq_hd_word(uint at) { return hd.Load(at); }
 uint word(uint at) { return seq_word(0u,at); }
 float number(uint at) { return asfloat(word(at)); }
 float4 text_over(float4 colour, float2 at) {
+    if (word(KSI_FACE)==0xffffffffu) return colour;
     float2 face=at-float2(number(KSI_FACE_X),number(KSI_FACE_Y));
     bool text=word(KSI_TEXT_INSERT)!=0u;
     float scale=text?number(KSI_TEXT_SCALE):1.0f;

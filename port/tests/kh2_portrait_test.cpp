@@ -11,6 +11,7 @@ extern "C" {
 }
 #include <bit>
 #include <chrono>
+#include <clocale>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -28,6 +29,11 @@ int masked[4]{}, scale = 2;
 float parent_x = 230, parent_y = 160;
 std::vector<std::vector<std::uint32_t>> images;
 std::vector<KhdaysUiElement> emitted;
+struct RegisteredAtlas {
+    const unsigned *pixels;
+    std::vector<unsigned> expected;
+};
+std::vector<RegisteredAtlas> registered_atlases;
 bool test_party = false, test_labels = false, native_limit = false;
 int party_health[]{372, 124, 62};
 void expect(bool value, const char *message)
@@ -101,6 +107,10 @@ void archive(const std::filesystem::path &p, unsigned version, bool gauge = fals
             word(s, 692 + clip * 36, 0x10000);
             word(s, 696 + clip * 36, 0);
         }
+        // A custom parent has no active attachment on its last ten frames.
+        word(s, 692 + 176 * 36, 0x20002);
+        word(s, 116 + 3 * 144, 0x73);
+        word(s, 116 + 3 * 144 + 12, 49);
     }
     std::vector<std::uint8_t> b(112 + s.size());
     word(b, 0, 0x01524142);
@@ -135,6 +145,8 @@ void assets()
             word(bytes, 112 + 116 + i * 144 + 20, i * 10 + 59);
         }
         write(directory / "label.archive", bytes);
+        word(bytes, 112 + 48, 1); // Unsupported palette: fail during playback after registering the atlas.
+        write(directory / "invalid-label.archive", bytes);
     }
     std::vector<std::uint8_t> dds(192, 255);
     std::fill(dds.begin(), dds.begin() + 128, std::uint8_t(0));
@@ -159,6 +171,22 @@ void assets()
 }
 void configuration()
 {
+    {
+        std::ifstream input(directory / "portrait.any-extension", std::ios::binary);
+        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+        for (unsigned entry : {16u, 32u}) {
+            auto invalid = bytes;
+            word(invalid, entry + 8, ~0u);
+            word(invalid, entry + 12, 0);
+            write(directory / "empty-entry.archive", invalid);
+            rejects(
+                [&] {
+                    render::load_sequence_asset(directory / "empty-entry.archive", "img", "seq",
+                                                directory / "portrait.DDS");
+                },
+                "empty BAR entry with a sentinel offset accepted");
+        }
+    }
     text(directory / "gauge.json",
          R"({"archive":"gauge.archive","texture":"portrait.DDS","entry":"img",
         "player_icon":{"enabled":true,"animation":0,"archive":"label.archive","scale":1,"offset_x":2,"offset_y":3},
@@ -166,7 +194,7 @@ void configuration()
         "party":{"enabled":true,"geometry_scale":0.5111111111111111,"slots":{
         "1":{"offset_x":0,"offset_y":0},
         "2":{"offset_x":5,"offset_y":-3,"player_icon":{"enabled":true,"animation":1,"p3":2,"archive":"label.archive","scale":1}},
-        "3":{"player_icon":{"enabled":true,"animation":0,"archive":"missing","scale":1}}
+        "3":{"center_override":176,"player_icon":{"enabled":true,"animation":0,"archive":"invalid-label.archive","scale":1}}
         }}})");
     // Gauge fixtures use the same image/sequence name, unlike the portrait test archive.
     auto gauge = std::ifstream(directory / "gauge.archive", std::ios::binary);
@@ -213,6 +241,15 @@ void configuration()
     expect(c[9][1].normal == 3 && c[9][1].alert == 0 && c[9][1].dead == 2 && c[9][1].scale == 0.65f,
            "party portrait must share KH2 states and gauge scale");
     expect(c[0][0].scale == 0.65f, "default player portrait scale must match the gauge");
+    const std::string numeric_locale = std::setlocale(LC_NUMERIC, nullptr);
+    text(directory / "decimal.json", R"({"characters":{"Roxas":{"player":{"scale":0.65}}}})");
+    if (std::setlocale(LC_NUMERIC, "de-DE")) {
+        const auto localized = portrait::load_portrait_config(directory / "decimal.json");
+        const auto localized_gauge = portrait::load_hp_gauge_configs(directory / "gauge.json");
+        expect(localized[12][0].scale == 0.65f && localized_gauge[1].style.geometry_scale > 0.5f,
+               "decimal JSON settings depend on the process locale");
+    }
+    std::setlocale(LC_NUMERIC, numeric_locale.c_str());
     text(directory / "bad.json", R"({"characters":{"Roxas":{"player":{"scale":0}}}})");
     rejects([&] { portrait::load_portrait_config(directory / "bad.json"); }, "zero scale accepted");
     text(directory / "bad.json",
@@ -469,6 +506,13 @@ void labels_runtime()
     khdays_ui_kh2_labels_commands(programs);
     expect(!programs[4].words[KSI_COUNT] && !programs[4].words[KSI_CLEAR],
            "limit sequence remained visible after the native limit text disappeared");
+    collect_labels(95);
+    KhdaysHudParent failed{};
+    expect(!khdays_ui_kh2_party_parent(3, &failed) && !khdays_ui_kh2_party_ready(3),
+           "bad party attachment escaped fallback");
+    collect_labels(96);
+    expect(!khdays_ui_kh2_party_ready(3) && khdays_ui_kh2_party_ready(1),
+           "bad party attachment retried every frame or disabled another slot");
 }
 } // namespace
 extern "C" {
@@ -525,8 +569,9 @@ int khdays_ui_scale(void)
 {
     return scale;
 }
-int khdays_textures_add_info(const char *, int, int, const unsigned *, unsigned)
+int khdays_textures_add_info(const char *, int w, int h, const unsigned *pixels, unsigned)
 {
+    registered_atlases.push_back({pixels, std::vector<unsigned>(pixels, pixels + std::size_t(w) * h)});
     return 100 + atlases++;
 }
 int khdays_ui_image_get(int w, int h)
@@ -630,6 +675,9 @@ int main(int argc, char **argv)
         runtime();
         party_runtime();
         labels_runtime();
+        for (const auto &atlas : registered_atlases)
+            expect(std::equal(atlas.expected.begin(), atlas.expected.end(), atlas.pixels),
+                   "registered atlas was freed or modified after a replacement failed");
         if (argc == 2 && !native_limit)
             private_assets(argv[1]);
         std::filesystem::remove_all(directory);

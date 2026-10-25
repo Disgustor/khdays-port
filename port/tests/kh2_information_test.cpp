@@ -41,6 +41,7 @@ KhdaysSequenceImage programs[2];
 KhdaysUiElement submitted{}, box{};
 std::optional<seq::SequenceData> original;
 std::array<int, 2> original_size{};
+seq::SequenceClip *loop_clip = nullptr;
 void expect(bool good, const char *why)
 {
     if (!good)
@@ -433,6 +434,7 @@ SequenceAsset load_sequence_asset(const std::filesystem::path &, const std::stri
     expect(entry == "gaug", "wrong information BAR entry");
     SequenceAsset a;
     a.sequence = original ? *original : fixture();
+    loop_clip = &a.sequence.clips[1];
     a.logical_size = original ? original_size : std::array{512, 256};
     a.texture.width = a.texture.height = 1;
     a.texture.rgba = {255, 255, 255, 255};
@@ -559,6 +561,16 @@ int main(int argc, char **argv)
             context_tests();
             pause_during_intro();
             marquee_end();
+            loop_clip->restart = ~0u;
+            khdays_ui_information_reset();
+            const unsigned short broken[]{'x', 0};
+            khdays_ui_information_message(broken);
+            for (int i = 0; i < 16; ++i)
+                step();
+            expect(!khdays_ui_information_state() && !khdays_ui_information_wants(),
+                   "invalid runtime animation escaped fallback or retained stale ownership");
+            expect(!programs[0].words[KSI_CLEAR] && !programs[1].words[KSI_CLEAR],
+                   "failed information animation retained GPU commands");
         }
         std::filesystem::remove(settings);
         std::cout << "Information playback, text anchor, caching and fallback passed\n";

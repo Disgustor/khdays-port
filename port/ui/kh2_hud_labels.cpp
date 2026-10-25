@@ -22,8 +22,8 @@ int khdays_settings_game_language(void);
 #include <cstdio>
 #include <map>
 #include <memory>
-#include <optional>
 #include <limits>
+#include <tuple>
 
 namespace {
 namespace gauge = khdays::ui::kh2;
@@ -46,6 +46,8 @@ struct Label {
     std::vector<KhdaysUiElement> native;
 };
 std::array<Label, 5> labels;
+// Registered texture pointers must remain valid even when a label falls back after an error.
+std::map<std::tuple<std::string, std::string, std::string>, std::shared_ptr<Resource>> resources;
 std::array<gauge::HpGaugeConfig, 4> gauges;
 bool tried = false, loaded = false, reference = true;
 unsigned previous_frame = 0;
@@ -91,7 +93,6 @@ void load()
             return;
         const auto configs = gauge::load_hp_gauge_configs(path(found));
         gauges = configs;
-        std::map<std::string, std::shared_ptr<Resource>> resources;
         for (int i = 0; i < 5; ++i) {
             auto &s = labels[i];
             s.config = i == 4 ? configs[0].limit_text : configs[i].player_icon;
@@ -101,23 +102,24 @@ void load()
             if (c.animation < 0 && std::all_of(c.animations.begin(), c.animations.end(), [](int n) { return n < 0; }))
                 continue;
             try {
-                const auto key = c.archive + '\n' + c.texture + '\n' + c.entry;
+                const auto key = std::tuple{c.archive, c.texture, c.entry};
                 auto &r = resources[key];
                 if (!r) {
-                    r = std::make_shared<Resource>();
+                    auto pending = std::make_shared<Resource>();
                     const auto folder = path(found).parent_path();
-                    r->asset = render::load_sequence_asset(folder / path(c.archive), c.entry, folder / path(c.texture));
-                    r->pixels.resize(r->asset.texture.rgba.size() / 4);
-                    std::memcpy(r->pixels.data(), r->asset.texture.rgba.data(), r->asset.texture.rgba.size());
+                    pending->asset =
+                        render::load_sequence_asset(folder / path(c.archive), c.entry, folder / path(c.texture));
+                    pending->pixels.resize(pending->asset.texture.rgba.size() / 4);
+                    std::memcpy(pending->pixels.data(), pending->asset.texture.rgba.data(),
+                                pending->asset.texture.rgba.size());
                     const auto atlas_name = "kh2:label:" + std::to_string(i);
-                    r->atlas =
-                        khdays_textures_add_info(atlas_name.c_str(), r->asset.texture.width, r->asset.texture.height,
-                                                 r->pixels.data(), KHDAYS_REPLACEMENT_NO_MIPS);
-                    if (r->atlas < 0)
+                    pending->atlas = khdays_textures_add_info(atlas_name.c_str(), pending->asset.texture.width,
+                                                              pending->asset.texture.height, pending->pixels.data(),
+                                                              KHDAYS_REPLACEMENT_NO_MIPS);
+                    if (pending->atlas < 0)
                         throw std::runtime_error("could not allocate label atlas");
+                    r = std::move(pending);
                 }
-                if (r->atlas < 0)
-                    throw std::runtime_error("could not allocate label atlas");
                 for (int clip : {c.animation, c.animations[0], c.animations[1], c.animations[2], c.animations[3]})
                     if (clip >= 0 && std::size_t(clip) >= r->asset.sequence.clips.size())
                         throw std::runtime_error("label animation is outside the archive");

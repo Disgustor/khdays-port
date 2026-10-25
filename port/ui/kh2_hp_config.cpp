@@ -1,8 +1,8 @@
-// The mod gauge's flat JSON settings; no game or graphics-device dependencies.
+// Shared gauge, label, reticle and information settings; no game or graphics-device dependencies.
 #include "kh2_hp_config.h"
 #include <algorithm>
+#include <charconv>
 #include <cmath>
-#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <set>
@@ -21,7 +21,7 @@ class Reader {
     std::set<std::string> keys;
     [[noreturn]] void fail() const
     {
-        throw std::runtime_error("gauge JSON: invalid flat JSON object at byte " + std::to_string(at));
+        throw std::runtime_error("gauge JSON: invalid object at byte " + std::to_string(at));
     }
     char next()
     {
@@ -102,8 +102,9 @@ class Reader {
             while (digit())
                 ++at;
         }
-        const double n = std::strtod(text.substr(start, at - start).c_str(), nullptr);
-        if (!std::isfinite(n))
+        double n = 0;
+        const auto parsed = std::from_chars(text.data() + start, text.data() + at, n);
+        if (parsed.ec != std::errc{} || parsed.ptr != text.data() + at || !std::isfinite(n))
             fail();
         return n;
     }

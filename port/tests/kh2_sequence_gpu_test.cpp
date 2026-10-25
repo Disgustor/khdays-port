@@ -809,6 +809,11 @@ void information_text()
         draw(p);
         const auto hidden = read(first * 4, unsigned(16 * scale * 16 * scale * 4));
         require(hidden[std::size_t(3 * scale * 16 * scale + 3 * scale)] == 0xff0000ffu);
+        // An exit can keep the old glyph bounds while its texture is intentionally absent.
+        p.words[KSI_FACE] = ~0u;
+        number(p, KSI_TEXT_ALPHA, 1);
+        draw(p);
+        require(read(first * 4, unsigned(16 * scale * 16 * scale * 4)) == hidden);
     }
     std::cout << "Information text insertion, scale, clipping and alpha passed at 1x/4x/8x\n";
 }

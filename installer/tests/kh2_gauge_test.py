@@ -165,6 +165,7 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual(changed[0][131][28:], bytes.fromhex("FFFFFF80") * 4)
                 self.assertEqual(changed[0][130][28:], bytes.fromhex("FFE60080") * 4)
                 party = config["party"]
+                self.assertFalse({"enemy", "reticles", "information"} & party.keys())
                 self.assertEqual(party["scale"], 0.65)
                 self.assertAlmostEqual(party["geometry_scale"], 23 / 45)
                 self.assertEqual((party["limit_circle"], party["limit_bar"], party["limit_marker"]), (-1, -1, -1))
@@ -220,6 +221,21 @@ class GaugeImport(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 gauge.make_gauge(root / "source", root / "out", list(gauge.LANGUAGES))
             self.assertFalse((root / "out").exists())
+
+    def test_rebuild_repairs_root_sections_in_old_party_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources(root / "source")
+            folder = root / "settings/en"
+            folder.mkdir(parents=True)
+            old = {"party": {"offset_y": 7, "enemy": {"enabled": True}, "reticles": {}, "information": {}}}
+            settings = folder / "gauge.json"
+            settings.write_text(json.dumps(old))
+            gauge.make_gauge(root / "source", root / "out", ["en"], root / "settings")
+            repaired = json.loads((root / "out/en/gauge.json").read_text())
+            self.assertEqual(repaired["party"]["offset_y"], 7)
+            self.assertFalse({"enemy", "reticles", "information"} & repaired["party"].keys())
+            self.assertEqual(json.loads(settings.read_text()), old)
 
     def test_rebuild_preserves_custom_animations_and_positions(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -147,11 +147,10 @@ std::uint32_t over(std::uint32_t under, std::uint32_t top)
 extern "C" void khdays_ui_kh2_hp_frame(unsigned frame)
 {
     load();
-    if (!asset || khdays_ui_mode(KHDAYS_UI_HUD) != KHDAYS_UI_ON)
-        return;
     int hp = 0, maximum = 0;
     const bool was = valid;
-    valid = khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
+    valid = asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_overlay_loaded(2) &&
+            khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
             khdays_link_player_hp(&hp, &maximum) && maximum > 0;
     if (!valid) {
         gauge_slot = -1;
@@ -209,18 +208,27 @@ extern "C" int khdays_ui_kh2_hp_parent(int slot, KhdaysHudParent *out)
         return 1;
     if (slot != gauge_slot || !khdays_ui_kh2_hp_ready())
         return 0;
-    const auto frame = gauge::evaluate_hp_gauge(asset->sequence, sample, config.style);
-    if (!frame.active)
+    try {
+        const auto frame = gauge::evaluate_hp_gauge(asset->sequence, sample, config.style);
+        if (!frame.active)
+            return 0;
+        const auto &p = *frame.active;
+        out->x = 230 + config.offset_x + config.portrait_offset_x +
+                 (float(p.x) - config.style.source_origin_x + config.style.center_offset[0]) * config.scale;
+        out->y = 160 + config.offset_y + config.portrait_offset_y +
+                 (float(p.y) - config.style.source_origin_y + config.style.center_offset[1]) * config.scale;
+        out->scale_x = p.scale_x;
+        out->scale_y = p.scale_y;
+        out->alpha = std::clamp(float(p.color >> 24) / 128, 0.0f, 1.0f);
+        return 1;
+    } catch (const std::exception &e) {
+        khdays_log("kh2 HUD: %s; keeping the Days gauge", e.what());
+        valid = false;
+        asset.reset();
+        program = {};
+        khdays_ui_changed();
         return 0;
-    const auto &p = *frame.active;
-    out->x = 230 + config.offset_x + config.portrait_offset_x +
-             (float(p.x) - config.style.source_origin_x + config.style.center_offset[0]) * config.scale;
-    out->y = 160 + config.offset_y + config.portrait_offset_y +
-             (float(p.y) - config.style.source_origin_y + config.style.center_offset[1]) * config.scale;
-    out->scale_x = p.scale_x;
-    out->scale_y = p.scale_y;
-    out->alpha = std::clamp(float(p.color >> 24) / 128, 0.0f, 1.0f);
-    return 1;
+    }
 }
 
 extern "C" void khdays_ui_kh2_hp_reference(int reference)
@@ -385,6 +393,7 @@ extern "C" int khdays_ui_kh2_hp_compose(const KhdaysUiElement *face, const Khday
         std::fprintf(stderr, "kh2 HUD: %s; disabling the replacement\n", e.what());
         valid = false;
         asset.reset();
+        program = {};
         khdays_ui_changed();
         return 0;
     }

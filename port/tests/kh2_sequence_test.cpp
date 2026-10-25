@@ -145,6 +145,17 @@ void parser_and_player()
     expect(evaluate_sequence(data, 0, 0).quads.size() == 1, "mirrored geometry/constant UV rejected");
     data.parts[0].scroll[0] = 1;
     rejects([&] { evaluate_sequence(data, 0, 0); }, "unsupported scroll silently rendered");
+    data = Fixture{}.read();
+    data.animations[0].x = {std::numeric_limits<int>::max() - 127, std::numeric_limits<int>::max() - 127};
+    data.animations[0].flags &= ~(1u << 14);
+    data.animations[0].offset_x = {256, 256};
+    rejects([&] { evaluate_sequence(data, 0, 0); }, "overflowing active attachment accepted");
+    data = Fixture{}.read();
+    data.groups.resize(65535, data.groups[0]);
+    data.sprites[0] = {0, 65535};
+    data.animations.push_back(data.animations[0]);
+    data.clips[0].animations.count = 2;
+    rejects([&] { evaluate_sequence(data, 0, 0); }, "unbounded sprite-range expansion accepted");
     std::vector<std::uint8_t> bar(16);
     bar[0] = 'B';
     bar[1] = 'A';
@@ -173,6 +184,10 @@ void rendering()
         atlas.rgba[i + 3] = 255;
     }
     auto q = quad();
+    KhdaysSequenceImage program{};
+    q.vertices[0].x = std::numeric_limits<float>::quiet_NaN();
+    rejects([&] { render::encode_sequence_quads(program, std::span(&q, 1)); }, "NaN GPU geometry accepted");
+    q = quad();
     std::vector<std::uint32_t> surface(4);
     render::draw_sequence(std::span(&q, 1), atlas, 2, 2, surface, 2, 2);
     expect((surface[0] & 255) == 200 && (surface[2] & 255) == 20, "replacement resolution mapping");

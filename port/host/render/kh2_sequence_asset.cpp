@@ -45,6 +45,8 @@ SequenceAsset load_sequence_asset(const std::filesystem::path &archive, const st
     }
     if (!image || !sequence)
         throw std::runtime_error("KH2 sequence: missing IMGD " + image_entry + " or SEQD " + sequence_entry);
+    if (image->size < 64 || sequence->size < 0x30)
+        throw std::runtime_error("KH2 sequence: truncated IMGD or SEQD entry");
     SequenceAsset out;
     out.logical_size = assets::kh2::read_sequence_image_size(bytes.data() + image->offset, image->size);
     out.sequence = assets::kh2::read_sequence(bytes.data() + sequence->offset, sequence->size);

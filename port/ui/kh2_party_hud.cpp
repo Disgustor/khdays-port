@@ -230,19 +230,27 @@ extern "C" int khdays_ui_kh2_party_parent(int slot, KhdaysHudParent *out)
     KhdaysUiElement box;
     if (!khdays_ui_kh2_party_box(slot, &box))
         return 0;
-    const auto &s = slots[std::size_t(slot - 1)];
-    const auto &config = configs[std::size_t(slot - 1)];
-    const auto f = gauge::evaluate_hp_gauge(asset->sequence, s.sample, config.style);
-    if (!f.active)
+    auto &s = slots[std::size_t(slot - 1)];
+    auto &config = configs[std::size_t(slot - 1)];
+    try {
+        const auto f = gauge::evaluate_hp_gauge(asset->sequence, s.sample, config.style);
+        if (!f.active)
+            return 0;
+        out->x = s.center_x + config.offset_x + config.portrait_offset_x +
+                 (float(f.active->x) - config.style.source_origin_x + config.style.center_offset[0]) * config.scale;
+        out->y = s.center_y + config.offset_y + config.portrait_offset_y +
+                 (float(f.active->y) - config.style.source_origin_y + config.style.center_offset[1]) * config.scale;
+        out->scale_x = f.active->scale_x;
+        out->scale_y = f.active->scale_y;
+        out->alpha = std::clamp(float(f.active->color >> 24) / 128, 0.0f, 1.0f);
+        return 1;
+    } catch (const std::exception &e) {
+        log(e.what());
+        config.enabled = s.valid = s.seen = false;
+        s.program = {};
+        khdays_ui_changed();
         return 0;
-    out->x = s.center_x + config.offset_x + config.portrait_offset_x +
-             (float(f.active->x) - config.style.source_origin_x + config.style.center_offset[0]) * config.scale;
-    out->y = s.center_y + config.offset_y + config.portrait_offset_y +
-             (float(f.active->y) - config.style.source_origin_y + config.style.center_offset[1]) * config.scale;
-    out->scale_x = f.active->scale_x;
-    out->scale_y = f.active->scale_y;
-    out->alpha = std::clamp(float(f.active->color >> 24) / 128, 0.0f, 1.0f);
-    return 1;
+    }
 }
 extern "C" int khdays_ui_kh2_party_compose(int slot, const KhdaysUiElement *face, const KhdaysUiElement *hd)
 {
@@ -330,6 +338,7 @@ extern "C" int khdays_ui_kh2_party_compose(int slot, const KhdaysUiElement *face
         return 1;
     } catch (const std::exception &e) {
         log(e.what());
+        configs[std::size_t(slot - 1)].enabled = false;
         s.valid = false;
         s.program.words[KSI_COUNT] = 0;
         return 0;

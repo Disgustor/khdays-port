@@ -63,6 +63,9 @@ void encode_sequence_quads(KhdaysSequenceImage &image, std::span<const assets::k
         for (unsigned v = 0; v < 4; ++v) {
             const auto &p = q.vertices[v];
             const float xyuv[]{p.x, p.y, p.u, p.v};
+            for (float value : xyuv)
+                if (!std::isfinite(value))
+                    throw std::runtime_error("KH2 renderer: non-finite vertex");
             std::memcpy(w + v * 5, xyuv, sizeof(xyuv));
             w[v * 5 + 4] = p.color;
         }

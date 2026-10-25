@@ -62,9 +62,8 @@ float mix(const std::array<float, 2>& v, float t) {
     return std::lerp(v[0], v[1], t);
 }
 
-int truncate(float value) {
-    if (!std::isfinite(value) || double(value) < std::numeric_limits<int>::min() ||
-        double(value) > std::numeric_limits<int>::max())
+int truncate(double value) {
+    if (!std::isfinite(value) || value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max())
         fail("transformation exceeds the coordinate range");
     return static_cast<int>(value);
 }
@@ -90,7 +89,7 @@ std::uint32_t color(const SequenceAnimation& a, float t, const SequencePose& pos
         if (!active && bit(a, 10))
             value = 128;
         else if (!bit(a, 7))
-            value += truncate(float(int((a.colors[1] >> (8 * c)) & 255u) - value) * t);
+            value = truncate(double(value) + truncate(float(int((a.colors[1] >> (8 * c)) & 255u) - value) * t));
         value = truncate(float(value) * pose.color_rate[c]);
         out |= std::uint32_t(std::clamp(value, 0, 255)) << (8 * c);
     }
@@ -304,12 +303,16 @@ SequenceFrame evaluate_sequence(const SequenceData& data, std::size_t clip, floa
         const auto m = transform(a, t, pose, move_base);
         if (!out.active && bit(a, 1)) {
             const auto p = point(m, 0, 0);
-            out.active =
-                SequenceActive{m.x + truncate(p[0]), m.y + truncate(p[1]), m.sx, m.sy, color(a, t, pose, true)};
+            out.active = SequenceActive{truncate(double(m.x) + truncate(p[0])), truncate(double(m.y) + truncate(p[1])),
+                                        m.sx, m.sy, color(a, t, pose, true)};
         }
         if (frame == float(a.time[1]) && bit(a, 15))
             continue;
         const auto sprite = data.sprites[a.sprite];
+        // Reused table ranges can otherwise expand a small file into billions of quads.
+        constexpr std::size_t max_frame_quads = 65536;
+        if (sprite.count > max_frame_quads - out.quads.size())
+            fail("frame exceeds 65536 quads");
         for (std::size_t g = sprite.first; g < std::size_t(sprite.first) + sprite.count; ++g) {
             const auto& group = data.groups[g];
             const auto& part = data.parts[group.part];

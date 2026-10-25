@@ -86,9 +86,9 @@ void load()
         const auto folder = path(found).parent_path();
         asset = render::load_sequence_asset(folder / path(config.archive), config.entry, folder / path(config.texture));
         const auto loop = seq::evaluate_sequence(asset->sequence, std::size_t(config.loop), 0);
-        text_start_x = (loop.active.value_or(seq::SequenceActive{}).x +
-                        asset->sequence.clips.at(std::size_t(config.loop)).parameters[0] +
-                        asset->sequence.clips.at(std::size_t(config.intro)).parameters[0]) *
+        text_start_x = (float(loop.active.value_or(seq::SequenceActive{}).x) +
+                        float(asset->sequence.clips.at(std::size_t(config.loop)).parameters[0]) +
+                        float(asset->sequence.clips.at(std::size_t(config.intro)).parameters[0])) *
                            config.scale +
                        config.text_offset_x;
         clip_width = config.clip_width > 0 ? config.clip_width
@@ -134,10 +134,12 @@ void load()
         }
         left = std::floor((x0 - config.source_origin_x) * config.scale) - 2;
         top = std::floor((y0 - config.source_origin_y) * config.scale) - 2;
-        width = int(std::ceil((x1 - config.source_origin_x) * config.scale) - left + 2);
-        height = int(std::ceil((y1 - config.source_origin_y) * config.scale) - top + 2);
-        if (width <= 0 || height <= 0 || width > 2048 || height > 512)
+        const float w = std::ceil((x1 - config.source_origin_x) * config.scale) - left + 2;
+        const float h = std::ceil((y1 - config.source_origin_y) * config.scale) - top + 2;
+        if (!std::isfinite(w) || !std::isfinite(h) || w <= 0 || h <= 0 || w > 2048 || h > 512)
             throw std::runtime_error("information canvas exceeds supported dimensions");
+        width = int(w);
+        height = int(h);
         atlas_pixels.resize(asset->texture.rgba.size() / 4);
         std::memcpy(atlas_pixels.data(), asset->texture.rgba.data(), asset->texture.rgba.size());
         atlas = khdays_textures_add_info("kh2:information:atlas", asset->texture.width, asset->texture.height,
@@ -148,6 +150,19 @@ void load()
         asset.reset();
         khdays_log("kh2 information: %s; keeping the Days banner", e.what());
     }
+}
+void disable(const char *reason)
+{
+    available = enabled = false;
+    asset.reset();
+    for (auto &s : windows) {
+        s.active = s.started = false;
+        s.program = {};
+    }
+    upper_art_owned = false;
+    upper_art_cells = {};
+    khdays_ui_changed();
+    khdays_log("kh2 information: %s; keeping the Days banner", reason);
 }
 void close(Window &s)
 {
@@ -273,8 +288,8 @@ void draw(Window &s)
     // SpriteMessage: active + clip parameters + message offsets. Days keeps its glyph metrics.
     const auto a = background.active.value_or(seq::SequenceActive{});
     const auto &params = d.clips[background_clip].parameters;
-    const float tx = float(a.x + params[0] + d.clips[std::size_t(config.intro)].parameters[0]);
-    const float ty = float(a.y + params[1]);
+    const float tx = float(a.x) + float(params[0]) + float(d.clips[std::size_t(config.intro)].parameters[0]);
+    const float ty = float(a.y) + float(params[1]);
     w[KSI_TEXT_INSERT] = split + 1;
     w[KSI_FACE] = !s.closing && s.text_ready && s.text >= 0 ? unsigned(khdays_ui_image_replacement(s.text)) : ~0u;
     w[KSI_HD_FACE] = ~0u;
@@ -479,11 +494,7 @@ extern "C" int khdays_ui_information_text(const KhdaysUiElement *anchor, const u
         s.seen = true;
         return 1;
     } catch (const std::exception &e) {
-        available = enabled = false;
-        asset.reset();
-        s.active = false;
-        s.program = {};
-        khdays_log("kh2 information: %s; keeping the Days banner", e.what());
+        disable(e.what());
         return 0;
     }
 }
@@ -493,8 +504,14 @@ extern "C" void khdays_ui_information_end(void)
         return;
     for (int engine = 0; engine < 2; ++engine) {
         auto &s = windows[std::size_t(engine)];
-        if (s.active && s.image >= 0)
-            draw(s);
+        if (s.active && s.image >= 0) {
+            try {
+                draw(s);
+            } catch (const std::exception &e) {
+                disable(e.what());
+                return;
+            }
+        }
         if (!s.active)
             s.previous = now;
         if (!s.started && !(engine == 0 && upper_art_owned))

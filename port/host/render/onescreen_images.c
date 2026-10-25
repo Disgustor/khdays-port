@@ -133,6 +133,12 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 continue;
             }
             const uint32_t lower = e != p->upper ? KOF_LOWER : 0;
+            const unsigned *pickup = p->obtained_image.words;
+            const int obtained = pickup[KSI_ANCHORED] && pickup[KSI_OUTPUT] == r[KE_IMAGE];
+            if (obtained) {
+                memcpy(&anchor_x, pickup + KSI_ANCHOR_X, 4);
+                memcpy(&anchor_y, pickup + KSI_ANCHOR_Y, 4);
+            }
             for (int s = 0; s < composition->shape_count; ++s) {
                 const uint32_t *src = composition->shapes[s].words;
                 float sx, sy, sw, sh, dx, dy, scale_x, scale_y;
@@ -148,8 +154,16 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 memcpy(&dy, src + KO_DST_Y1, 4);
                 memcpy(&scale_x, src + KO_SCALE_X, 4);
                 memcpy(&scale_y, src + KO_SCALE_Y, 4);
-                dx += (x - sx) * scale_x;
-                dy += (y - sy) * scale_y;
+                if (obtained) {
+                    dx += (anchor_x - sx) * scale_x;
+                    dy += (anchor_y - sy) * scale_y;
+                    scale_x = scale_y = 0.766667f * khdays_composition_hud_factor();
+                    dx += (x - anchor_x) * scale_x;
+                    dy += (y - anchor_y) * scale_y;
+                } else {
+                    dx += (x - sx) * scale_x;
+                    dy += (y - sy) * scale_y;
+                }
                 const float dw = w * scale_x, dh = h * scale_y;
                 Picture *picture = &pictures[count++];
                 picture->owner = s;

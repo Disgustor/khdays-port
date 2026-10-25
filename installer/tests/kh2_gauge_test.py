@@ -52,6 +52,10 @@ def synthetic_gauge() -> bytes:
         )
         animations.append(bytes(animation))
         clips[clip] = struct.pack("<HH", index, 1) + bytes(32)
+    popup = bytearray(144)
+    struct.pack_into("<II2i4i", popup, 0, 3, 0, 0, 106, 199, 205, 340, 348)
+    clips[76] = struct.pack("<HH", len(animations), 1) + bytes(32)
+    animations.append(bytes(popup))
     data = bytearray(80)
     struct.pack_into("<4sI", data, 0, b"BAR\1", 1)
     struct.pack_into("<I4sII", data, 16, 25, b"gaug", 32, 48)
@@ -76,6 +80,27 @@ def sources(folder: Path) -> bytes:
 
 
 class GaugeImport(unittest.TestCase):
+    def test_obtained_recenters_all_tracks_without_changing_motion(self):
+        original = synthetic_gauge()
+        _, before = tables(original)
+        _, after = tables(gauge.recenter_obtained(original))
+        first, count = struct.unpack_from("<HH", before[4][76])
+        for index in range(len(before[3])):
+            if first <= index < first + count:
+                self.assertEqual(struct.unpack_from("<4i", after[3][index], 16), (0, 6, 0, 8))
+                self.assertEqual(before[3][index][:16], after[3][index][:16])
+                self.assertEqual(before[3][index][32:], after[3][index][32:])
+            else:
+                self.assertEqual(before[3][index], after[3][index])
+        for t in (0, 1, 2, 4):
+            self.assertEqual(before[t], after[t])
+        entry, regional = tables(original)
+        track = bytearray(regional[3][first])
+        struct.pack_into("<2i", track, 16, 256, 262)
+        regional[3][first] = bytes(track)
+        _, centered = tables(gauge.recenter_obtained(replace_sequence(original, entry, regional)))
+        self.assertEqual(struct.unpack_from("<4i", centered[3][first], 16), (0, 6, 0, 8))
+
     def test_party_conversion_preserves_timing_and_centers_the_mirrored_backing(self):
         centered = gauge.recenter_gauge(synthetic_gauge())
         entry, old = tables(centered)
@@ -165,7 +190,11 @@ class GaugeImport(unittest.TestCase):
                 self.assertEqual(changed[0][131][28:], bytes.fromhex("FFFFFF80") * 4)
                 self.assertEqual(changed[0][130][28:], bytes.fromhex("FFE60080") * 4)
                 party = config["party"]
-                self.assertFalse({"enemy", "reticles", "information"} & party.keys())
+                self.assertFalse({"enemy", "reticles", "information", "obtained"} & party.keys())
+                self.assertEqual(config["obtained"]["animation"], 76)
+                self.assertEqual(config["obtained"]["scale"], 0.65)
+                popup = struct.unpack_from("<H", old[4][76])[0]
+                self.assertEqual(struct.unpack_from("<4i", changed[3][popup], 16), (0, 6, 0, 8))
                 self.assertEqual(party["scale"], 0.65)
                 self.assertAlmostEqual(party["geometry_scale"], 23 / 45)
                 self.assertEqual((party["limit_circle"], party["limit_bar"], party["limit_marker"]), (-1, -1, -1))

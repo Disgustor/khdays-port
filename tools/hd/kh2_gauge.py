@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "port" / "tools"))
 from kh2_add_limit_gauge import add_limit_gauge  # noqa: E402
 from kh2_add_limit_marker import add_limit_marker  # noqa: E402
 from kh2_add_party_gauges import add_party_gauges, party_config  # noqa: E402
-from kh2_center_gauge import recenter_gauge  # noqa: E402
+from kh2_center_gauge import recenter_gauge, recenter_obtained  # noqa: E402
 
 LANGUAGES = {"en": "us", "es": "sp", "fr": "fr", "de": "gr", "it": "it"}
 CONFIG = "docs/examples/kh2-gauge.json"
@@ -63,12 +63,12 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
             if picture.format != "PNG":
                 raise ValueError(f"expected the reticles' remastered PNG: {reticle_image}")
             picture.verify()
-        converted, limit = add_limit_gauge(recenter_gauge(original))
+        converted, limit = add_limit_gauge(recenter_obtained(recenter_gauge(original)))
         converted, marker = add_limit_marker(converted)
         converted, party_clips = add_party_gauges(converted)
         config = deepcopy(defaults)
         config.update(archive="zz0field.2dd", texture=texture, source_origin_x=0, source_origin_y=0)
-        for name in ("player_icon", "limit_text", "enemy"):
+        for name in ("player_icon", "limit_text", "enemy", "obtained"):
             config[name].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config["reticles"].update(archive="zz0field.2dd", texture=reticle_texture, entry="fiel")
         config["information"].update(archive="zz0field.2dd", texture=texture, entry="gaug")
@@ -78,7 +78,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         previous = settings / language / "gauge.json" if settings else None
         resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
         # Earlier converters accidentally copied these root-only sections into party settings.
-        party_excluded = resources | {"enemy", "reticles", "information"}
+        party_excluded = resources | {"enemy", "reticles", "information", "obtained"}
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))
             if not isinstance(custom, dict) or set(custom) - set(defaults):

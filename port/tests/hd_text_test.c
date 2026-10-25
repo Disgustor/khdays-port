@@ -6,6 +6,34 @@ static int information_engine, information_bg;
 static uint32_t information_ink;
 static int information_right;
 static unsigned information_epoch = 1;
+static int obtained_sequence_enabled, obtained_sequence_owned, obtained_sequence_calls;
+static unsigned obtained_sequence_ink;
+int khdays_ui_obtained_enabled(void)
+{
+    return obtained_sequence_enabled;
+}
+void khdays_ui_obtained_request(int announcement)
+{
+    if (!announcement)
+        obtained_sequence_owned = 0;
+}
+void khdays_ui_obtained_begin(void) {}
+int khdays_ui_obtained_owns(void)
+{
+    return obtained_sequence_owned;
+}
+void khdays_ui_obtained_end(void) {}
+int khdays_ui_obtained_text(const KhdaysUiElement *e, const unsigned *rgba, int w, int h, unsigned version)
+{
+    (void)e;
+    (void)version;
+    obtained_sequence_owned = 1;
+    ++obtained_sequence_calls;
+    obtained_sequence_ink = 0;
+    for (int i = 0; i < w * h; ++i)
+        obtained_sequence_ink |= rgba[i];
+    return 1;
+}
 unsigned khdays_ui_information_epoch(void)
 {
     return information_epoch;
@@ -264,6 +292,7 @@ static int map_width = 2, map_height = 1;
 static KhdaysUiElement submissions[128];
 static int submission_count;
 static unsigned char suppressed[32 * 32];
+static unsigned char suppressed_layers[4][32 * 32];
 static uint32_t tint = 0xff123456u;
 #define CHECK(expr)                                                                                                    \
     do {                                                                                                               \
@@ -349,9 +378,11 @@ void khdays_ui_left_out_cell(int part, int screen, int bg, int x, int y)
 {
     (void)part;
     (void)screen;
-    (void)bg;
-    if (x >= 0 && x < 32 && y >= 0 && y < 32)
+    if (x >= 0 && x < 32 && y >= 0 && y < 32) {
         suppressed[y * 32 + x] = 1;
+        if (bg >= 0 && bg < 4)
+            suppressed_layers[bg][y * 32 + x] = 1;
+    }
 }
 uint32_t khdays_ui_palette_colour(int engine, uint32_t slot, uint32_t indexed)
 {
@@ -1033,6 +1064,49 @@ static void obtained_popup(void)
     CHECK(khdays_ui_text_obtained_wants(0, 1));
     obtained_reset();
     fit_widths[1] = 0;
+    /* A sequence requests a private native-font capture even with identical font routes. */
+    obtained_sequence_enabled = 1;
+    available_glyphs = 0;
+    CHECK(khdays_ui_text_obtained_wants(0, 1));
+    cc = (DsCanvas *)(ram + 8200);
+    *cc = *(const DsCanvas *)(ram + 16);
+    cc->char_base = 9000;
+    c = canvas_of(cc, "sequence pickup");
+    khdays_ui_text_scope_push("field.obtained");
+    draw(0);
+    khdays_ui_text_scope_pop();
+    CHECK(c->op_count && c->ops[0].native_glyph);
+    khdays_ui_text_obtained_capture(surface);
+    c = find(KHDAYS_REF(ram + 16));
+    cc = (DsCanvas *)(ram + 16);
+    khdays_ui_text_scope_push("field.command");
+    draw(0);
+    khdays_ui_text_scope_pop();
+    memcpy(vram + address, ram + 1024, c->bytes);
+    chars_loaded(0, 1, ram + 1024, address, c->bytes);
+    memset(suppressed_layers, 0, sizeof(suppressed_layers));
+    emit();
+    CHECK(obtained_sequence_calls && obtained_sequence_ink);
+    CHECK(suppressed[7 * 32] && suppressed[9 * 32 + 12] && !suppressed[9 * 32 + 13] && !suppressed[10 * 32 + 12]);
+    for (int bg = 0; bg < 4; ++bg)
+        CHECK(suppressed_layers[bg][7 * 32 + 12] == (bg == 1 || bg == 3));
+    KhdaysBgLayer pickup_layer;
+    CHECK(khdays_bg_text_layer(0, 1, &pickup_layer));
+    CHECK(obtained_cell(c, &pickup_layer, 12, 7) && !obtained_cell(c, &pickup_layer, 13, 7));
+    Canvas picture_canvas = {0};
+    picture_canvas.bg = 3;
+    CHECK(obtained_cell(&picture_canvas, &pickup_layer, 12, 7));
+    picture_canvas.engine = 1;
+    CHECK(!obtained_cell(&picture_canvas, &pickup_layer, 12, 7));
+    picture_canvas.engine = 0;
+    obtained_sequence_owned = obtained_sequence_enabled = 0;
+    CHECK(!obtained_cell(c, &pickup_layer, 12, 7));
+    CHECK(!obtained_cell(&picture_canvas, &pickup_layer, 12, 7));
+    memset(suppressed_layers, 0, sizeof(suppressed_layers));
+    emit();
+    CHECK(!suppressed_layers[3][7 * 32 + 12]);
+    available_glyphs = 1;
+    obtained_reset();
     test_mappings = 1;
     command_route = 0;
     popup_route = 1;

@@ -141,8 +141,9 @@ Transform transform(const SequenceAnimation& a, float t, const SequencePose& pos
     m.x = move_base ? mix(a.x, t) : a.x[0];
     m.y = move_base ? mix(a.y, t) : a.y[0];
     if (move_base && !bit(a, 4)) {
-        constexpr float tau = 6.2831853071795864769f;
-        const float x = tau * t * float(a.sway_count[0]), y = tau * t * float(a.sway_count[1]);
+        // UpdateActive (0xC32D8) uses 0x40490FDB: each count is a half-turn.
+        constexpr float pi = 3.14159265358979323846f;
+        const float x = pi * t * float(a.sway_count[0]), y = pi * t * float(a.sway_count[1]);
         m.x = truncate(float(m.x) + float(truncate(mix(a.sway_x, t) * (bit(a, 3) ? std::cos(x) : std::sin(x)))));
         m.y = truncate(float(m.y) + float(truncate(mix(a.sway_y, t) * (bit(a, 3) ? std::cos(y) : std::sin(y)))));
     }

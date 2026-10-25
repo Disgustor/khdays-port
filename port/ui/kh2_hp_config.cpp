@@ -126,8 +126,8 @@ class Reader {
                 if (next() == '{') {
                     const bool label = key == "player_icon" || key == "limit_text";
                     const bool allowed =
-                        (prefix.empty() &&
-                         (key == "party" || key == "enemy" || key == "reticles" || key == "information" || label)) ||
+                        (prefix.empty() && (key == "party" || key == "enemy" || key == "reticles" ||
+                                            key == "information" || key == "obtained" || label)) ||
                         (prefix == "reticles." && (key == "soft_lock" || key == "hard_lock" || key == "interact" ||
                                                    key == "chain" || key == "error")) ||
                         (prefix == "party." && (key == "slots" || label)) ||
@@ -284,6 +284,7 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
     extract("enemy.");
     extract("reticles.");
     extract("information.");
+    extract("obtained.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
         overrides[i] = extract("party.slots." + std::to_string(i + 1) + '.');
@@ -474,6 +475,40 @@ InformationConfig load_information_config(const std::filesystem::path &path)
     c.scroll_speed = float(number(o, "scroll_speed", c.scroll_speed, 0, 32));
     if (!o.empty())
         throw std::runtime_error("gauge JSON: unknown information key " + o.begin()->first);
+    return c;
+}
+ObtainedConfig load_obtained_config(const std::filesystem::path &path)
+{
+    const auto root = load_hp_gauge_config(path);
+    Object o;
+    for (const auto &[key, value] : read_file(path))
+        if (key.starts_with("obtained."))
+            o.emplace(key.substr(9), value);
+    ObtainedConfig c;
+    c.enabled = !o.empty();
+    c.archive = root.archive;
+    c.texture = root.texture;
+    c.entry = root.entry;
+    c.scale = root.scale;
+    c.enabled = get(o, "enabled", c.enabled);
+    for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
+        *field = get(o, key, *field);
+        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
+            throw std::runtime_error("gauge JSON: obtained resources must be local file names");
+    }
+    c.animation = int(number(o, "animation", c.animation, 0, 65535, true));
+    for (auto [key, field] : {std::pair{"offset_x", &c.offset_x},
+                              {"offset_y", &c.offset_y},
+                              {"source_origin_x", &c.source_origin_x},
+                              {"source_origin_y", &c.source_origin_y},
+                              {"text_offset_x", &c.text_offset_x},
+                              {"text_offset_y", &c.text_offset_y}})
+        *field = float(number(o, key, *field, -4096, 4096));
+    c.scale = float(number(o, "scale", c.scale, 0.01, 4));
+    c.text_scale = float(number(o, "text_scale", c.text_scale, 0.1, 4));
+    c.frames_per_tick = float(number(o, "frames_per_tick", c.frames_per_tick, 0.01, 8));
+    if (!o.empty())
+        throw std::runtime_error("gauge JSON: unknown obtained key " + o.begin()->first);
     return c;
 }
 } // namespace khdays::ui::kh2

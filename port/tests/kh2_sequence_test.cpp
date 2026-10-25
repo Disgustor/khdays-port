@@ -138,7 +138,14 @@ void parser_and_player()
     data.animations[0].x = {0, 0};
     data.animations[0].sway_x = {10, 10};
     data.animations[0].sway_count[0] = 1;
-    expect(evaluate_sequence(data, 0, 2).active->x == 9, "sway count and timeline phase");
+    expect(evaluate_sequence(data, 0, 2).active->x == 5, "sway count uses half-turns");
+    expect(evaluate_sequence(data, 0, 5).active->x == 10 &&
+               near(evaluate_sequence(data, 0, 5).quads[0].vertices[0].x, 10.5f),
+           "sway midpoint differs between sprite and active anchor");
+    expect(evaluate_sequence(data, 0, 8).active->x == 5, "sway added a second oscillation");
+    data.animations[0].flags |= 1u << 3;
+    expect(evaluate_sequence(data, 0, 0).active->x == 10 && evaluate_sequence(data, 0, 10).active->x == -10,
+           "cosine sway count uses half-turns");
     data = Fixture{}.read();
     data.groups[0].rect = {4, 4, 0, 0};
     data.parts[0].uv = {2, 0, 2, 4};

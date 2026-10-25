@@ -343,6 +343,12 @@ target_compile_options(khdays-kh2-information-test PRIVATE /W4 /std:c++20 /EHsc)
 add_test(NAME khdays-kh2-information COMMAND khdays-kh2-information-test)
 add_test(NAME khdays-kh2-information-missing COMMAND khdays-kh2-information-test --missing)
 add_test(NAME khdays-kh2-information-legacy COMMAND khdays-kh2-information-test --legacy)
+add_executable(khdays-kh2-obtained-test tests/kh2_obtained_test.cpp ui/kh2_obtained.cpp)
+target_link_libraries(khdays-kh2-obtained-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-kh2-obtained-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-obtained COMMAND khdays-kh2-obtained-test)
+add_test(NAME khdays-kh2-obtained-missing COMMAND khdays-kh2-obtained-test --missing)
+add_test(NAME khdays-kh2-obtained-legacy COMMAND khdays-kh2-obtained-test --legacy)
 target_link_libraries(khdays-kh2-reticles-test PRIVATE khdays-kh2-gauge)
 target_compile_options(khdays-kh2-reticles-test PRIVATE /W4 /std:c++20 /EHsc)
 add_test(NAME khdays-kh2-reticles COMMAND khdays-kh2-reticles-test)
@@ -572,6 +578,7 @@ add_executable(khdays-native
     ui/kh2_enemy_hud.cpp
     ui/kh2_reticles.cpp
     ui/kh2_information.cpp
+    ui/kh2_obtained.cpp
     ui/kh2_party_hud.cpp
     ui/kh2_hud_labels.cpp
     ui/kh2_portrait_hud.cpp

@@ -935,6 +935,64 @@ static void test_steps(void)
     }
 }
 
+static int image_shapes(const KhdaysComposition *c);
+static void test_obtained_image(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    uint32_t record[KE_WORDS] = {0};
+    record[KE_SLOT] = KES_DIRECT | KES_PICTURE | KES_HUD | KES_NATIVE_FADE | 1;
+    record[KE_IMAGE] = 77;
+    record[KE_IW] = 712;
+    record[KE_IH] = 280;
+    put_float(record, KE_X, -2);
+    put_float(record, KE_Y, 54);
+    put_float(record, KE_W, 178);
+    put_float(record, KE_H, 70);
+    p->elements[0].records = record;
+    p->elements[0].count = 1;
+    p->obtained_image.words[KSI_OUTPUT] = 77;
+    p->obtained_image.words[KSI_ANCHORED] = 1;
+    put_float(p->obtained_image.words, KSI_ANCHOR_X, 0);
+    put_float(p->obtained_image.words, KSI_ANCHOR_Y, 56);
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    for (int size = 1; size <= 8; size *= 2) {
+        khdays_composition_set_hud_size(size);
+        KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+        KhdaysComposition comp;
+        khdays_composition_for(&s, 342, &comp);
+        float root_x = 0, root_y = 0;
+        int found = 0;
+        for (int i = 0; i < comp.shape_count; ++i) {
+            const uint32_t *w = comp.shapes[i].words;
+            if (w[KO_FLAGS] & (KOF_LOWER | KOF_3D | KOF_IMAGE))
+                continue;
+            const float sx = word_float(w, KO_SRC_X), sy = word_float(w, KO_SRC_Y);
+            if (sx <= 0 && sx + word_float(w, KO_SRC_W) > 0 && sy <= 56 && sy + word_float(w, KO_SRC_H) > 56) {
+                root_x = word_float(w, KO_DST_X1) - sx * word_float(w, KO_SCALE_X);
+                root_y = word_float(w, KO_DST_Y1) + (56 - sy) * word_float(w, KO_SCALE_Y);
+                found = 1;
+                break;
+            }
+        }
+        CHECK(found);
+        const float scale = .766667f * khdays_composition_hud_factor();
+        khdays_onescreen_images(p, &s, &comp);
+        CHECK(image_shapes(&comp) == 1);
+        for (int i = 0; i < comp.shape_count; ++i) {
+            const uint32_t *w = comp.shapes[i].words;
+            if ((w[KO_FLAGS] & KOF_IMAGE) && w[KO_KEYS] == 77) {
+                CHECK(fabsf(word_float(w, KO_DST_X1) - (root_x - 2 * scale)) < .001f);
+                CHECK(fabsf(word_float(w, KO_DST_Y1) - (root_y - 2 * scale)) < .001f);
+                CHECK(fabsf(word_float(w, KO_DST_X2) - word_float(w, KO_DST_X1) - 178 * scale) < .001f);
+            }
+        }
+    }
+    free(p);
+}
 static void test_independent_image(void)
 {
     /* Outside the screen's crop, an image still covers its own rectangle; its alpha composes
@@ -1457,6 +1515,7 @@ int main(void)
     test_title_prompt();
     test_steps();
     test_independent_image();
+    test_obtained_image();
     test_native_hud_fade();
     test_information_image();
     test_hud_image_layers();

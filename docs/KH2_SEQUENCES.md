@@ -505,6 +505,62 @@ at all 17 hardware fade levels.
 - `port/ui/kh2_hp_gauge` selects the gauge clips and builds mask geometry. The
   reusable sequence code has no knowledge of gauge thresholds or Days HP units.
 
+## Obtained items
+
+The `obtained` object in the same `gauge.json` replaces Days' item pickup banner
+with `gaug` clip 76. It defaults to scale 0.65. `animation`, `offset_x/y`,
+`source_origin_x/y`, `frames_per_tick`, `text_offset_x/y`, and `text_scale` can be
+customized along with the archive, atlas and entry. An absent object, disabled
+object, missing file or invalid animation keeps the existing Days notification.
+
+The installed-game importer recenters every track of clip 76 relative to its
+first active track's base position, preserving both endpoints, sprite offsets,
+rotation, scale, colors, timing and flags. The verified western PC resources use
+199,340 in English and 256,340 in Spanish, French, German and Italian. This is a
+conversion of freshly extracted data, not an in-place patch of an existing mod.
+It leaves other clips untouched and retains existing JSON customizations.
+
+The replacement anchors to the native upper-screen pickup area beside Days'
+item-name tiles at map column 1, row 8 on BG1. Its complete animation can extend
+beyond the original crop. In single-screen mode it keeps the native notification
+position and the player/party gauges' composition scale. Original artwork and
+captured text in the pickup rectangle are suppressed only while the replacement
+owns the announcement; other copies of the cached item name remain available.
+The native layout's pickup entry (tag 0x4A in `UI/btl/main.p2` entry 0) covers
+13 by 3 tiles at column 0, row 7; suppression includes that complete rectangle
+on BG3 for the artwork and BG1 for the item name. `Ov002_LoadElemsFromLayout`
+maps its kind 3 through `data_ov002_0207db70[3]` to destination 11 (main BG3).
+Entrance sway counts represent half-turns, as confirmed by `UpdateActive`'s
+0x40490FDB constant at 0xC2D18 and its multiplication at 0xC32E4.
+
+Days still selects the item name, sound and gameplay behavior. The existing
+`Ov002_PanelDrawSlotCursor` private capture records both native glyphs and font
+replacements in `field.obtained` scope. Glyphs are uploaded only when their
+content, palette or resolution changes; animation, blending and composition run
+on the GPU. The text follows the active track and its alpha, with no marquee.
+The western PC timeline is 107 frames, advanced in the same game-frame units as
+the other sequences. Repeated announcements restart it, pause freezes it, and
+menu, cutscene and scene changes cancel it. Its exit can finish after the native
+tilemap stops showing the pickup. Saves and inventory state are not changed.
+
+The original debug executable confirms the setup inlined into
+`dk::TREASURE_INFO::update()` (0x7FCDC): the prize queue creates `SpriteMessage`
+with clip 76, group 13, font size 16, no 16:9 offset, and centered alignment when
+the clip's Ex parameter is one. `dk::SpriteMessage::drawMessage()` (0x7B5C8)
+attaches text to active XY plus clip parameters and applies active alpha.
+`yasui/libys/messagedraw.h` identifies alignment 2 as `ALIGN_CENTER`. The port
+uses the visible Days glyph extent for that centering and preserves Days' font
+metrics rather than substituting KH2's font. The Days source is the same pinned
+decompilation commit documented below; its cached item tiles and private capture
+are described in [HD fonts](HD_FONTS.md).
+
+`khdays-kh2-obtained-test` checks one-shot playback, repeated items, text alpha and
+translation, cached uploads, pause, context changes and fallback with synthetic
+resources. `--reference ARCHIVE` verifies every frame of the locally converted
+PC resource. `khdays-kh2-gpu-test --obtained ARCHIVE TEXTURE` compares entrance,
+hold and exit frames against the CPU reference at 1x, 4x and 8x. Font-canvas and
+single-screen tests cover native-font capture and position/scale independently.
+
 ## Information window
 
 `gauge.json` also accepts an independent `information` object. The HD importer enables

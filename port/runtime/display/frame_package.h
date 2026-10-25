@@ -133,6 +133,7 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage enemy_image;
     KhdaysSequenceImage reticle_images[5];
     KhdaysSequenceImage information_images[2];
+    KhdaysSequenceImage obtained_image;
     uint32_t information_hold_frames;
     uint32_t information_state;
 } KhdaysFramePackage;

@@ -24,6 +24,7 @@
 #include "../../ui/kh2_enemy_hud.h"
 #include "../../ui/kh2_reticles.h"
 #include "../../ui/kh2_information.h"
+#include "../../ui/kh2_obtained.h"
 #include "../../ui/pause.h"
 #include "../../ui/text.h"
 #include "../../ui/situation.h"
@@ -901,6 +902,7 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_kh2_labels_commands(p->label_images);
     khdays_ui_kh2_enemy_commands(&p->enemy_image);
     khdays_ui_information_commands(p->information_images);
+    khdays_ui_obtained_commands(&p->obtained_image);
     p->information_hold_frames = khdays_ui_information_hold_frames();
     p->information_state = khdays_ui_information_state();
     for (int e = 0; e < 2; ++e) {
@@ -1118,6 +1120,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     p->frame = frame;
     p->sequence_image.words[KSI_COUNT] = 0;
     memset(p->information_images, 0, sizeof(p->information_images));
+    memset(&p->obtained_image, 0, sizeof(p->obtained_image));
     p->information_hold_frames = 0;
     p->information_state = 0;
     p->enemy_image.words[KSI_COUNT] = p->enemy_image.words[KSI_CLEAR] = p->enemy_image.words[KSI_ANCHORED] = 0;
@@ -1527,6 +1530,7 @@ void khdays_display_vblank(u32 frame)
     }
     khdays_ui_kh2_hp_frame(frame);
     khdays_ui_information_frame(frame);
+    khdays_ui_obtained_frame(frame);
     khdays_reticles_frame(frame);
     khdays_ui_kh2_enemy_frame(frame);
     khdays_ui_kh2_party_frame(frame);

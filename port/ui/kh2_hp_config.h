@@ -45,6 +45,15 @@ struct InformationConfig final {
     float scroll_wait_frames = 180, scroll_speed = 1;
 };
 InformationConfig load_information_config(const std::filesystem::path &path);
+struct ObtainedConfig final {
+    bool enabled = false;
+    std::string archive = "zz0field.2dd", texture = "US_zz0field_2dd1.png", entry = "gaug";
+    int animation = 76;
+    float offset_x = 0, offset_y = 0, scale = 0.65f, frames_per_tick = 1;
+    float source_origin_x = 0, source_origin_y = 0;
+    float text_offset_x = 0, text_offset_y = 0, text_scale = 1;
+};
+ObtainedConfig load_obtained_config(const std::filesystem::path &path);
 // Player settings at the root; shared party settings and per-slot overrides below party.
 std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &path);
 HpGaugeConfig load_hp_gauge_config(const std::filesystem::path &path);

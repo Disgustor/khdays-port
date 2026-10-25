@@ -231,6 +231,22 @@
     "scroll_wait_frames": 180,
     "scroll_speed": 1
   },
+  "obtained": {
+    "enabled": true,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "animation": 76,
+    "scale": 0.65,
+    "offset_x": 0,
+    "offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "text_offset_x": 0,
+    "text_offset_y": 0,
+    "text_scale": 1
+  },
   "enemy": {
     "enabled": true,
     "archive": "zz0field.2dd",

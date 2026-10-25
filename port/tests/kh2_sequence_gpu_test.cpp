@@ -510,6 +510,25 @@ void multiple_images()
     std::cout << "GPU multiple-image command cycling and transparent-frame clearing passed\n";
 }
 
+void private_obtained(const std::filesystem::path &archive, const std::filesystem::path &texture)
+{
+    const auto a = render::load_sequence_asset(archive, "gaug", texture);
+    std::vector<std::uint32_t> texels(a.texture.rgba.size() / 4);
+    std::memcpy(texels.data(), a.texture.rgba.data(), a.texture.rgba.size());
+    set_image(1, a.texture.width, a.texture.height, texels);
+    images[1].info = KHDAYS_REPLACEMENT_NO_MIPS;
+    for (int resolution : {1, 4, 8}) {
+        const render::SequenceView view{80.0f * resolution, 20.0f * resolution, .65f * resolution};
+        for (float frame : {0.0f, 8.0f, 16.0f, 26.0f, 27.0f, 86.0f, 87.0f, 97.0f, 106.0f}) {
+            const auto evaluated = seq::evaluate_sequence(a.sequence, 76, frame);
+            KhdaysSequenceImage p{};
+            initialize(p, 260 * resolution, 100 * resolution, a.logical_size[0], a.logical_size[1], view);
+            render::encode_sequence_quads(p, evaluated.quads);
+            compare(p, evaluated.quads, a.texture, a.logical_size[0], a.logical_size[1], view);
+        }
+    }
+    std::cout << "Obtained intro, hold and exit match GPU/reference at 1x/4x/8x\n";
+}
 void private_portraits(const std::filesystem::path &folder)
 {
     for (const auto *name : {"P_EX110.a.us", "P_EX020.a.us"}) {
@@ -856,6 +875,8 @@ int main(int argc, char **argv)
         native_marker_depth();
         if (argc == 4 && std::string(argv[1]) == "--information")
             private_information(argv[2], argv[3]);
+        else if (argc == 4 && std::string(argv[1]) == "--obtained")
+            private_obtained(argv[2], argv[3]);
         else if (argc == 4 && std::string(argv[1]) == "--reticles")
             private_reticles(argv[2], argv[3]);
         else if (argc == 4 && std::string(argv[1]) == "--enemy")

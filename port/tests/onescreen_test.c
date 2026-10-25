@@ -1499,6 +1499,92 @@ static void test_swap_skips(void)
     CHECK((s.states & (1u << KHDAYS_ST_LOWER_3D)) != 0u);
 }
 
+static void test_weighted_image(void)
+{
+    const uint32_t background = 0x01000000u | 0x00ffffffu;
+    memset(shape_words, 0, sizeof(shape_words));
+    shape(0, KOF_IMAGE | KOF_WEIGHT, 0, 0, 20, 20, 0, 0, 1);
+    image_colour = 0x80000000u;
+    use_image_colours = 0;
+    put_float(shape_words[0], KO_FADE, 5);
+    uint32_t edge = ko_pixel(0, 10, 1, background, 1, KOB_DEFAULT, 0, 0, 171, 1);
+    uint32_t middle = ko_pixel(10, 10, 1, background, 1, KOB_DEFAULT, 0, 0, 171, 1);
+    uint32_t ramp = ko_pixel(2.5f, 10, 1, background, 1, KOB_DEFAULT, 0, 0, 171, 1);
+    CHECK((edge & 255u) == 255u && (middle & 255u) == 127u && (ramp & 255u) == 191u);
+}
+
+static void test_mission_panel_image(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    uint32_t records[KE_WORDS * 2] = {0};
+    for (int i = 0; i < 2; ++i) {
+        uint32_t *r = records + i * KE_WORDS;
+        r[KE_SLOT] = KES_DIRECT | KES_FINE | KES_PICTURE | 2;
+        r[KE_IMAGE] = 71 + i;
+        r[KE_IW] = 400;
+        r[KE_IH] = 100;
+        put_float(r, KE_X, -2);
+        put_float(r, KE_Y, -3);
+        put_float(r, KE_W, 200);
+        put_float(r, KE_H, 50);
+    }
+    put_float(records, KE_Y, 152 - 3);
+    p->upper = 0;
+    p->elements[1].records = records;
+    p->elements[1].count = 2;
+    p->mission_panel_state = 3;
+    p->mission_panel_backdrop = 73;
+    p->mission_panel_image.words[KSI_OUTPUT] = 71;
+    p->mission_panel_image.words[KSI_ANCHORED] = 1;
+    put_float(p->mission_panel_image.words, KSI_ANCHOR_Y, 152);
+    p->information_images[1].words[KSI_OUTPUT] = 72;
+    p->information_images[1].words[KSI_ANCHORED] = 1;
+    p->information_state = KHDAYS_INFORMATION_AVAILABLE | 0x202u;
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    khdays_composition_set_hud_size(4);
+    KhdaysSituation s = {KHDAYS_SIT_FIELD,
+                         (1u << KHDAYS_ST_HUD) | (1u << KHDAYS_ST_MISSION_PANEL) | (1u << KHDAYS_ST_MISSION_PANEL_MOD)};
+    khdays_onescreen_information(p, &s);
+    KhdaysComposition c;
+    khdays_composition_for(&s, 342, &c);
+    for (int i = 0; i < c.shape_count; ++i) {
+        const uint32_t *shape = c.shapes[i].words;
+        CHECK(!(word_float(shape, KO_SRC_Y) == 152 && word_float(shape, KO_SRC_X) == 4));
+    }
+    khdays_onescreen_images(p, &s, &c);
+    CHECK(c.shapes[0].words[KO_KEYS] == 72 && c.shapes[1].words[KO_KEYS] == 71);
+    const float factor = khdays_composition_hud_factor();
+    CHECK(fabsf(word_float(c.shapes[1].words, KO_DST_Y1) - (5 - 3 * .766667f) * factor) < .001f);
+    int backdrop = 0;
+    for (int i = 0; i < c.shape_count; ++i)
+        if ((c.shapes[i].words[KO_FLAGS] & KOF_IMAGE) && c.shapes[i].words[KO_KEYS] == 73)
+            ++backdrop;
+    CHECK(backdrop == 1);
+    // With native INFORMATION, its crop still covers the independent mission panel.
+    p->information_state = 0;
+    p->elements[1].count = 1;
+    s.states &= ~(1u << KHDAYS_ST_INFORMATION_MOD);
+    s.states |= 1u << KHDAYS_ST_INFO_UPPER;
+    khdays_composition_for(&s, 342, &c);
+    khdays_onescreen_images(p, &s, &c);
+    CHECK(!(c.shapes[0].words[KO_FLAGS] & KOF_IMAGE));
+    CHECK(word_float(c.shapes[0].words, KO_SRC_Y) == 0 && word_float(c.shapes[0].words, KO_SRC_H) == 24);
+    // No replacement restores the existing cropped panel.
+    p->mission_panel_state = 0;
+    s.states &= ~(1u << KHDAYS_ST_MISSION_PANEL_MOD);
+    khdays_composition_for(&s, 342, &c);
+    int native = 0;
+    for (int i = 0; i < c.shape_count; ++i)
+        if (word_float(c.shapes[i].words, KO_SRC_Y) == 152 && word_float(c.shapes[i].words, KO_SRC_X) == 4)
+            ++native;
+    CHECK(native == 2);
+    free(p);
+}
+
 int main(void)
 {
     test_places();
@@ -1518,6 +1604,8 @@ int main(void)
     test_obtained_image();
     test_native_hud_fade();
     test_information_image();
+    test_mission_panel_image();
+    test_weighted_image();
     test_hud_image_layers();
     test_split();
     test_split_under_3d();

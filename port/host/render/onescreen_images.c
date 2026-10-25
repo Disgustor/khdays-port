@@ -65,6 +65,13 @@ static void image_shape(KhdaysShape *shape, const uint32_t *r, uint32_t lower, f
     memcpy(dst + KO_SCALE_Y, &sy, 4);
 }
 
+static int native_information_crop(const uint32_t *w)
+{
+    float src[4];
+    memcpy(src, w + KO_SRC_X, sizeof(src));
+    return !(w[KO_FLAGS] & (KOF_IMAGE | KOF_3D)) && src[0] == 0 && src[1] == 0 && src[2] >= 224 && src[3] == 24;
+}
+
 static int hud_shown(const KhdaysSituation *s)
 {
     return (s->scene == KHDAYS_SIT_FIELD || s->scene == KHDAYS_SIT_FIELD_3D_BOTH || s->scene == KHDAYS_SIT_TUTORIAL) &&
@@ -120,14 +127,22 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                     memcpy(&anchor_y, native + KSI_ANCHOR_Y, 4);
                 }
             }
-            if (information) {
-                if (!information_shown(p, situation, e))
+            const unsigned *panel = p->mission_panel_image.words;
+            const int mission =
+                (p->mission_panel_state & 1u) && panel[KSI_ANCHORED] && panel[KSI_OUTPUT] == r[KE_IMAGE];
+            if (information || mission) {
+                if (mission) {
+                    float native_y;
+                    memcpy(&native_y, panel + KSI_ANCHOR_Y, 4);
+                    y -= native_y;
+                }
+                if (information && !information_shown(p, situation, e))
                     continue;
                 /* Match the player/party gauge's composition scale, with one root for both native engines.
                  * The element already contains gauge.json's offsets and the entire animation. */
                 const float factor = khdays_composition_hud_factor(), scale = 0.766667f * factor;
                 Picture *picture = &pictures[count++];
-                picture->owner = -1;
+                picture->owner = information ? -2 : -1;
                 image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0, x * scale, 5 * factor + y * scale,
                             w * scale, h * scale);
                 continue;
@@ -188,14 +203,36 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
     }
     if (!count)
         return;
-    for (size_t i = 0; i < count; ++i)
-        if (pictures[i].owner == -1)
-            placed[out++] = pictures[i].shape;
+    if (p->mission_panel_state & 1u)
+        for (int s = 0; s < composition->shape_count; ++s)
+            if (native_information_crop(composition->shapes[s].words))
+                placed[out++] = composition->shapes[s];
+    for (int priority = -2; priority < 0; ++priority)
+        for (size_t i = 0; i < count; ++i)
+            if (pictures[i].owner == priority)
+                placed[out++] = pictures[i].shape;
     for (int s = 0; s < composition->shape_count; ++s) {
         for (size_t i = 0; i < count; ++i)
             if (pictures[i].owner == s)
                 placed[out++] = pictures[i].shape;
-        placed[out++] = composition->shapes[s];
+        KhdaysShape shape = composition->shapes[s];
+        float source[4];
+        memcpy(source, shape.words + KO_SRC_X, sizeof(source));
+        if ((p->mission_panel_state & 1u) && p->mission_panel_backdrop >= 0 &&
+            !(shape.words[KO_FLAGS] & (KOF_3D | KOF_IMAGE)) && (shape.words[KO_FLAGS] & KOF_LOWER) &&
+            source[0] == 186 && source[1] == 156 && source[2] == 2 && source[3] == 12) {
+            shape.words[KO_FLAGS] = (shape.words[KO_FLAGS] | KOF_IMAGE) & ~KOF_SEE_THROUGH;
+            shape.words[KO_KEYS] = (unsigned)p->mission_panel_backdrop;
+            const float rectangle[4] = {0, 0, 1, 1};
+            memcpy(shape.words + KO_SRC_X, rectangle, sizeof(rectangle));
+            float dx[4];
+            memcpy(dx, shape.words + KO_DST_X1, sizeof(dx));
+            const float sx = dx[2] - dx[0], sy = dx[3] - dx[1];
+            memcpy(shape.words + KO_SCALE_X, &sx, 4);
+            memcpy(shape.words + KO_SCALE_Y, &sy, 4);
+        }
+        if (!(p->mission_panel_state & 1u) || !native_information_crop(shape.words))
+            placed[out++] = shape;
     }
     composition->shape_count = (int)out;
     composition->shapes = placed;

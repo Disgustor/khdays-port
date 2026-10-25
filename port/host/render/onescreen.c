@@ -567,6 +567,11 @@ void khdays_onescreen_prepare(const KhdaysFramePackage *p, int columns, KhdaysCo
                 info_new(p, &now);
         }
         mission_panel(&now);
+        if (p->mission_panel_state & 1u) {
+            now.states |= 1u << KHDAYS_ST_MISSION_PANEL_MOD;
+            if (p->mission_panel_state & 2u)
+                now.states |= 1u << KHDAYS_ST_MISSION_PANEL;
+        }
         lower_shown(&p->situation, &now);
         screens_content(&now);
         if (!told || now.scene != situation.scene || now.states != situation.states) {

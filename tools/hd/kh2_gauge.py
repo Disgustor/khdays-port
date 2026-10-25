@@ -78,7 +78,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         previous = settings / language / "gauge.json" if settings else None
         resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
         # Earlier converters accidentally copied these root-only sections into party settings.
-        party_excluded = resources | {"enemy", "reticles", "information", "obtained"}
+        party_excluded = resources | {"enemy", "reticles", "information", "obtained", "mission_panel"}
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))
             if not isinstance(custom, dict) or set(custom) - set(defaults):

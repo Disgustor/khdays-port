@@ -126,6 +126,19 @@ KO_FN float ko_clamp01(float v)
     return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
 }
 
+KO_FN float ko_weight(uint i, float px, float py)
+{
+    float weight = ko_float(i, KO_OPACITY);
+    const float f0 = ko_float(i, KO_FADE), f1 = ko_float(i, KO_FADE + 1);
+    const float f2 = ko_float(i, KO_FADE + 2), f3 = ko_float(i, KO_FADE + 3);
+    const float left = f0 == 0.0f ? 1.0f : ko_clamp01((px - ko_float(i, KO_DST_X1)) / f0);
+    const float top = f1 == 0.0f ? 1.0f : ko_clamp01((py - ko_float(i, KO_DST_Y1)) / f1);
+    const float right = f2 == 0.0f ? 1.0f : ko_clamp01((ko_float(i, KO_DST_X2) - px) / f2);
+    const float bottom = f3 == 0.0f ? 1.0f : ko_clamp01((ko_float(i, KO_DST_Y2) - py) / f3);
+    weight *= (left < right ? left : right) * (top < bottom ? top : bottom);
+    return weight;
+}
+
 KO_FN float ko_clamp(float v, float lo, float hi)
 {
     return v < lo ? lo : v > hi ? hi : v;
@@ -193,7 +206,7 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
             const uint t = KO_IMAGE(KO_SHAPE(i, KO_KEYS), fx, fy);
             const uint rgb =
                 (flags & KOF_DIM) != 0u ? ko_mix(0u, t & 0xffffffu, ko_float(i, KO_OPACITY)) : t & 0xffffffu;
-            const float a = (float)(t >> 24) / 255.0f;
+            const float a = (float)(t >> 24) / 255.0f * ((flags & KOF_WEIGHT) != 0u ? ko_weight(i, px, py) : 1.0f);
             group_r += group_through * a * (float)(rgb & 255u);
             group_g += group_through * a * (float)((rgb >> 8) & 255u);
             group_b += group_through * a * (float)((rgb >> 16) & 255u);
@@ -278,14 +291,7 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
             colour = ko_mix(0u, colour, ko_float(i, KO_OPACITY)); /* toward black, whatever is under it */
         }
         if ((flags & KOF_WEIGHT) != 0u) {
-            float weight = ko_float(i, KO_OPACITY);
-            const float f0 = ko_float(i, KO_FADE), f1 = ko_float(i, KO_FADE + 1);
-            const float f2 = ko_float(i, KO_FADE + 2), f3 = ko_float(i, KO_FADE + 3);
-            const float left = f0 == 0.0f ? 1.0f : ko_clamp01((px - x1) / f0);
-            const float top = f1 == 0.0f ? 1.0f : ko_clamp01((py - y1) / f1);
-            const float right = f2 == 0.0f ? 1.0f : ko_clamp01((x2 - px) / f2);
-            const float bottom = f3 == 0.0f ? 1.0f : ko_clamp01((y2 - py) / f3);
-            weight *= (left < right ? left : right) * (top < bottom ? top : bottom);
+            const float weight = ko_weight(i, px, py);
             colour = ko_mix(under, colour, weight);
         }
         result = colour;

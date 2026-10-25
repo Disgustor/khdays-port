@@ -6,6 +6,13 @@ static int information_engine, information_bg;
 static uint32_t information_ink;
 static int information_right;
 static unsigned information_epoch = 1;
+static int mission_panel_owned;
+void khdays_ui_mission_panel_emit(void) {}
+int khdays_ui_mission_panel_cell(int engine, int bg, int x, int y)
+{
+    (void)x;
+    return mission_panel_owned && engine == 1 && (bg == 0 || bg == 2) && y >= 19 && y < 24;
+}
 static int obtained_sequence_enabled, obtained_sequence_owned, obtained_sequence_calls;
 static unsigned obtained_sequence_ink;
 int khdays_ui_obtained_enabled(void)
@@ -945,6 +952,21 @@ static void command_menu_selections(int primary_row)
 
 static void obtained_popup(void)
 {
+    {
+        Canvas panel = {0};
+        KhdaysBgLayer panel_layer = {0};
+        panel.engine = 1;
+        panel.bg = 0;
+        mission_panel_owned = 1;
+        CHECK(obtained_cell(&panel, &panel_layer, 1, 20));
+        CHECK(!obtained_cell(&panel, &panel_layer, 1, 10));
+        panel.bg = 1;
+        CHECK(!obtained_cell(&panel, &panel_layer, 1, 20));
+        mission_panel_owned = 0;
+        panel.bg = 0;
+        CHECK(!obtained_cell(&panel, &panel_layer, 1, 20));
+    }
+
     ram_bytes = 0x02400000u;
     ram = (unsigned char *)calloc(1, ram_bytes);
     CHECK(ram != NULL);

@@ -840,3 +840,99 @@ Days HP maps to KH2 HP as `days_hp * 10 / 31`: 186 is the 60-HP circular capacit
 logical units without a gameplay cap. The parent position is normalized from the
 asset's 455,355 center. The Days adapter places its own existing portrait artwork
 over this gauge and advances before the display's unchanged-frame shortcut.
+
+## Optional authored mission panel
+
+The `mission_panel` object in `layouts/gauge/<language>/gauge.json` is disabled
+by default. It is for a mod-authored BAR/SEQD and PNG or DDS atlas, not an asset
+extracted from KH2. Put `mission.2dd` and `mission.png` next to that JSON, set
+`enabled` to true, and restart. `archive`, `texture`, and the BAR `entry` (`miss`
+by default) are configurable local names. The atlas uses the BAR image entry's
+logical size, independently of its replacement resolution. The HD importer
+preserves this section and never patches or replaces the custom mission files.
+
+The example JSON lists every setting. The default animation assignments are:
+
+| Setting | Clip | Use |
+|---|---:|---|
+| `reference` | 0 | Canvas extent only; authoring/debug artwork is never drawn |
+| `intro`, `outro` | 1, 2 | Background, active parent, and shared fade/translation |
+| `track` | 3 | Empty progress track |
+| `fill`, `ready_fill`, `full_fill` | 4, 5, 6 | Below minimum, minimum reached, full progress |
+| `heading`, `complete_heading` | 7, 8 | Mission gauge / mission complete label |
+| `full_marker`, `minimum_marker` | 9, 10 | End marker and calculated minimum marker |
+| `bead_empty`, `bead_full` | 11, 12 | Available/completed missions on a day |
+| `unity`, `rank`, `chest` | 13, 14, 15 | Separate counter icons |
+
+The background clips need an active track. Its resting location is the last
+frame of `intro`; other components follow its relative translation and alpha.
+`intro` honors its sequence loop/restart, whereas `outro` plays once. Pausing
+freezes animation. Leaving the field, opening menus, cutscenes, and map changes
+cancel the previous panel. The native panel's tilemap controls when it is shown;
+rendering does not alter progress, collection flags, or other gameplay state.
+No dummy tracks or extra sprite groups are required in the authored file.
+
+Positions below are KH2 logical units before `scale` (0.65), and are relative
+to the file's origin. `source_origin_x/y` defaults to 0,15. `offset_x/y` moves
+the whole result in Days screen units. On one screen it uses the information
+bar's top-left placement and HUD composition scale, bypassing the original
+mission-panel crop and its scale. Both native and replacement information bars
+cover it. On two screens it stays in Days' native lower-screen mission-panel area at Y=152.
+
+| Anchors | Meaning |
+|---|---|
+| `description_x/y` | Left edge/top of the objective or localized DAY text |
+| `tally_x/y` | **Right** edge/top of localized Missions Left text |
+| `counters_right`, `counters_y` | Right edge of the counter row and icon origin Y |
+| `icon_gap`, `counter_gap` | Icon-to-text gap and gap between complete blocks |
+| `counter_text_offset_y` | Extra vertical adjustment of number text relative to the icons |
+| `beads_x/y`, `bead_spacing` | First bead position and horizontal step |
+| `bar_start_x`, `bar_end_x`, `bar_y` | Track endpoints and origin Y |
+| `heading_x/y` | Pre-rendered gauge/complete heading origin |
+| `full_marker_x/y`, `minimum_marker_y` | End-marker origin and minimum-marker Y |
+
+Counter blocks pack leftwards in chest, unity, rank order from the right edge.
+Zero-total blocks are omitted. Each block reserves its icon's bounds over the
+whole animation, measured font width including bearings/shadow, and both gaps.
+Description text fits horizontally around counter blocks only when their vertical
+bounds overlap its row. Moving the counters to another row restores the full
+description width. Replacement font cell heights, including shadows, are retained. Numbers use Days'
+8-dot font, yellow with a white slash and black shadow, with no one-digit cap;
+the label uses the 10-dot font. Both honor `field.hud.status` HD font mappings.
+`text_scale` adjusts label text and `counter_scale` adjusts only counter text.
+`counters_scale` (default 1, range 0.1–4) scales the entire chest/badge row,
+including icons, text, gaps, and relative text offsets, around `counters_right`
+and `counters_y`. It multiplies the existing `counter_scale`; it does not scale
+the description, Missions Left text, or mission beads. Text pixels are
+cached until their content or resolution changes; sequences render on the GPU.
+
+The track and fill span the configured endpoints; fill is clipped with matching
+UVs rather than stretching its texture as progress changes. It follows Days'
+existing displayed 224-step progress, preserving catch-up timing. The minimum
+marker uses `floor(goal * 224 / total)`, clamped to 223, mapped onto those same
+endpoints; it is omitted when goal equals total. The complete label and green
+fill wait for the displayed progress to reach the minimum; full displayed
+progress selects the orange fill.
+
+When disabled, missing, or invalid, the original panel remains. When active, its
+BG2 artwork, BG0 text, panel sprites, and port-added badge overlay are suppressed
+only in the panel area. The minimap backdrop remains independent of those
+suppressed pixels. Edit settings and restart to retry a rejected asset.
+
+Verified Days sources at decomp commit
+`a2b0478b87e3102732094c34f6ca89595f98ab93`: `Ov002_DrawLoadedPortrait`,
+`Ov002_DrawLoadedTally`, `Ov002_DrawNoticeGauge`, `Ov002_DrawMessageCaption`,
+`Ov002_DrawMissionGaugeTrack`, `Ov002_StepProgressBar`, and
+`Ov002_UpdatePageStamp`. Collection flags use the port's existing
+`mission_list.c` and `badges.c` data sources. The configurable anchor positions
+are mod policy, not inferred KH2 game behavior.
+
+`khdays-kh2-mission-panel-test` uses synthetic art/state to check parent fades,
+packing, multi-digit counters, fill geometry, cached text, pause, context loss,
+JSON validation, and disabled fallback. Its optional `--asset GAUGE_JSON` mode
+checks locally authored art without launching the game. Text-canvas and
+single-screen tests also verify native suppression, independent scaling,
+information priority, and restoration of the original crop. In-game validation
+should cover a normal mission, a day list, challenge/Mission Mode, simultaneous
+chest/unity/rank counters, pause, and entering/exiting a map, with the mod both
+on and off.

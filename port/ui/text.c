@@ -8,6 +8,7 @@
 #include "parts.h"
 #include "kh2_information.h"
 #include "kh2_obtained.h"
+#include "kh2_mission_panel.h"
 #include "../gpu/gpu2d.h"
 #include "../runtime/mods/font_runtime.h"
 #include "../runtime/mods/tiles2d.h"
@@ -355,6 +356,8 @@ static void obtained_written(int engine, uint32_t address, uint32_t bytes)
 
 static int obtained_cell(const Canvas *c, const KhdaysBgLayer *l, int x, int y)
 {
+    if (khdays_ui_mission_panel_cell(c->engine, c->bg, x, y))
+        return 1;
     if (c != &obtained.canvas && c->engine == 0 && (c->bg == 1 || c->bg == 3) && khdays_ui_obtained_owns()) {
         const int cx = (x % l->wt + l->wt) % l->wt, cy = (y % l->ht + l->ht) % l->ht;
         if (cx < 13 && cy >= 7 && cy < 10)
@@ -3089,6 +3092,7 @@ static void emit(void)
     uint32_t palettes[2] = {0};
     unsigned palettes_valid = 0;
     khdays_ui_information_begin();
+    khdays_ui_mission_panel_emit();
     khdays_ui_obtained_begin();
     prepare_obtained(scale);
     prepare_obtained_sequence(scale);

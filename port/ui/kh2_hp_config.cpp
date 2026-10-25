@@ -126,8 +126,9 @@ class Reader {
                 if (next() == '{') {
                     const bool label = key == "player_icon" || key == "limit_text";
                     const bool allowed =
-                        (prefix.empty() && (key == "party" || key == "enemy" || key == "reticles" ||
-                                            key == "information" || key == "obtained" || label)) ||
+                        (prefix.empty() &&
+                         (key == "party" || key == "enemy" || key == "reticles" || key == "information" ||
+                          key == "obtained" || key == "mission_panel" || label)) ||
                         (prefix == "reticles." && (key == "soft_lock" || key == "hard_lock" || key == "interact" ||
                                                    key == "chain" || key == "error")) ||
                         (prefix == "party." && (key == "slots" || label)) ||
@@ -285,6 +286,7 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
     extract("reticles.");
     extract("information.");
     extract("obtained.");
+    extract("mission_panel.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
         overrides[i] = extract("party.slots." + std::to_string(i + 1) + '.');
@@ -509,6 +511,70 @@ ObtainedConfig load_obtained_config(const std::filesystem::path &path)
     c.frames_per_tick = float(number(o, "frames_per_tick", c.frames_per_tick, 0.01, 8));
     if (!o.empty())
         throw std::runtime_error("gauge JSON: unknown obtained key " + o.begin()->first);
+    return c;
+}
+MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
+{
+    Object o;
+    for (const auto &[key, value] : read_file(path))
+        if (key.starts_with("mission_panel."))
+            o.emplace(key.substr(14), value);
+    MissionPanelConfig c;
+    c.enabled = get(o, "enabled", false);
+    for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
+        *field = get(o, key, *field);
+        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
+            throw std::runtime_error("gauge JSON: mission panel resources must be local file names");
+    }
+    c.reference = int(number(o, "reference", c.reference, 0, 65535, true));
+    c.intro = int(number(o, "intro", c.intro, 0, 65535, true));
+    c.outro = int(number(o, "outro", c.outro, 0, 65535, true));
+    c.track = int(number(o, "track", c.track, 0, 65535, true));
+    c.fill = int(number(o, "fill", c.fill, 0, 65535, true));
+    c.ready_fill = int(number(o, "ready_fill", c.ready_fill, 0, 65535, true));
+    c.full_fill = int(number(o, "full_fill", c.full_fill, 0, 65535, true));
+    c.heading = int(number(o, "heading", c.heading, 0, 65535, true));
+    c.complete_heading = int(number(o, "complete_heading", c.complete_heading, 0, 65535, true));
+    c.full_marker = int(number(o, "full_marker", c.full_marker, 0, 65535, true));
+    c.minimum_marker = int(number(o, "minimum_marker", c.minimum_marker, 0, 65535, true));
+    c.bead_empty = int(number(o, "bead_empty", c.bead_empty, 0, 65535, true));
+    c.bead_full = int(number(o, "bead_full", c.bead_full, 0, 65535, true));
+    c.unity = int(number(o, "unity", c.unity, 0, 65535, true));
+    c.rank = int(number(o, "rank", c.rank, 0, 65535, true));
+    c.chest = int(number(o, "chest", c.chest, 0, 65535, true));
+    c.offset_x = float(number(o, "offset_x", c.offset_x, -4096, 4096));
+    c.offset_y = float(number(o, "offset_y", c.offset_y, -4096, 4096));
+    c.source_origin_x = float(number(o, "source_origin_x", c.source_origin_x, -4096, 4096));
+    c.source_origin_y = float(number(o, "source_origin_y", c.source_origin_y, -4096, 4096));
+    c.description_x = float(number(o, "description_x", c.description_x, -4096, 4096));
+    c.description_y = float(number(o, "description_y", c.description_y, -4096, 4096));
+    c.tally_x = float(number(o, "tally_x", c.tally_x, -4096, 4096));
+    c.tally_y = float(number(o, "tally_y", c.tally_y, -4096, 4096));
+    c.counters_right = float(number(o, "counters_right", c.counters_right, -4096, 4096));
+    c.counters_y = float(number(o, "counters_y", c.counters_y, -4096, 4096));
+    c.counter_text_offset_y = float(number(o, "counter_text_offset_y", c.counter_text_offset_y, -4096, 4096));
+    c.beads_x = float(number(o, "beads_x", c.beads_x, -4096, 4096));
+    c.beads_y = float(number(o, "beads_y", c.beads_y, -4096, 4096));
+    c.bar_start_x = float(number(o, "bar_start_x", c.bar_start_x, -4096, 4096));
+    c.bar_end_x = float(number(o, "bar_end_x", c.bar_end_x, -4096, 4096));
+    c.bar_y = float(number(o, "bar_y", c.bar_y, -4096, 4096));
+    c.heading_x = float(number(o, "heading_x", c.heading_x, -4096, 4096));
+    c.heading_y = float(number(o, "heading_y", c.heading_y, -4096, 4096));
+    c.full_marker_x = float(number(o, "full_marker_x", c.full_marker_x, -4096, 4096));
+    c.full_marker_y = float(number(o, "full_marker_y", c.full_marker_y, -4096, 4096));
+    c.minimum_marker_y = float(number(o, "minimum_marker_y", c.minimum_marker_y, -4096, 4096));
+    c.scale = float(number(o, "scale", c.scale, 0.01, 4));
+    c.text_scale = float(number(o, "text_scale", c.text_scale, 0.1, 4));
+    c.counter_scale = float(number(o, "counter_scale", c.counter_scale, 0.1, 4));
+    c.counters_scale = float(number(o, "counters_scale", c.counters_scale, 0.1, 4));
+    c.frames_per_tick = float(number(o, "frames_per_tick", c.frames_per_tick, 0.01, 8));
+    c.icon_gap = float(number(o, "icon_gap", c.icon_gap, 0, 128));
+    c.counter_gap = float(number(o, "counter_gap", c.counter_gap, 0, 128));
+    c.bead_spacing = float(number(o, "bead_spacing", c.bead_spacing, 1, 128));
+    if (c.bar_end_x <= c.bar_start_x)
+        throw std::runtime_error("gauge JSON: mission panel bar end must follow its start");
+    if (!o.empty())
+        throw std::runtime_error("gauge JSON: unknown mission panel key " + o.begin()->first);
     return c;
 }
 } // namespace khdays::ui::kh2

@@ -239,6 +239,18 @@ int main(void)
         CHECK(memcmp(out, base_out, sizeof(out)) == 0);
     }
 
+    /* A native mission-panel image remains visible on engine B's BG2 in dual-screen mode. */
+    scene();
+    put32(io + 0x1000, 0x00010000u | 0x700u);
+    put16(io + 0x100a, 1u | (1u << 2) | (30u << 8));
+    put16(io + 0x100c, 2u | (1u << 2) | (29u << 8));
+    image(1, 8, 8, 0);
+    for (int i = 0; i < 64; ++i)
+        images[1][i] = 0xff00ff00u;
+    element(r, 2 | KES_DIRECT | KES_PICTURE | KES_FINE, 16, 152, 8, 8, 1, 8, 8);
+    compose(1, r, 1, NULL, out);
+    CHECK(out[152 * W + 16] != out[0]);
+
     CHECK((KES_FINE & KES_PICTURE) == 0u);
     /* Independent images are drawn separately from the one-screen source crop. */
     scene();

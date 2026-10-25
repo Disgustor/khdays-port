@@ -343,6 +343,14 @@ target_compile_options(khdays-kh2-information-test PRIVATE /W4 /std:c++20 /EHsc)
 add_test(NAME khdays-kh2-information COMMAND khdays-kh2-information-test)
 add_test(NAME khdays-kh2-information-missing COMMAND khdays-kh2-information-test --missing)
 add_test(NAME khdays-kh2-information-legacy COMMAND khdays-kh2-information-test --legacy)
+add_executable(khdays-kh2-mission-panel-test tests/kh2_mission_panel_test.cpp)
+target_link_libraries(khdays-kh2-mission-panel-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-kh2-mission-panel-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-kh2-mission-panel COMMAND khdays-kh2-mission-panel-test)
+add_test(NAME khdays-kh2-mission-panel-missing COMMAND khdays-kh2-mission-panel-test --missing)
+add_test(NAME khdays-kh2-mission-panel-legacy COMMAND khdays-kh2-mission-panel-test --legacy)
+add_test(NAME khdays-kh2-mission-panel-disabled COMMAND khdays-kh2-mission-panel-test --disabled)
+
 add_executable(khdays-kh2-obtained-test tests/kh2_obtained_test.cpp ui/kh2_obtained.cpp)
 target_link_libraries(khdays-kh2-obtained-test PRIVATE khdays-kh2-gauge)
 target_compile_options(khdays-kh2-obtained-test PRIVATE /W4 /std:c++20 /EHsc)
@@ -579,6 +587,7 @@ add_executable(khdays-native
     ui/kh2_reticles.cpp
     ui/kh2_information.cpp
     ui/kh2_obtained.cpp
+    ui/kh2_mission_panel.cpp
     ui/kh2_party_hud.cpp
     ui/kh2_hud_labels.cpp
     ui/kh2_portrait_hud.cpp

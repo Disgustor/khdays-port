@@ -316,6 +316,34 @@ class GaugeImport(unittest.TestCase):
             self.assertNotEqual(gauge_before, setup.tool_made_by("kh2_gauge.py", template))
             self.assertEqual(font_before, setup.tool_made_by("kh2_fonts.py", ["{kh2}"]))
 
+    def test_authored_mission_panel_survives_regeneration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources(root / "source")
+            folder = root / "pack/en"
+            folder.mkdir(parents=True)
+            panel = {
+                "enabled": True,
+                "archive": "mine.2dd",
+                "texture": "mine.dds",
+                "description_x": 33,
+                "tally_x": 249,
+                "counter_gap": 9,
+            }
+            (folder / "gauge.json").write_text(json.dumps({"mission_panel": panel}))
+            (folder / "mine.2dd").write_bytes(b"custom authored sequence")
+            (folder / "mine.dds").write_bytes(b"custom atlas")
+            gauge.make_gauge(root / "source", root / "pack", ["en", "fr"], root / "pack")
+            en = json.loads((folder / "gauge.json").read_text())
+            fr = json.loads((root / "pack/fr/gauge.json").read_text())
+            self.assertTrue(en["mission_panel"]["enabled"])
+            for key, value in panel.items():
+                self.assertEqual(en["mission_panel"][key], value)
+            self.assertNotIn("mission_panel", en["party"])
+            self.assertFalse(fr["mission_panel"]["enabled"])
+            self.assertEqual((folder / "mine.2dd").read_bytes(), b"custom authored sequence")
+            self.assertEqual((folder / "mine.dds").read_bytes(), b"custom atlas")
+
     def test_legacy_party_file_is_merged_and_test_lift_becomes_default(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

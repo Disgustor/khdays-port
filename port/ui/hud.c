@@ -9,6 +9,7 @@
 #include "kh2_party_hud.h"
 #include "kh2_hud_labels.h"
 #include "badges.h"
+#include "kh2_mission_panel.h"
 #include "crowns.h"
 #include "autosave_notice.h"
 #include "save_numbers.h"
@@ -341,6 +342,8 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
         khdays_ui_kh2_label_native(piece->label - 1, &hd_element);
     if (strcmp(piece->id, "hud.info") == 0 && khdays_ui_information_active(piece->screen))
         native_hp = 1;
+    if (strcmp(piece->id, "hud.mission") == 0 && khdays_ui_mission_panel_owns())
+        native_hp = 1;
     if (!native_hp)
         khdays_ui_emit(KHDAYS_UI_HUD, &e);
     if (sh->hd_image1 != 0 && !native_hp) {
@@ -438,6 +441,22 @@ static void emit_sprites(int index, int there)
         Sprite *sp = &sprites[engine][i];
         int w, h, x, y, changed = 0;
         KhdaysUiElement e;
+        if (strcmp(piece->id, "hud.mission") == 0 && khdays_ui_mission_panel_owns() && shape < 3u && mode < 2u &&
+            ((a0 & 0x100u) || !(a0 & 0x200u))) {
+            int sx = (int)(a1 & 511u), sy = (int)(a0 & 255u);
+            sx = sx >= 256 ? sx - 512 : sx;
+            sy = sy >= 192 ? sy - 256 : sy;
+            int sw = obj_w[shape][size], sh = obj_h[shape][size];
+            if ((a0 & 0x300u) == 0x300u) {
+                sw *= 2;
+                sh *= 2;
+            }
+            if (sx + sw / 2 >= piece->x0 && sx + sw / 2 < piece->x1 && sy + sh / 2 >= piece->y0 &&
+                sy + sh / 2 < piece->y1) {
+                khdays_ui_left_out_obj(KHDAYS_UI_HUD, engine, i);
+                continue;
+            }
+        }
         if ((a0 & 0x100u) || (a0 & 0x200u) || shape == 3u || mode >= 2u || (colors256 && (dispcnt & 0x80000000u))) {
             continue;
         }
@@ -585,7 +604,7 @@ static void emit(void)
         if (there || strcmp(pieces_table[n].id, "hud.portrait") == 0) {
             emit_sprites(n, there);
         }
-        if (there && strcmp(pieces_table[n].id, "hud.mission") == 0) {
+        if (there && strcmp(pieces_table[n].id, "hud.mission") == 0 && !khdays_ui_mission_panel_owns()) {
             khdays_ui_badges_emit(); /* the port's own addition to the panel, above it */
         }
         party_there |= there && strcmp(pieces_table[n].id, "hud.portrait") == 0;

@@ -118,7 +118,7 @@ def party_config(player: dict, mapping: dict[str, int]) -> dict:
     result = {
         key: deepcopy(value)
         for key, value in player.items()
-        if key not in ("party", "slots", "limit_text", "enemy", "reticles", "information", "obtained")
+        if key not in ("party", "slots", "limit_text", "enemy", "reticles", "information", "obtained", "mission_panel")
     }
     result.update(
         offset_x=0,

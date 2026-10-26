@@ -135,6 +135,7 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage information_images[2];
     KhdaysSequenceImage obtained_image;
     KhdaysSequenceImage mission_panel_image;
+    KhdaysSequenceImage minimap_images[4];
     uint32_t mission_panel_state; /* bit 0: replacement owns panel; bit 1: native panel visible */
     int mission_panel_backdrop;
     uint32_t information_hold_frames;

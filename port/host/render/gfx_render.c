@@ -979,6 +979,13 @@ static int draw(const KhdaysFramePackage *p, int scale, int raster, const Khdays
             return 0;
         }
     }
+    for (int i = 0; i < 4; ++i) {
+        if (!khdays_sequence_gpu_draw(device, cmd, &p->minimap_images[i])) {
+            SDL_CancelGPUCommandBuffer(cmd);
+            valid = 0;
+            return 0;
+        }
+    }
     if (!khdays_sequence_gpu_draw(device, cmd, &p->mission_panel_image)) {
         SDL_CancelGPUCommandBuffer(cmd);
         valid = 0;

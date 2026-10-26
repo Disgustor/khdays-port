@@ -26,6 +26,7 @@
 #include "../../ui/kh2_information.h"
 #include "../../ui/kh2_obtained.h"
 #include "../../ui/kh2_mission_panel.h"
+#include "../../ui/minimap.h"
 #include "../../ui/pause.h"
 #include "../../ui/text.h"
 #include "../../ui/situation.h"
@@ -905,6 +906,7 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_information_commands(p->information_images);
     khdays_ui_obtained_commands(&p->obtained_image);
     khdays_ui_mission_panel_commands(&p->mission_panel_image);
+    khdays_minimap_commands(p->minimap_images);
     p->mission_panel_state = khdays_ui_mission_panel_state();
     p->mission_panel_backdrop = khdays_ui_mission_panel_backdrop();
     p->information_hold_frames = khdays_ui_information_hold_frames();
@@ -1126,6 +1128,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     memset(p->information_images, 0, sizeof(p->information_images));
     memset(&p->obtained_image, 0, sizeof(p->obtained_image));
     memset(&p->mission_panel_image, 0, sizeof(p->mission_panel_image));
+    memset(p->minimap_images, 0, sizeof(p->minimap_images));
     p->mission_panel_state = 0;
     p->mission_panel_backdrop = -1;
     p->information_hold_frames = 0;
@@ -1539,6 +1542,7 @@ void khdays_display_vblank(u32 frame)
     khdays_ui_information_frame(frame);
     khdays_ui_obtained_frame(frame);
     khdays_ui_mission_panel_frame(frame);
+    khdays_minimap_frame(frame);
     khdays_reticles_frame(frame);
     khdays_ui_kh2_enemy_frame(frame);
     khdays_ui_kh2_party_frame(frame);

@@ -487,6 +487,7 @@ HD_MENU_TOOLS = [
     ("ddd_camp.py", ["{ddd}", "{mare}", "{settings}"]),
     ("kh2_fonts.py", ["{kh2}"]),
     ("kh2_gauge.py", ["{kh2_gauge}", "--settings", "{gauge_settings}"]),
+    ("minimap_icons.py", ["--settings", "{minimap_settings}"]),
 ]
 HD_MENU_SUPPORT = (
     "port/tools/kh2_center_gauge.py",
@@ -626,6 +627,7 @@ def trace_inputs(args: argparse.Namespace) -> dict[str, Any]:
     kh2_gauge = args.kh2_gauge or args.kh2.with_name("kh2_fifth.hed_out")
     places["kh2_gauge"] = kh2_gauge
     places["gauge_settings"] = Path("no-existing-gauge-settings")
+    places["minimap_settings"] = Path("no-existing-minimap-settings")
     # the archives the sources are extractions of, and how a file there names its entry
     sources = [
         ("Mare", args.mare, "original"),
@@ -749,7 +751,14 @@ def movies_folder(folder: Path) -> Path:
     return folder / MOVIES
 
 
-DATA_TOOLS = {"theater_mission.py", "theater_cine.py", "save_screen.py", "ddd_camp.py", "kh2_fonts.py"}  # take --data
+DATA_TOOLS = {
+    "theater_mission.py",
+    "theater_cine.py",
+    "save_screen.py",
+    "ddd_camp.py",
+    "kh2_fonts.py",
+    "minimap_icons.py",
+}  # take --data
 
 MESSAGES.update(
     {
@@ -967,6 +976,7 @@ def build_hd(args: argparse.Namespace) -> dict[str, Any]:
             "hand": src / "kh2_first.hed_out" / "remastered" / HAND / HAND_ASSET,
             "kh2_gauge": src / "kh2_fifth.hed_out",
             "gauge_settings": install / "mods" / HD_MOD / "layouts" / "gauge",
+            "minimap_settings": install / "mods" / HD_MOD / "layouts" / "minimap",
         }
         runs = [(t, template) for t, template in HD_MENU_TOOLS if t in menus] + (HD_VIDEO_TOOLS if videos else [])
         # the collections' files these tools read (their arguments' archives), made from their archives

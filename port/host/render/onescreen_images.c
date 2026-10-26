@@ -113,6 +113,12 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
             memcpy(&h, r + KE_H, 4);
             float anchor_x = (x + w < 256 ? x + w : 256) - 2;
             float anchor_y = (y + h < 192 ? y + h : 192) - 2;
+            const unsigned *map = p->minimap_images[0].words;
+            const int minimap = map[KSI_ANCHORED] && map[KSI_OUTPUT] == r[KE_IMAGE];
+            if (minimap) {
+                memcpy(&anchor_x, map + KSI_ANCHOR_X, 4);
+                memcpy(&anchor_y, map + KSI_ANCHOR_Y, 4);
+            }
             const unsigned *native = p->enemy_image.words;
             if (native[KSI_ANCHORED] && native[KSI_OUTPUT] == r[KE_IMAGE]) {
                 memcpy(&anchor_x, native + KSI_ANCHOR_X, 4);
@@ -184,6 +190,26 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 picture->owner = s;
                 image_shape(&picture->shape, r, lower, dx, dy, dw, dh);
                 uint32_t *dst = picture->shape.words;
+                if (minimap) {
+                    /* Keep the map crop and edge fade, without its white key or floor recolouring. */
+                    const float left = x > sx ? x : sx, top = y > sy ? y : sy;
+                    const float right = x + w < sx + sw ? x + w : sx + sw;
+                    const float bottom = y + h < sy + sh ? y + h : sy + sh;
+                    const float source[4] = {(left - x) * r[KE_IW] / w, (top - y) * r[KE_IH] / h,
+                                             (right - left) * r[KE_IW] / w, (bottom - top) * r[KE_IH] / h};
+                    const float rect[4] = {dx + (left - x) * scale_x, dy + (top - y) * scale_y,
+                                           dx + (right - x) * scale_x, dy + (bottom - y) * scale_y};
+                    memcpy(dst + KO_SRC_X, source, sizeof(source));
+                    memcpy(dst + KO_DST_X1, rect, sizeof(rect));
+                    dst[KO_FLAGS] |= src[KO_FLAGS] & KOF_WEIGHT;
+                    float fade[4];
+                    memcpy(fade, src + KO_FADE, sizeof(fade));
+                    const float inset[4] = {(left - sx) * scale_x, (top - sy) * scale_y, (sx + sw - right) * scale_x,
+                                            (sy + sh - bottom) * scale_y};
+                    for (int edge = 0; edge < 4; ++edge)
+                        fade[edge] = fade[edge] > inset[edge] ? fade[edge] - inset[edge] : 0;
+                    memcpy(dst + KO_FADE, fade, sizeof(fade));
+                }
                 dst[KO_FLAGS] |= src[KO_FLAGS] & KOF_DIM;
                 dst[KO_OPACITY] = src[KO_OPACITY];
                 if (r[KE_SLOT] & (KES_HUD | KES_NATIVE_FADE)) {

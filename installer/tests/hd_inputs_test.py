@@ -40,6 +40,17 @@ class Inputs(unittest.TestCase):
         for region in ("us", "sp", "fr", "gr", "it"):
             self.assertIn(f"kh2_fifth field2d/{region}/zz0field.2dd", entries)
 
+    def test_minimap_generator_wiring(self):
+        self.assertIn(("minimap_icons.py", ["--settings", "{minimap_settings}"]), s.HD_MENU_TOOLS)
+        self.assertIn("minimap_icons.py", s.DATA_TOOLS)
+        source = ast.parse((HERE.parent / "build_installer.py").read_text(encoding="utf-8"))
+        tools = next(
+            node.value
+            for node in source.body
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "TOOLS" for t in node.targets)
+        )
+        self.assertIn("tools/hd/minimap_icons.py", ast.literal_eval(tools))
+
     def test_font_generator_wiring(self):
         self.assertIn(("kh2_fonts.py", ["{kh2}"]), s.HD_MENU_TOOLS)
         self.assertIn("kh2_fonts.py", s.DATA_TOOLS)

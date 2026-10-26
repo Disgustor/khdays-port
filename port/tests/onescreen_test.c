@@ -775,6 +775,13 @@ static uint32_t upper_src[192][256], lower_src[192][256]; /* as KO_SOURCE gives 
 static uint32_t image_colour;
 static uint32_t image_colours[16];
 static int use_image_colours;
+static float last_image_x, last_image_y;
+static uint32_t image_sample(uint32_t image, float x, float y)
+{
+    last_image_x = x;
+    last_image_y = y;
+    return use_image_colours ? image_colours[image] : image_colour;
+}
 
 static uint32_t source(uint32_t lower, float x, float y)
 {
@@ -797,7 +804,7 @@ static float as_float(uint32_t u)
 #define KO_FLOOR(f) floorf(f)
 #define KO_ABS(i) abs(i)
 #define KO_SOURCE(lower, x, y) source((lower), (x), (y))
-#define KO_IMAGE(image, x, y) (use_image_colours ? image_colours[(image)] : image_colour)
+#define KO_IMAGE(image, x, y) image_sample((image), (x), (y))
 #include "../gfx/onescreen.h"
 
 static void put_float(uint32_t *w, int at, float f)
@@ -1585,6 +1592,69 @@ static void test_mission_panel_image(void)
     free(p);
 }
 
+static void test_minimap_image(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    uint32_t record[KE_WORDS] = {0};
+    record[KE_SLOT] = KES_DIRECT | KES_FINE | KES_PICTURE | KES_NATIVE_FADE | 2;
+    record[KE_IMAGE] = 90;
+    record[KE_IW] = 240;
+    record[KE_IH] = 160;
+    put_float(record, KE_X, 104);
+    put_float(record, KE_Y, 56);
+    put_float(record, KE_W, 120);
+    put_float(record, KE_H, 80);
+    p->elements[1].records = record;
+    p->elements[1].count = 1;
+    p->minimap_images[0].words[KSI_OUTPUT] = 90;
+    p->minimap_images[0].words[KSI_ANCHORED] = 1;
+    put_float(p->minimap_images[0].words, KSI_ANCHOR_X, 164);
+    put_float(p->minimap_images[0].words, KSI_ANCHOR_Y, 96);
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    KhdaysSituation s = {KHDAYS_SIT_FIELD, (1u << KHDAYS_ST_HUD) | (1u << KHDAYS_ST_MISSION_PANEL)};
+    for (int size = 1; size <= 8; size *= 2) {
+        khdays_composition_set_hud_size(size);
+        KhdaysComposition c;
+        khdays_composition_for(&s, 342, &c);
+        KhdaysShape map = {0};
+        for (int i = 0; i < c.shape_count; ++i)
+            if ((c.shapes[i].words[KO_FLAGS] & KOF_LOWER) && word_float(c.shapes[i].words, KO_SRC_X) == 112 &&
+                word_float(c.shapes[i].words, KO_SRC_Y) == 64)
+                map = c.shapes[i];
+        CHECK(map.words[KO_KEY_COUNT] != 0);
+        khdays_onescreen_images(p, &s, &c);
+        CHECK(image_shapes(&c) == 1);
+        for (int i = 0; i < c.shape_count; ++i) {
+            const uint32_t *w = c.shapes[i].words;
+            if (!(w[KO_FLAGS] & KOF_IMAGE) || w[KO_KEYS] != 90)
+                continue;
+            CHECK(word_float(w, KO_SRC_X) == 16 && word_float(w, KO_SRC_Y) == 16);
+            CHECK(word_float(w, KO_SRC_W) == 208 && word_float(w, KO_SRC_H) == 128);
+            CHECK(word_float(w, KO_DST_X1) == word_float(map.words, KO_DST_X1));
+            CHECK(word_float(w, KO_DST_Y1) == word_float(map.words, KO_DST_Y1));
+            CHECK(!(w[KO_FLAGS] & KOF_SEE_THROUGH));
+            CHECK(w[KO_FLAGS] & KOF_WEIGHT);
+            CHECK(word_float(w, KO_FADE) == word_float(map.words, KO_FADE));
+            CHECK(word_float(w, KO_IMAGE_ALPHA) == 1);
+            memset(shape_words, 0, sizeof(shape_words));
+            memcpy(shape_words[0], w, KO_WORDS * sizeof(*w));
+            use_image_colours = 0;
+            float x = (word_float(w, KO_DST_X1) + word_float(w, KO_DST_X2)) / 2;
+            float y = (word_float(w, KO_DST_Y1) + word_float(w, KO_DST_Y2)) / 2;
+            for (int colour = 0; colour < 3; ++colour) {
+                image_colour = colour == 0 ? 0xffffffffu : colour == 1 ? 0xffefefefu : 0xff0000ffu;
+                CHECK(ko_pixel(x, y, 1, 0x01000000u, 1, KOB_DEFAULT, 0, 0, 171, 1) == (image_colour & 0xffffffu));
+                CHECK(fabsf(last_image_x - 120) < .001f && fabsf(last_image_y - 80) < .001f);
+            }
+        }
+    }
+    free(p);
+}
+
 int main(void)
 {
     test_places();
@@ -1605,6 +1675,7 @@ int main(void)
     test_native_hud_fade();
     test_information_image();
     test_mission_panel_image();
+    test_minimap_image();
     test_weighted_image();
     test_hud_image_layers();
     test_split();

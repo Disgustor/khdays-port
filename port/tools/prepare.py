@@ -2396,6 +2396,48 @@ FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_HoldPanelScreen.c"] = [
     ),
 ]
 
+# Capture the minimap's icon stamps before they are flattened into its 4bpp layer.
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_RedrawMapPanel.c"] = [
+    (
+        "    pScene = data_ov002_0207f638;",
+        "    extern void khdays_minimap_begin(void);\n    extern void khdays_minimap_end(void);\n    khdays_minimap_begin();\n    pScene = data_ov002_0207f638;",
+    ),
+    (
+        "    GFXi_EnqueueCommand(0x16, 0x2720, pScene->pTiles, 0x12c0);",
+        "    khdays_minimap_end();\n    GFXi_EnqueueCommand(0x16, 0x2720, pScene->pTiles, 0x12c0);",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_PlotMapIcon.c"] = [
+    (
+        "    pCtx = data_ov002_0207f638;",
+        "    extern void khdays_minimap_icon(int kind, int x, int y);\n    khdays_minimap_icon(nKind, pCell[0], pCell[1]);\n    pCtx = data_ov002_0207f638;",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_PlotPageGlyph.c"] = [
+    (
+        "    nBand = ((nHeight + 0x1000) / 0x2000) % 8;",
+        "    extern void khdays_minimap_player(int player, int x, int y, int heading);\n    khdays_minimap_player(nSelf, pCell->x, pCell->y, nHeight);\n    nBand = ((nHeight + 0x1000) / 0x2000) % 8;",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_PlotPageEmblem.c"] = [
+    (
+        "    bMask = data_ov002_0207e400[nSelf];",
+        "    extern void khdays_minimap_emblem(int player);\n    khdays_minimap_emblem(nSelf);\n    bMask = data_ov002_0207e400[nSelf];",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_StampCellBlock.c"] = [
+    (
+        "    for (i = 0; i < 8; i++) {",
+        "    { extern void khdays_minimap_stamp(unsigned source, int x, int y);\n      khdays_minimap_stamp((unsigned)pCells, x, y); }\n    for (i = 0; i < 8; i++) {",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_TeardownHudNode.c"] = [
+    (
+        "    int node = (int)data_ov002_0207f638;",
+        "    extern void khdays_minimap_reset(void);\n    int node = (int)data_ov002_0207f638;\n    khdays_minimap_reset();",
+    ),
+]
+
 # The portrait label is measured and drawn here, before dialogue window layout.
 # Selection art only: keep projection, target choice, tween state and all native fallback draws.
 HOOKS["ov022@02085380"] += [

@@ -203,7 +203,7 @@ KO_FN uint ko_pixel(float px, float py, float texel, uint x3d, uint shape_count,
                 group = next_group;
                 group_alpha = (flags & KOF_NATIVE_FADE) != 0u ? ko_float(i, KO_IMAGE_ALPHA) : 1.0f;
             }
-            const uint t = KO_IMAGE(KO_SHAPE(i, KO_KEYS), fx, fy);
+            const uint t = KO_IMAGE(KO_SHAPE(i, KO_KEYS), fx + ko_float(i, KO_SRC_X), fy + ko_float(i, KO_SRC_Y));
             const uint rgb =
                 (flags & KOF_DIM) != 0u ? ko_mix(0u, t & 0xffffffu, ko_float(i, KO_OPACITY)) : t & 0xffffffu;
             const float a = (float)(t >> 24) / 255.0f * ((flags & KOF_WEIGHT) != 0u ? ko_weight(i, px, py) : 1.0f);

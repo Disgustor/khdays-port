@@ -9,6 +9,7 @@
 #include "kh2_party_hud.h"
 #include "kh2_hud_labels.h"
 #include "badges.h"
+#include "minimap.h"
 #include "kh2_mission_panel.h"
 #include "crowns.h"
 #include "autosave_notice.h"
@@ -216,7 +217,8 @@ static int emit_piece(int index, int bg, const KhdaysBgLayer *l)
                                  : khdays_bg_map_entry(piece->screen, l, cx, cy);
             if (piece->label && entry != 0xffffffffu && !khdays_ui_kh2_label_cell(piece->label - 1, entry))
                 entry = 0xffffffffu;
-            if (entry != 0xffffffffu && khdays_ui_kh2_hp_cell(piece->screen, bg, l, entry)) {
+            if (entry != 0xffffffffu &&
+                (khdays_ui_kh2_hp_cell(piece->screen, bg, l, entry) || khdays_minimap_cell(piece->screen, bg, entry))) {
                 khdays_ui_left_out_cell(KHDAYS_UI_HUD, piece->screen, bg, cx, cy);
                 entry = 0xffffffffu;
             }
@@ -587,6 +589,7 @@ static void emit_sprites(int index, int there)
 
 static void emit(void)
 {
+    khdays_minimap_emit();
     khdays_ui_kh2_enemy_emit();
     khdays_ui_kh2_hp_prepare();
     khdays_ui_kh2_party_prepare();

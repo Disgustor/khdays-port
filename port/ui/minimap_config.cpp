@@ -232,6 +232,14 @@ Config load_config(const std::filesystem::path &path)
     Config c;
     number(o, "version", 1, 1, 1, true);
     c.enabled = get(o, "enabled", false);
+    c.kh2map = get(o, "kh2map", false);
+    c.map_texture = get(o, "map_texture", c.map_texture);
+    filename(c.map_texture);
+    c.map_scale = float(number(o, "map_scale", .65, .1, 4));
+    c.map_offset_x = float(number(o, "map_offset_x", 0, -512, 512));
+    c.map_offset_y = float(number(o, "map_offset_y", 0, -512, 512));
+    c.map_opacity = float(number(o, "map_opacity", .75, 0, 1));
+    c.map_icon_scale = float(number(o, "map_icon_scale", 2, .1, 8));
     c.texture = get(o, "texture", c.texture);
     filename(c.texture);
     c.width = int(number(o, "logical_width", 256, 1, 4096, true));

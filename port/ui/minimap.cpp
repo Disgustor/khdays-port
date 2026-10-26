@@ -14,6 +14,7 @@ extern "C" {
 #include "../runtime/core/rom.h"
 #include "../runtime/core/session_log.h"
 #include "../runtime/mods/textures.h"
+#include "../runtime/mods/tiles2d.h"
 #include "../runtime/menus/camp.h"
 }
 #include <algorithm>
@@ -37,6 +38,19 @@ struct Draw {
 };
 std::vector<Draw> draws;
 std::array<KhdaysSequenceImage, KHDAYS_MINIMAP_BATCHES> programs{};
+KhdaysSequenceImage radar_program{};
+std::vector<unsigned> mask_pixels;
+int mask_atlas = -1, terrain_image = -1, terrain_scale = 0, radar_output = -1, radar_resolution = 0;
+unsigned terrain_hash = 0;
+const char *radar_status = "";
+bool terrain_unavailable(const char *reason)
+{
+    if (std::strcmp(radar_status, reason)) {
+        khdays_log("minimap radar: %s; retaining existing map presentation", reason);
+        radar_status = reason;
+    }
+    return false;
+}
 bool tried = false, loaded = false, recording = false, complete = false, overflow = false, owns = false;
 unsigned owner = 0;
 int atlas = -1, output = -1, output_scale = 0, layer = -1;
@@ -146,6 +160,21 @@ void load()
         if (atlas < 0)
             throw std::runtime_error("could not register sprite sheet");
         loaded = true;
+        if (config.kh2map) {
+            try {
+                auto mask = image(folder / path(config.map_texture));
+                if (mask.width % 64 || mask.height % 16 || mask.width / 64 != mask.height / 16)
+                    throw std::runtime_error("radar mask must have dimensions proportional to 64x16");
+                mask_pixels.resize(mask.rgba.size() / 4);
+                std::memcpy(mask_pixels.data(), mask.rgba.data(), mask.rgba.size());
+                mask_atlas = khdays_textures_add_info("minimap:radar_mask", mask.width, mask.height, mask_pixels.data(),
+                                                      KHDAYS_REPLACEMENT_NO_MIPS);
+                if (mask_atlas >= 0)
+                    khdays_log("minimap radar: KH2 presentation enabled, mask %s", config.map_texture.c_str());
+            } catch (const std::exception &e) {
+                khdays_log("minimap: %s; retaining existing map presentation", e.what());
+            }
+        }
     } catch (const std::exception &e) {
         fail(e.what());
     }
@@ -164,8 +193,9 @@ void push(std::string sprite, float x, float y, float angle = 0, float scale = 1
         float radius = std::hypot(std::max(std::abs(s.pivot_x), std::abs(s.draw_width - s.pivot_x)),
                                   std::max(std::abs(s.pivot_y), std::abs(s.draw_height - s.pivot_y))) *
                        s.scale * scale;
-        if (x + s.offset_x + radius <= 0 || x + s.offset_x - radius >= 120 || y + s.offset_y + radius <= 0 ||
-            y + s.offset_y - radius >= 80)
+        radius *= config.kh2map ? std::max(1.f, config.map_icon_scale) : 1;
+        if (x + s.offset_x + radius <= 0 || x + s.offset_x - radius >= 120 ||
+            y + s.offset_y + radius <= (config.kh2map ? -8 : 0) || y + s.offset_y - radius >= (config.kh2map ? 88 : 80))
             return;
     }
     if (draws.size() >= KHDAYS_MINIMAP_BATCHES * KSI_MAX_QUADS) {
@@ -215,6 +245,199 @@ bool locate(float &x, float &y)
             }
     }
     return false;
+}
+// The NSCR places packed map tiles into a 32x32 grid, including repeated padding tiles.
+bool terrain()
+{
+    if ((read(owner + 0x20) & 255) >= 2)
+        return terrain_unavailable("native map is hidden");
+    KhdaysBgLayer bg;
+    if (!khdays_bg_text_layer(1, 3, &bg) || bg.colors256)
+        return terrain_unavailable("terrain BG3 is unavailable");
+    unsigned entry = khdays_bg_map_entry(1, &bg, 0, 0);
+    if ((entry & 1023u) != 0x1cf)
+        return terrain_unavailable("terrain tile map is not installed");
+    const unsigned first = bg.chars + 0x39e0;
+    const char *source;
+    unsigned source_offset, run;
+    if (!khdays_bg_source(1, first, &source, &source_offset, &run) || !std::strstr(source, "mapchr.p2"))
+        return terrain_unavailable("resident map source is unavailable");
+    std::vector<unsigned char> data;
+    data.reserve(32768);
+    for (unsigned tile = 0; tile < 1024; ++tile) {
+        const char *file;
+        unsigned offset;
+        const unsigned at = first + tile * 32;
+        if (!khdays_bg_source(1, at, &file, &offset, &run) || std::strcmp(file, source) ||
+            offset != source_offset + tile * 32 || run < 32)
+            break;
+        const auto *tile_bytes = khdays_bg_memory(1, at);
+        if (!tile_bytes)
+            break;
+        data.insert(data.end(), tile_bytes, tile_bytes + 32);
+    }
+    if (data.empty())
+        return terrain_unavailable("resident map has no complete tiles");
+    std::array<unsigned, 256> colours{};
+    std::array<unsigned, 32 * 32> cells;
+    std::vector<unsigned> hd(data.size() / 32);
+    unsigned hash = 2166136261u;
+    auto mix = [&](unsigned v) { hash = (hash ^ v) * 16777619u; };
+    unsigned palettes = 0;
+    for (unsigned i = 0; i < cells.size(); ++i) {
+        cells[i] = khdays_bg_map_entry(1, &bg, i % 32, i / 32) & 0xffffu;
+        mix(cells[i]);
+        palettes |= 1u << (cells[i] >> 12);
+    }
+    for (unsigned bank = 0; bank < 16; ++bank)
+        if (palettes & (1u << bank))
+            for (unsigned i = 0; i < 16; ++i) {
+                unsigned index = bank * 16 + i;
+                colours[index] = khdays_ui_palette_colour(1, 3, KET_OPAQUE | index);
+                mix(colours[index]);
+            }
+    for (auto byte : data)
+        mix(byte);
+    int resolution = 1;
+    for (unsigned i = 0; i < hd.size(); ++i) {
+        hd[i] = khdays_tiles2d_bg_tile(1, bg.chars + (0x1cf + i) * 32);
+        mix(hd[i]);
+        const auto *r = hd[i] ? khdays_textures_replacement(int(hd[i] >> 20) - 1) : nullptr;
+        if (r && (r->info & KHDAYS_REPLACEMENT_TILES)) {
+            resolution = std::max(resolution, std::min(8, int((r->info >> 8) & 255)));
+            mix(khdays_textures_version(int(hd[i] >> 20) - 1));
+        }
+    }
+    if (terrain_image >= 0 && terrain_hash == hash && terrain_scale == resolution) {
+        if (std::strcmp(radar_status, "ready")) {
+            khdays_log("minimap radar: ready, cached resident terrain");
+            radar_status = "ready";
+        }
+        return true;
+    }
+    if (terrain_image < 0 || terrain_scale != resolution) {
+        khdays_ui_image_put(terrain_image);
+        terrain_image = khdays_ui_image_get(256 * resolution, 256 * resolution);
+        terrain_scale = resolution;
+    }
+    if (terrain_image < 0)
+        return false;
+    auto *out = khdays_ui_image_begin(terrain_image);
+    if (!out)
+        return false;
+    const int side = 256 * resolution;
+    std::fill(out, out + size_t(side) * side, 0);
+    for (unsigned cell = 0; cell < cells.size(); ++cell) {
+        const unsigned map_entry = cells[cell], tile = (map_entry & 1023u) - 0x1cfu;
+        if (tile >= hd.size())
+            continue;
+        const unsigned palette = (map_entry >> 12) * 16;
+        const auto *r = hd[tile] ? khdays_textures_replacement(int(hd[tile] >> 20) - 1) : nullptr;
+        int rs = r ? int((r->info >> 8) & 255) : 0, cols = r ? int(r->info >> 16) : 0;
+        bool replaced = r && r->rgba && (r->info & KHDAYS_REPLACEMENT_TILES) && rs && cols;
+        unsigned index = hd[tile] & 0xfffffu;
+        if (replaced &&
+            ((index % cols + 1) * 8 * rs > unsigned(r->width) || (index / cols + 1) * 8 * rs > unsigned(r->height)))
+            replaced = false;
+        for (int y = 0; y < 8 * resolution; ++y)
+            for (int x = 0; x < 8 * resolution; ++x) {
+                unsigned v = 0, colour = 0;
+                unsigned tx = (map_entry & 0x400u) ? 8 * resolution - 1 - x : x;
+                unsigned ty = (map_entry & 0x800u) ? 8 * resolution - 1 - y : y;
+                if (replaced) {
+                    unsigned u = (index % cols) * 8 * rs + (2 * tx + 1) * rs / (2 * resolution);
+                    unsigned vv = (index / cols) * 8 * rs + (2 * ty + 1) * rs / (2 * resolution);
+                    colour = r->rgba[size_t(vv) * r->width + u];
+                    if (r->info & KHDAYS_REPLACEMENT_INDEXED) {
+                        v = colour & 15;
+                        colour = v ? colours[palette + v] : 0;
+                    }
+                } else {
+                    unsigned px = tx / resolution, py = ty / resolution;
+                    v = (data[tile * 32 + py * 4 + px / 2] >> ((px & 1) * 4)) & 15;
+                    colour = v ? colours[palette + v] : 0;
+                }
+                if ((colour & 255) >= 248 && ((colour >> 8) & 255) >= 248 && ((colour >> 16) & 255) >= 248)
+                    colour = 0;
+                out[(size_t(cell / 32) * 8 * resolution + y) * side + (cell % 32) * 8 * resolution + x] = colour;
+            }
+    }
+    khdays_ui_image_end(terrain_image);
+    terrain_hash = hash;
+    if (std::strcmp(radar_status, "ready")) {
+        khdays_log("minimap radar: ready, %zu resident tiles, terrain resolution %dx", hd.size(), resolution);
+        radar_status = "ready";
+    }
+    return true;
+}
+seq::SequenceQuad sprite_quad(const Draw &d, bool radar = false)
+{
+    const auto found = config.sprites.find(d.sprite);
+    if (found == config.sprites.end())
+        throw std::runtime_error("missing required sprite: " + d.sprite);
+    const auto &s = found->second;
+    float r = d.angle * 3.14159265358979323846f / 180, c = std::cos(r), sn = std::sin(r), scale = s.scale * d.scale;
+    if (radar && !d.sprite.starts_with("emblem"))
+        scale *= config.map_icon_scale;
+    seq::SequenceQuad q;
+    for (unsigned v = 0; v < 4; ++v) {
+        float lx = ((v & 1 ? s.draw_width : 0) - s.pivot_x) * scale,
+              ly = ((v & 2 ? s.draw_height : 0) - s.pivot_y) * scale;
+        q.vertices[v] = {d.x + s.offset_x + lx * c + ly * sn - (radar ? 12 : 0),
+                         d.y + s.offset_y - lx * sn + ly * c + (radar ? 8 : 0), s.x + (v & 1 ? s.width : 0),
+                         s.y + (v & 2 ? s.height : 0), 0x80808080};
+    }
+    return q;
+}
+void radar(int resolution)
+{
+    if (!config.kh2map)
+        return;
+    if (mask_atlas < 0) {
+        terrain_unavailable("radar mask is unavailable");
+        return;
+    }
+    if (draws.size() >= KSI_MAX_QUADS) {
+        terrain_unavailable("radar icon capacity exceeded");
+        return;
+    }
+    if (!terrain())
+        return;
+    if (radar_output < 0 || radar_resolution != resolution) {
+        khdays_ui_image_put(radar_output);
+        radar_output = khdays_ui_image_get(96 * resolution, 96 * resolution);
+        radar_resolution = resolution;
+    }
+    if (radar_output < 0)
+        return;
+    auto &p = radar_program;
+    auto *w = p.words;
+    w[KSI_OUTPUT] = unsigned(khdays_ui_image_replacement(radar_output));
+    w[KSI_ATLAS] = unsigned(khdays_ui_image_replacement(terrain_image));
+    w[KSI_LOGICAL_W] = w[KSI_LOGICAL_H] = 256;
+    w[KSI_WIDTH] = w[KSI_HEIGHT] = 96 * resolution;
+    w[KSI_CLEAR] = 1;
+    w[KSI_FACE] = w[KSI_HD_FACE] = ~0u;
+    w[KSI_RADAR_MASK] = unsigned(mask_atlas + 1);
+    w[KSI_RADAR_ICONS] = unsigned(atlas);
+    w[KSI_RADAR_ICON_W] = config.width;
+    w[KSI_RADAR_ICON_H] = config.height;
+    float factor = float(resolution);
+    std::memcpy(w + KSI_SCALE, &factor, 4);
+    std::memcpy(w + KSI_RADAR_SCALE, &config.map_scale, 4);
+    std::memcpy(w + KSI_RADAR_ALPHA, &config.map_opacity, 4);
+    std::memcpy(w + KSI_ANCHOR_X, &config.map_offset_x, 4);
+    std::memcpy(w + KSI_ANCHOR_Y, &config.map_offset_y, 4);
+    std::vector<seq::SequenceQuad> quads(1);
+    float x = -float(int(read(owner + 8))) - 12, y = -float(int(read(owner + 12))) + 8;
+    // Cover the radar at map boundaries; the sampler clamps UVs to the terrain's edge texels.
+    for (unsigned v = 0; v < 4; ++v)
+        quads[0].vertices[v] = {float(v & 1 ? 96 : 0), float(v & 2 ? 96 : 0), float(v & 1 ? 96 : 0) - x,
+                                float(v & 2 ? 96 : 0) - y, 0x80808080};
+    quads[0].linear_filter = false;
+    for (const auto &d : draws)
+        quads.push_back(sprite_quad(d, true));
+    khdays::render::kh2::encode_sequence_quads(p, quads);
 }
 } // namespace
 extern "C" void khdays_minimap_begin(void)
@@ -286,11 +509,14 @@ extern "C" void khdays_minimap_reset(void)
     recording = complete = owns = false;
     owner = 0;
     programs = {};
+    radar_program = {};
+    terrain_hash = 0;
 }
 extern "C" void khdays_minimap_frame(unsigned frame)
 {
     khdays_situation_take(&context, frame);
     programs = {};
+    radar_program = {};
     owns = false;
     if (ready() && complete)
         khdays_ui_changed();
@@ -298,6 +524,7 @@ extern "C" void khdays_minimap_frame(unsigned frame)
 extern "C" void khdays_minimap_emit(void)
 {
     programs = {};
+    radar_program = {};
     owns = false;
     if (!ready() || !complete || owner != read(0x0207f638) || context.scene != 2 || !owner ||
         context.camp_screen != KHDAYS_CAMP_NONE || context.movie || context.tutorial ||
@@ -317,22 +544,8 @@ extern "C" void khdays_minimap_emit(void)
             throw std::runtime_error("could not allocate icon layer");
         std::vector<seq::SequenceQuad> quads;
         quads.reserve(draws.size());
-        for (const auto &d : draws) {
-            auto found = config.sprites.find(d.sprite);
-            if (found == config.sprites.end())
-                throw std::runtime_error("missing required sprite: " + d.sprite);
-            const auto &s = found->second;
-            float r = d.angle * 3.14159265358979323846f / 180, c = std::cos(r), sn = std::sin(r),
-                  scale = s.scale * d.scale;
-            seq::SequenceQuad q;
-            for (unsigned v = 0; v < 4; ++v) {
-                float lx = ((v & 1 ? s.draw_width : 0) - s.pivot_x) * scale,
-                      ly = ((v & 2 ? s.draw_height : 0) - s.pivot_y) * scale;
-                q.vertices[v] = {d.x + s.offset_x + lx * c + ly * sn, d.y + s.offset_y - lx * sn + ly * c,
-                                 s.x + (v & 1 ? s.width : 0), s.y + (v & 2 ? s.height : 0), 0x80808080};
-            }
-            quads.push_back(q);
-        }
+        for (const auto &d : draws)
+            quads.push_back(sprite_quad(d));
         size_t batches = std::max(size_t(1), (quads.size() + KSI_MAX_QUADS - 1) / KSI_MAX_QUADS);
         for (size_t i = 0; i < batches; ++i) {
             auto &p = programs[i];
@@ -364,6 +577,12 @@ extern "C" void khdays_minimap_emit(void)
                           output};
         khdays_ui_emit(KHDAYS_UI_HUD, &e);
         owns = true;
+        try {
+            radar(resolution);
+        } catch (const std::exception &e) {
+            radar_program = {};
+            khdays_log("minimap: %s; retaining existing map presentation", e.what());
+        }
     } catch (const std::exception &e) {
         fail(e.what());
     }
@@ -376,4 +595,8 @@ extern "C" int khdays_minimap_cell(int engine, int bg, unsigned entry)
 extern "C" void khdays_minimap_commands(KhdaysSequenceImage *out)
 {
     std::copy(programs.begin(), programs.end(), out);
+}
+extern "C" void khdays_minimap_radar_commands(KhdaysSequenceImage *out)
+{
+    *out = radar_program;
 }

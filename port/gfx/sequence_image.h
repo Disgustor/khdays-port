@@ -35,6 +35,12 @@
 #define KSI_TEXT_CLIP_W 27u
 #define KSI_TEXT_CLIP_H 28u
 #define KSI_TEXT_ALPHA 29u
+#define KSI_RADAR_MASK 30u /* radar DDS replacement id + 1, else ordinary sequence */
+#define KSI_RADAR_ICONS 31u
+#define KSI_RADAR_ICON_W 32u
+#define KSI_RADAR_ICON_H 33u
+#define KSI_RADAR_SCALE 34u
+#define KSI_RADAR_ALPHA 35u
 /* A quad: four x,y,u,v,RGBA vertices, then flags (test/write/colour/texture/filter), depth, blend. */
 #ifndef KSI_SHADER
 typedef struct KhdaysSequenceImage {

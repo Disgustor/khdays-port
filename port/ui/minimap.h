@@ -17,6 +17,7 @@ void khdays_minimap_frame(unsigned frame);
 void khdays_minimap_emit(void);
 int khdays_minimap_cell(int engine, int bg, unsigned entry);
 void khdays_minimap_commands(KhdaysSequenceImage *out);
+void khdays_minimap_radar_commands(KhdaysSequenceImage *out);
 #ifdef __cplusplus
 }
 #endif

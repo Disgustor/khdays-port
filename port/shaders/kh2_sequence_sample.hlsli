@@ -61,8 +61,11 @@ bool seq_sample(uint program, uint q, float2 at, inout uint depth, out float4 sr
     src=255.0f;
     if ((flags&8u)!=0u) {
         uint atlas=seq_word(program,KSI_ATLAS);
+        bool radar_icon=seq_word(program,KSI_RADAR_MASK)!=0u && q>0u;
+        if(radar_icon) atlas=seq_word(program,KSI_RADAR_ICONS);
         float2 ratio=float2(seq_hd_word(atlas*16u+4u),seq_hd_word(atlas*16u+8u)) /
-                     float2(seq_word(program,KSI_LOGICAL_W),seq_word(program,KSI_LOGICAL_H));
+                     (radar_icon?float2(seq_word(program,KSI_RADAR_ICON_W),seq_word(program,KSI_RADAR_ICON_H)):
+                      float2(seq_word(program,KSI_LOGICAL_W),seq_word(program,KSI_LOGICAL_H)));
         float2 uv0=seq_pair(program,base+2u), uv1=seq_pair(program,base+7u), uv2=seq_pair(program,base+12u);
         src=seq_texture(atlas,(uv0+(uv1-uv0)*s+(uv2-uv0)*t)*ratio,(flags&16u)!=0u);
     }

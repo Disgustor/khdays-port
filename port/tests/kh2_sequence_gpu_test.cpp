@@ -836,6 +836,59 @@ void information_text()
     }
     std::cout << "Information text insertion, scale, clipping and alpha passed at 1x/4x/8x\n";
 }
+void radar_mask()
+{
+    set_image(1, 1, 1, {0xff00ff00u});
+    set_image(2, 1, 1, {0xffffffffu});
+    set_image(3, 64, 16, std::vector<std::uint32_t>(64 * 16, 0));
+    KhdaysSequenceImage p;
+    initialize(p, 192, 192, 1, 1, {0, 0, 2});
+    p.words[KSI_FACE] = ~0u;
+    p.words[KSI_RADAR_MASK] = 4;
+    p.words[KSI_RADAR_ICONS] = 2;
+    p.words[KSI_RADAR_ICON_W] = p.words[KSI_RADAR_ICON_H] = 1;
+    number(p, KSI_RADAR_ALPHA, .75f);
+    std::array<seq::SequenceQuad, 2> quads;
+    for (unsigned q = 0; q < 2; ++q)
+        for (unsigned v = 0; v < 4; ++v) {
+            float start = q ? 40.f : 0.f, side = q ? 16.f : 96.f;
+            quads[q].vertices[v] = {start + (v & 1 ? side : 0), start + (v & 2 ? side : 0), float(v & 1 ? 1 : 0),
+                                    float(v & 2 ? 1 : 0), 0x80808080u};
+        }
+    render::encode_sequence_quads(p, quads);
+    draw(p);
+    unsigned first = read(0, 16)[0];
+    auto output = read(first * 4, 192 * 192 * 4);
+    require(output[48 * 192 + 48] == 0xbf00ff00u);
+    require(output[96 * 192 + 96] == 0xbfffffffu);
+    require((output[4 * 192 + 4] >> 24) == 0);
+    number(p, KSI_RADAR_ALPHA, .5f);
+    set_image(3, 64, 16, std::vector<std::uint32_t>(64 * 16, 0xffffffffu));
+    draw(p);
+    output = read(first * 4, 192 * 192 * 4);
+    require(output[4 * 192 + 4] == 0x8000ff00u);
+    require(output[96 * 192 + 96] == 0x80ffffffu);
+    // A radar near a map boundary must extend its edge colours, without wrapping room artwork.
+    set_image(1, 2, 2, {0xff0000ffu, 0xff00ff00u, 0xffff0000u, 0xff00ffffu});
+    p.words[KSI_LOGICAL_W] = p.words[KSI_LOGICAL_H] = 2;
+    p.words[KSI_COUNT] = 1;
+    for (unsigned v = 0; v < 4; ++v) {
+        quads[0].vertices[v].u = v & 1 ? 3.f : -1.f;
+        quads[0].vertices[v].v = v & 2 ? 3.f : -1.f;
+    }
+    quads[0].linear_filter = false;
+    render::encode_sequence_quads(p, std::span(quads).first(1));
+    khdays_gpu_hd_close();
+    require(khdays_gpu_hd_open(device));
+    draw(p);
+    first = read(0, 16)[0];
+    output = read(first * 4, 192 * 192 * 4);
+    require(output[4 * 192 + 4] == 0x800000ffu);
+    require(output[4 * 192 + 188] == 0x8000ff00u);
+    require(output[188 * 192 + 4] == 0x80ff0000u);
+    require(output[188 * 192 + 188] == 0x8000ffffu);
+    std::cout << "Native radar terrain, independent icon colours, center opacity and textured edge mask passed\n";
+}
 } // namespace
 extern "C" {
 int khdays_textures_replacements(void)
@@ -871,6 +924,7 @@ int main(int argc, char **argv)
         large_atlas();
         multiple_images();
         information_text();
+        radar_mask();
         scene_blending();
         native_marker_depth();
         if (argc == 4 && std::string(argv[1]) == "--information")

@@ -24,13 +24,29 @@ float4 text_over(float4 colour, float2 at) {
     }
     return colour;
 }
+// RadarRect's 80x80 alpha center and mirrored 8-pixel strips/corners in radar.tm2.
+float radar_alpha(float2 p) {
+    bool left=p.x<8.0f, right=p.x>=88.0f, top=p.y<8.0f, bottom=p.y>=88.0f;
+    if(!left && !right && !top && !bottom) return number(KSI_RADAR_ALPHA);
+    float2 uv;
+    if((left||right) && (top||bottom))
+        uv=float2(left?7.5f-p.x*0.875f:0.5f+(p.x-88.0f)*0.875f,
+                  top?15.5f-p.y*0.875f:8.5f+(p.y-88.0f)*0.875f);
+    else if(top||bottom)
+        uv=float2(24.5f+(p.x-8.0f)*7.0f/80.0f,top?0.5f+p.y*0.875f:7.5f-(p.y-88.0f)*0.875f);
+    else
+        uv=float2(left?7.5f-p.x*0.875f:0.5f+(p.x-88.0f)*0.875f,0.5f+(p.y-8.0f)*7.0f/80.0f);
+    uint mask=word(KSI_RADAR_MASK)-1u;
+    float2 size=float2(seq_hd_word(mask*16u+4u),seq_hd_word(mask*16u+8u));
+    return seq_texture(mask,uv*size/float2(64.0f,16.0f),true).a/255.0f*number(KSI_RADAR_ALPHA);
+}
 [numthreads(8,8,1)]
 void cs_main(uint3 id : SV_DispatchThreadID) {
     uint width=word(KSI_WIDTH), height=word(KSI_HEIGHT);
     if (id.x>=width || id.y>=height) return;
     float2 at=(float2)id.xy+0.5f;
     uint depth=0u;
-    float4 out_colour=0.0f;
+    float4 out_colour=word(KSI_RADAR_MASK)!=0u?float4(0,0,0,255):0.0f;
     uint insert=word(KSI_TEXT_INSERT);
     for (uint q=0u; q<=word(KSI_COUNT); ++q) {
         if(insert==q+1u) out_colour=text_over(out_colour,at);
@@ -39,6 +55,7 @@ void cs_main(uint3 id : SV_DispatchThreadID) {
         if (seq_sample(0u,q,at,depth,src,blend)) out_colour=seq_blend(out_colour,src,blend);
     }
     if(insert==0u) out_colour=text_over(out_colour,at);
+    if(word(KSI_RADAR_MASK)!=0u) out_colour.a*=radar_alpha(at/number(KSI_SCALE));
     uint first=hd.Load(word(KSI_OUTPUT)*16u);
     hd.Store((first+id.y*width+id.x)*4u,seq_pack(out_colour));
 }

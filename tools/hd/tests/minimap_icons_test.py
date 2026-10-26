@@ -15,6 +15,27 @@ import minimap_icons as icons  # noqa: E402
 
 
 class MinimapAtlas(unittest.TestCase):
+    def test_remastered_radar_alpha_and_preservation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            file = root / "source/remastered/radar.tm2/-0.dds"
+            file.parent.mkdir(parents=True)
+            picture = Image.new("RGBA", (128, 32), (120, 80, 40, 96))
+            picture.putpixel((0, 0), (0, 0, 0, 0))
+            picture.save(file)
+            output = root / "mod"
+            icons.make_radar(root / "source", output)
+            self.assertEqual((output / "radar.dds").read_bytes(), file.read_bytes())
+            with Image.open(output / "radar.dds") as copied:
+                self.assertEqual(copied.getpixel((0, 0))[3], 0)
+                self.assertEqual(copied.getpixel((1, 1))[3], 96)
+            (output / "radar.dds").write_bytes(b"custom mask")
+            icons.make_radar(root / "source", output)
+            self.assertEqual((output / "radar.dds").read_bytes(), b"custom mask")
+            Image.new("RGBA", (64, 64)).save(file)
+            with self.assertRaises(ValueError):
+                icons.make_radar(root / "source", root / "bad")
+
     def test_preserves_standalone_player_and_character_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -26,10 +47,10 @@ class MinimapAtlas(unittest.TestCase):
                 "characters": {"Axel": {"sprite": "axel.DDS"}},
             }
             (source / "minimap.json").write_text(json.dumps(config))
-            for name in ("minimap.png", "key.png", "axel.DDS"):
+            for name in ("minimap.png", "key.png", "axel.DDS", "radar.dds"):
                 (source / name).write_bytes(name.encode())
             icons.preserve(source, output)
-            for name in ("minimap.json", "minimap.png", "key.png", "axel.DDS"):
+            for name in ("minimap.json", "minimap.png", "key.png", "axel.DDS", "radar.dds"):
                 self.assertEqual((source / name).read_bytes(), (output / name).read_bytes())
             config["players"]["1"]["sprite"] = "../bad.png"
             (source / "minimap.json").write_text(json.dumps(config))

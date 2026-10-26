@@ -1651,6 +1651,31 @@ static void test_minimap_image(void)
                 CHECK(fabsf(last_image_x - 120) < .001f && fabsf(last_image_y - 80) < .001f);
             }
         }
+        p->radar_image.words[KSI_CLEAR] = 1;
+        p->radar_image.words[KSI_RADAR_MASK] = 99;
+        p->radar_image.words[KSI_OUTPUT] = 91;
+        p->radar_image.words[KSI_WIDTH] = p->radar_image.words[KSI_HEIGHT] = 192;
+        put_float(p->radar_image.words, KSI_RADAR_SCALE, .65f);
+        khdays_composition_for(&s, 342, &c);
+        khdays_onescreen_images(p, &s, &c);
+        CHECK(image_shapes(&c) == 1);
+        int found = 0;
+        for (int i = 0; i < c.shape_count; ++i) {
+            const uint32_t *w = c.shapes[i].words;
+            if ((w[KO_FLAGS] & KOF_IMAGE) && w[KO_KEYS] == 91) {
+                float side = 96 * .65f * .766667f * khdays_composition_hud_factor();
+                CHECK(fabsf(word_float(w, KO_DST_X2) - word_float(map.words, KO_DST_X2)) < .001f);
+                CHECK(fabsf(word_float(w, KO_DST_X1) - (word_float(map.words, KO_DST_X2) - side)) < .001f);
+                CHECK(fabsf(word_float(w, KO_DST_Y2) - word_float(w, KO_DST_Y1) - side) < .001f);
+                CHECK(word_float(w, KO_SRC_X) == 0 && word_float(w, KO_SRC_W) == 192);
+                CHECK(!(w[KO_FLAGS] & (KOF_WEIGHT | KOF_SEE_THROUGH)) && word_float(w, KO_FADE) == 0);
+                ++found;
+            }
+            CHECK((w[KO_FLAGS] & KOF_IMAGE) || word_float(w, KO_SRC_X) != 112 || word_float(w, KO_SRC_Y) != 64);
+            CHECK((w[KO_FLAGS] & KOF_IMAGE) || word_float(w, KO_SRC_X) != 186 || word_float(w, KO_SRC_Y) != 156);
+        }
+        CHECK(found == 1);
+        memset(&p->radar_image, 0, sizeof(p->radar_image));
     }
     free(p);
 }

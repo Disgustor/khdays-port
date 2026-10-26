@@ -9,6 +9,14 @@ KhdaysSituationInputs test_context{};
 KhdaysUiElement test_element{};
 std::filesystem::path settings;
 std::vector<std::vector<unsigned>> images;
+bool test_terrain = false, test_hd_map = false;
+unsigned terrain_uploads = 0;
+unsigned hd_map_version = 1;
+std::vector<unsigned char> resident_map(32);
+unsigned map_cell_flip = 0;
+bool resident_source = true;
+std::vector<unsigned> hd_map_pixels(16 * 16, 0xff123456u);
+KhdaysTextureReplacement hd_map{16, 16, hd_map_pixels.data(), KHDAYS_REPLACEMENT_TILES | 2u << 8 | 1u << 16};
 void check(bool c, const char *why)
 {
     if (!c)
@@ -206,6 +214,75 @@ void standalone()
     std::filesystem::remove(folder / "key.DDS");
     std::filesystem::remove(folder);
 }
+void native_map()
+{
+    config.kh2map = true;
+    mask_atlas = 98;
+    test_terrain = true;
+    // DropPendingEdit cleared the upload state and freed its NCGR buffer before drawing.
+    store(0x02100030, 0);
+    store(0x02100028, 0);
+    resident_map.assign(32, 0x11);
+    khdays_minimap_begin();
+    khdays_minimap_player(0, 60 << 12, 40 << 12, 0);
+    khdays_minimap_end();
+    step();
+    check(radar_program.words[KSI_CLEAR] && radar_program.words[KSI_COUNT] == 2, "native map not generated");
+    check(radar_program.words[KSI_WIDTH] == 192 && radar_program.words[KSI_RADAR_MASK] == 99,
+          "native map resolution or mask wrong");
+    auto coordinate = [](unsigned word) {
+        float f;
+        std::memcpy(&f, radar_program.words + word, sizeof(f));
+        return f;
+    };
+    check(coordinate(KSI_HEADER) == 0 && coordinate(KSI_HEADER + 1) == 0 && coordinate(KSI_HEADER + 5) == 96 &&
+              coordinate(KSI_HEADER + 11) == 96 && coordinate(KSI_HEADER + 2) == 12 && coordinate(KSI_HEADER + 3) == -8,
+          "map boundary left a black gap instead of clamping the terrain edge");
+    check(images[terrain_image][0] == 0xff808080u, "native terrain palette was lost");
+    unsigned uploads = terrain_uploads;
+    step();
+    check(terrain_uploads == uploads, "unchanged terrain uploaded every frame");
+    test_hd_map = true;
+    step();
+    check(terrain_scale == 2 && images[terrain_image][0] == 0xff123456u && images[terrain_image][15] == 0xff123456u &&
+              images[terrain_image][16] == 0,
+          "existing HD tile replacement was not retained at its own scale");
+    hd_map.info |= KHDAYS_REPLACEMENT_INDEXED;
+    std::fill(hd_map_pixels.begin(), hd_map_pixels.end(), 2);
+    ++hd_map_version;
+    step();
+    check(images[terrain_image][0] == 0xff00ff00u, "indexed HD map lost the native palette");
+    test_hd_map = false;
+    resident_map.assign(480 * 32, 0x11);
+    std::fill(resident_map.begin() + 24 * 32, resident_map.begin() + 25 * 32, static_cast<unsigned char>(0x22));
+    resident_map[0] = 0x12;
+    step();
+    check(images[terrain_image][8 * 256] == 0xff00ff00u && images[terrain_image][0] == 0xff00ff00u &&
+              images[terrain_image][1] == 0xff808080u,
+          "24-column packed map tiles were incorrectly treated as a 32-column image");
+    map_cell_flip = 0x400;
+    step();
+    check(images[terrain_image][0] == 0xff808080u && images[terrain_image][7] == 0xff00ff00u,
+          "map-cell horizontal flip was not applied");
+    map_cell_flip = 0;
+    resident_source = false;
+    step();
+    check(!radar_program.words[KSI_CLEAR] && owns, "missing resident source did not retain existing icons");
+    resident_source = true;
+    store(0x02100020, 2);
+    step();
+    check(!radar_program.words[KSI_CLEAR], "hidden native map was resurrected");
+    store(0x02100020, 0);
+    config.kh2map = false;
+    step();
+    check(!radar_program.words[KSI_CLEAR] && owns, "disabled KH2 map did not retain existing icon path");
+    config.kh2map = true;
+    mask_atlas = -1;
+    step();
+    check(!radar_program.words[KSI_CLEAR] && owns, "missing radar asset disabled the existing map");
+    test_terrain = test_hd_map = false;
+    config.kh2map = false;
+}
 } // namespace
 extern "C" {
 unsigned char *khdays_window;
@@ -238,6 +315,30 @@ int khdays_ui_image_get(int w, int h)
     return int(images.size() - 1);
 }
 void khdays_ui_image_put(int) {}
+unsigned *khdays_ui_image_begin(int i)
+{
+    return images[i].data();
+}
+void khdays_ui_image_end(int)
+{
+    ++terrain_uploads;
+}
+unsigned khdays_ui_palette_colour(int, unsigned, unsigned index)
+{
+    return (index & 15) == 2 ? 0xff00ff00u : (index & 15) ? 0xff808080u : 0xffffffffu;
+}
+unsigned khdays_tiles2d_bg_tile(int, unsigned)
+{
+    return test_hd_map ? 1u << 20 : 0;
+}
+const KhdaysTextureReplacement *khdays_textures_replacement(int i)
+{
+    return test_hd_map && i == 0 ? &hd_map : nullptr;
+}
+unsigned khdays_textures_version(int)
+{
+    return hd_map_version;
+}
 int khdays_ui_image_replacement(int i)
 {
     return i;
@@ -254,10 +355,28 @@ int khdays_bg_text_layer(int engine, int bg, KhdaysBgLayer *l)
 {
     *l = {};
     l->wt = l->ht = 32;
-    return engine == 1 && bg == 2;
+    l->chars = bg == 3 ? 0x10000 : 0;
+    return engine == 1 && (bg == 2 || (bg == 3 && test_terrain));
 }
-unsigned khdays_bg_map_entry(int, const KhdaysBgLayer *, int x, int y)
+const unsigned char *khdays_bg_memory(int, unsigned address)
 {
+    unsigned offset = address - 0x139e0;
+    return offset < resident_map.size() ? resident_map.data() + offset : nullptr;
+}
+int khdays_bg_source(int, unsigned address, const char **file, unsigned *offset, unsigned *run)
+{
+    unsigned at = address - 0x139e0;
+    if (!resident_source || at >= resident_map.size())
+        return 0;
+    *file = "UI/btl/mapchr.p2@36a00";
+    *offset = 48 + at;
+    *run = unsigned(resident_map.size()) - at;
+    return 1;
+}
+unsigned khdays_bg_map_entry(int, const KhdaysBgLayer *l, int x, int y)
+{
+    if (l->chars == 0x10000)
+        return (x < 24 && y < 20 ? 0xb1cfu + y * 24 + x : 0xb1cfu + 479) | (x == 0 && y == 0 ? map_cell_flip : 0);
     return x >= 13 && x < 28 && y >= 7 && y < 17 ? 0xd139u + (y - 7) * 15 + (x - 13) : 0;
 }
 }
@@ -282,6 +401,7 @@ int main(int argc, char **argv)
         } else {
             tests();
             standalone();
+            native_map();
         }
         std::filesystem::remove(std::filesystem::temp_directory_path() / "khdays-minimap-test.json");
         delete[] khdays_window;

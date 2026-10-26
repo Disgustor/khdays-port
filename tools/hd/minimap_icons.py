@@ -81,6 +81,13 @@ def make(data: Path, output: Path):
     config = dict(
         version=1,
         enabled=True,
+        kh2map=False,
+        map_texture="radar.dds",
+        map_scale=0.65,
+        map_offset_x=0,
+        map_offset_y=0,
+        map_opacity=0.75,
+        map_icon_scale=2,
         texture="minimap.png",
         logical_width=256,
         logical_height=128,
@@ -101,7 +108,7 @@ def make(data: Path, output: Path):
 
 def preserve(settings: Path, output: Path):
     config = json.loads((settings / "minimap.json").read_text(encoding="utf-8"))
-    files = {"minimap.json", config.get("texture", "minimap.png")}
+    files = {"minimap.json", config.get("map_texture", "radar.dds"), config.get("texture", "minimap.png")}
     for group in ("players", "characters"):
         for policy in config.get(group, {}).values():
             name = policy.get("sprite", "")
@@ -117,12 +124,28 @@ def preserve(settings: Path, output: Path):
             shutil.copy2(source, output / name)
 
 
+def make_radar(source: Path, output: Path):
+    """Keep the KH2 radar mask's remastered texels and alpha without conversion."""
+    file = source / "remastered/radar.tm2/-0.dds"
+    with Image.open(file) as picture:
+        if picture.format != "DDS" or "A" not in picture.getbands():
+            raise ValueError(f"expected the radar's remastered DDS with alpha: {file}")
+        w, h = picture.size
+        if w % 64 or h % 16 or w // 64 != h // 16:
+            raise ValueError(f"expected radar texture dimensions proportional to 64x16: {file}")
+        picture.load()
+    output.mkdir(parents=True, exist_ok=True)
+    if not (output / "radar.dds").exists():
+        shutil.copy2(file, output / "radar.dds")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", type=Path)
     p.add_argument("--output", type=Path)
     p.add_argument("--mod", default="HD PACK")
     p.add_argument("--settings", type=Path, help="preserve an existing mod's minimap settings and atlas")
+    p.add_argument("--kh2", type=Path, help="extracted kh2_first archive, including the remastered radar.tm2")
     a = p.parse_args()
     output = a.output or Path(__file__).resolve().parents[2] / "mods" / a.mod / "layouts/minimap"
     if a.settings and (a.settings / "minimap.json").is_file():
@@ -134,6 +157,8 @@ def main():
             p.error("no extracted Days data: give --data")
         data = found[0].parent
     make(data, output)
+    if a.kh2:
+        make_radar(a.kh2, output)
 
 
 if __name__ == "__main__":

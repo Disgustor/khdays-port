@@ -16,6 +16,9 @@ struct Player {
 };
 struct Config {
     bool enabled = false;
+    bool kh2map = false;
+    std::string map_texture = "radar.dds";
+    float map_scale = .65f, map_offset_x = 0, map_offset_y = 0, map_opacity = .75f, map_icon_scale = 2;
     std::string texture = "minimap.png";
     int width = 256, height = 128;
     std::map<std::string, Sprite> sprites;

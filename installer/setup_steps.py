@@ -487,7 +487,7 @@ HD_MENU_TOOLS = [
     ("ddd_camp.py", ["{ddd}", "{mare}", "{settings}"]),
     ("kh2_fonts.py", ["{kh2}"]),
     ("kh2_gauge.py", ["{kh2_gauge}", "--settings", "{gauge_settings}"]),
-    ("minimap_icons.py", ["--settings", "{minimap_settings}"]),
+    ("minimap_icons.py", ["--settings", "{minimap_settings}", "--kh2", "{kh2}"]),
 ]
 HD_MENU_SUPPORT = (
     "port/tools/kh2_center_gauge.py",

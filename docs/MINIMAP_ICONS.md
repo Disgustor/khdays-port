@@ -17,6 +17,42 @@ No extracted sheet is committed. [Example settings](examples/minimap.json) use
 the exporter's default arrangement, with replacement disabled. The exported
 JSON enables the sheet; all enhancements initially remain off.
 
+The HD builder also copies KH2's remastered `radar.tm2/-0.dds` from `kh2_first`
+to `layouts/minimap/radar.dds`, preserving its alpha gradients and resolution.
+An existing custom `radar.dds` is preserved on pack regeneration. For a standalone
+export, add `--kh2 <extracted-kh2_first-root>` to the command above. This asset
+supplies the KH2-style map mask. Enable `kh2map` to use it in single-screen mode.
+
+`kh2map` defaults to false. When enabled, the room's loaded Days tile image is
+rendered from its resident VRAM tiles through KH2's 96x96 radar mask, independently of the bottom
+screen crop. Days' world-to-map conversion and scroll origin are unchanged.
+Existing indexed and RGBA HD tile replacements are sampled through the normal
+tile-replacement lookup. Terrain is cached and uploaded only when its pixels,
+palette, or replacements change; map scrolling, icons and masking run on the GPU.
+Source tracking bounds the resident tile run; the renderer does not retain or
+read the NCGR upload buffer that Days frees after uploading it. The temporary
+upload-state byte can be zero while the map remains resident and visible.
+The resident NSCR supplies tile placement, palette banks, and flips. Its map
+artwork is packed 24 tiles across, with repeated padding cells in the surrounding
+32x32 BG grid; the texture sheet is not interpreted as a 32-column bitmap.
+At the outer map boundaries, terrain sampling clamps to the edge texels across
+the radar window. It does not repeat the room artwork or expose a differently
+coloured backing when the player approaches the edge of the image.
+
+`map_scale` defaults to 0.65 and follows the same HUD sizing convention as the
+other KH2 replacements. `map_offset_x` and `map_offset_y` move the entire map.
+`map_opacity` defaults to 0.75. `map_icon_scale` defaults to 2, giving an 8-pixel
+Days icon KH2's 16-unit display size before the common UI scale; the existing
+16-pixel center emblem keeps its size. The DDS supplies the 8-pixel edge strips
+and mirrored corners around an 80x80 center. Source: `dk::RadarRect::createRect`
+(0x73460), `updateRect` (0x732D0), and `Radar::create`/`draw` (0x739C8/0x73FD8).
+
+Dual-screen rendering is unchanged. Missing masks, unavailable terrain, and
+more than 127 captured icons retain the existing map presentation. With
+`kh2map: false`, no native radar image is composed and the existing map crop
+and backing remain in use. This replaces field/pause radar presentation only;
+it does not replace map or other menu pages.
+
 ## Atlas and sprites
 
 `logical_width` and `logical_height` default to 256 and 128. Rectangles in

@@ -82,6 +82,7 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                              KhdaysComposition *composition)
 {
     size_t maximum = 0, count = 0, out = 0;
+    int radar_owner = -1;
     for (int e = 0; e < 2; ++e)
         maximum += p->elements[e].count;
     if (!maximum)
@@ -190,7 +191,26 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 picture->owner = s;
                 image_shape(&picture->shape, r, lower, dx, dy, dw, dh);
                 uint32_t *dst = picture->shape.words;
-                if (minimap) {
+                const unsigned *radar = p->radar_image.words;
+                const int native_map = minimap && radar[KSI_RADAR_MASK] && radar[KSI_CLEAR];
+                if (native_map) {
+                    uint32_t record[KE_WORDS];
+                    memcpy(record, r, sizeof(record));
+                    record[KE_IMAGE] = radar[KSI_OUTPUT];
+                    record[KE_IW] = radar[KSI_WIDTH];
+                    record[KE_IH] = radar[KSI_HEIGHT];
+                    float ui_scale, offset_x, offset_y, right, top;
+                    memcpy(&ui_scale, radar + KSI_RADAR_SCALE, 4);
+                    memcpy(&offset_x, radar + KSI_ANCHOR_X, 4);
+                    memcpy(&offset_y, radar + KSI_ANCHOR_Y, 4);
+                    memcpy(&right, src + KO_DST_X2, 4);
+                    memcpy(&top, src + KO_DST_Y1, 4);
+                    const float factor = .766667f * khdays_composition_hud_factor();
+                    const float side = 96 * ui_scale * factor;
+                    image_shape(&picture->shape, record, lower, right - side + offset_x * factor,
+                                top + offset_y * factor, side, side);
+                    radar_owner = s;
+                } else if (minimap) {
                     /* Keep the map crop and edge fade, without its white key or floor recolouring. */
                     const float left = x > sx ? x : sx, top = y > sy ? y : sy;
                     const float right = x + w < sx + sw ? x + w : sx + sw;
@@ -244,6 +264,10 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
         KhdaysShape shape = composition->shapes[s];
         float source[4];
         memcpy(source, shape.words + KO_SRC_X, sizeof(source));
+        if (radar_owner >= 0 && (s == radar_owner || (!(shape.words[KO_FLAGS] & (KOF_IMAGE | KOF_3D)) &&
+                                                      (shape.words[KO_FLAGS] & KOF_LOWER) && source[0] == 186 &&
+                                                      source[1] == 156 && source[2] == 2 && source[3] == 12)))
+            continue;
         if ((p->mission_panel_state & 1u) && p->mission_panel_backdrop >= 0 &&
             !(shape.words[KO_FLAGS] & (KOF_3D | KOF_IMAGE)) && (shape.words[KO_FLAGS] & KOF_LOWER) &&
             source[0] == 186 && source[1] == 156 && source[2] == 2 && source[3] == 12) {

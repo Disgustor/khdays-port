@@ -907,6 +907,7 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_obtained_commands(&p->obtained_image);
     khdays_ui_mission_panel_commands(&p->mission_panel_image);
     khdays_minimap_commands(p->minimap_images);
+    khdays_minimap_radar_commands(&p->radar_image);
     p->mission_panel_state = khdays_ui_mission_panel_state();
     p->mission_panel_backdrop = khdays_ui_mission_panel_backdrop();
     p->information_hold_frames = khdays_ui_information_hold_frames();
@@ -1129,6 +1130,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     memset(&p->obtained_image, 0, sizeof(p->obtained_image));
     memset(&p->mission_panel_image, 0, sizeof(p->mission_panel_image));
     memset(p->minimap_images, 0, sizeof(p->minimap_images));
+    memset(&p->radar_image, 0, sizeof(p->radar_image));
     p->mission_panel_state = 0;
     p->mission_panel_backdrop = -1;
     p->information_hold_frames = 0;

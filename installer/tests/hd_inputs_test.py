@@ -37,11 +37,12 @@ class Inputs(unittest.TestCase):
         self.assertIn(f"kh2_first {s.HAND}", entries)
         self.assertIn("kh2_first msg/us/fontinfo.bar", entries)
         self.assertIn("kh2_first msg/us/fontimage.bar", entries)
+        self.assertIn("kh2_first radar.tm2", entries)
         for region in ("us", "sp", "fr", "gr", "it"):
             self.assertIn(f"kh2_fifth field2d/{region}/zz0field.2dd", entries)
 
     def test_minimap_generator_wiring(self):
-        self.assertIn(("minimap_icons.py", ["--settings", "{minimap_settings}"]), s.HD_MENU_TOOLS)
+        self.assertIn(("minimap_icons.py", ["--settings", "{minimap_settings}", "--kh2", "{kh2}"]), s.HD_MENU_TOOLS)
         self.assertIn("minimap_icons.py", s.DATA_TOOLS)
         source = ast.parse((HERE.parent / "build_installer.py").read_text(encoding="utf-8"))
         tools = next(

@@ -986,6 +986,12 @@ static int draw(const KhdaysFramePackage *p, int scale, int raster, const Khdays
             return 0;
         }
     }
+    for (int i = 0; i < 3; ++i)
+        if (!khdays_sequence_gpu_draw(device, cmd, &p->notification_images[i])) {
+            SDL_CancelGPUCommandBuffer(cmd);
+            valid = 0;
+            return 0;
+        }
     if (one && !khdays_sequence_gpu_draw(device, cmd, &p->radar_image)) {
         SDL_CancelGPUCommandBuffer(cmd);
         valid = 0;

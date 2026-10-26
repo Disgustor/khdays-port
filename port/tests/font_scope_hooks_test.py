@@ -150,6 +150,17 @@ class ScopeHooks(unittest.TestCase):
             "src/overlays/scenes/ov002_field/Ov002_BuildPanelLabels.c", prepare.UI_HOOKS
         )  # Enemy-name captions are not command labels.
 
+    def test_notification_layout_observer(self):
+        rel = "src/overlays/scenes/ov002_field/Ov002_BlitTileRegion.c"
+        text = prepare.transform((prepare.DECOMP / rel).read_text(encoding="utf-8"))
+        for before, after in prepare.FILE_HOOKS[rel]:
+            self.assertEqual(text.count(before), 1)
+            text = text.replace(before, after)
+        self.assertIn("khdays_ui_notification_layout(pReq, nFlag)", text)
+        self.assertIn("Ov002_WriteMapRow(pReq->nDest", text)
+        rel = "src/overlays/scenes/ov002_field/Ov002_BuildTextItem.c"
+        self.assertIn(("Ov002_BuildTextItem", "text", "field.breakthrough", "scope"), prepare.UI_HOOKS[rel])
+
     def test_obtained_private_surface(self):
         rel = "src/overlays/scenes/ov002_field/Ov002_PanelDrawSlotCursor.c"
         text = prepare.transform((prepare.DECOMP / rel).read_text(encoding="utf-8"))

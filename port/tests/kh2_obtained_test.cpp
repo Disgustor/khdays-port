@@ -6,6 +6,7 @@
 extern "C" {
 #include "../ui/situation.h"
 #include "../ui/parts.h"
+#include "../ui/bg.h"
 #include "../runtime/menus/camp.h"
 }
 #include <algorithm>
@@ -36,6 +37,18 @@ std::vector<std::vector<unsigned>> images;
 KhdaysSequenceImage program{};
 KhdaysUiElement submitted{}, anchor{};
 std::optional<khdays::assets::kh2::SequenceData> reference_data;
+std::array<unsigned char, 8192> bg_pixels = [] {
+    std::array<unsigned char, 8192> p{};
+    std::fill_n(p.begin() + 32, 32, static_cast<unsigned char>(0x11));
+    std::fill_n(p.begin() + 0x1020, 32, static_cast<unsigned char>(0x22));
+    return p;
+}();
+std::array<std::array<unsigned, 32 * 24>, 2> bg_maps = [] {
+    std::array<std::array<unsigned, 32 * 24>, 2> m{};
+    for (auto &layer : m)
+        layer.fill(1);
+    return m;
+}();
 void expect(bool ok, const char *why)
 {
     if (!ok)
@@ -88,6 +101,20 @@ void test()
     expect(uploads == uploaded + 1, "changed item text was not refreshed");
     khdays_ui_obtained_request(0);
     expect(!khdays_ui_obtained_owns(), "normal selection remained hidden");
+    for (int tick = 0; tick < 3; ++tick) {
+        step(false);
+        expect(khdays_ui_notification_cell(0, 3, 0, 7) && khdays_ui_notification_cell(0, 1, 0, 7),
+               "pickup art/text leaked while the native clear was pending");
+    }
+    std::fill_n(bg_pixels.begin() + 0x1020, 32, static_cast<unsigned char>(0));
+    expect(!khdays_ui_notification_cell(0, 3, 0, 7) && khdays_ui_notification_cell(0, 1, 0, 7),
+           "pickup did not retire artwork and text independently");
+    std::fill_n(bg_pixels.begin() + 32, 32, static_cast<unsigned char>(0));
+    step(false);
+    expect(!khdays_ui_notification_cell(0, 1, 0, 7), "pickup retained cells after their pixel data cleared");
+    std::fill_n(bg_pixels.begin() + 32, 32, static_cast<unsigned char>(0x11));
+    std::fill_n(bg_pixels.begin() + 0x1020, 32, static_cast<unsigned char>(0x22));
+    expect(!khdays_ui_notification_cell(0, 3, 0, 7), "retired pickup mask hid later artwork reusing a tile");
     step(false);
     expect(program.words[KSI_CLEAR], "native disappearance cut off the sequence's own exit");
     context.camp_screen = KHDAYS_CAMP_IN_MENU;
@@ -105,6 +132,70 @@ void test()
     step();
     hd = false;
     expect(!khdays_ui_obtained_enabled() && !khdays_ui_obtained_owns(), "HD-disabled fallback was suppressed");
+}
+void notifications()
+{
+    hd = true;
+    ++caption_epoch;
+    step(false);
+    std::array<short, 14> request{};
+    request[8] = 11;
+    request[1] = 0;
+    request[2] = 7;
+    request[5] = 13;
+    request[6] = 3;
+    std::vector<unsigned> ink(64 * scale * 16 * scale, 0xffffffffu);
+    KhdaysSequenceImage result[3]{};
+    for (int k = 1; k <= 3; ++k) {
+        request[0] = short(k == 1 ? 78 : k == 2 ? 72 : 60);
+        khdays_ui_notification_layout(request.data(), 1);
+        khdays_ui_obtained_begin();
+        KhdaysUiElement box{};
+        expect(khdays_ui_notification_box(k, &box), "notice did not follow native layout");
+        expect(!khdays_ui_notification_cell(1, 3, 0, 7), "notice hid the other screen");
+        if (k != 3)
+            khdays_ui_notification_text(k, &box, ink.data(), 64 * scale, 16 * scale, 1);
+        khdays_ui_obtained_end();
+        khdays_ui_notification_commands(result);
+        expect(result[k - 1].words[KSI_CLEAR] && result[k - 1].words[KSI_COUNT] == 1, "notice did not render on GPU");
+        expect(khdays_ui_notification_cell(0, 3, 12, 9), "notice left native background visible");
+        expect(!khdays_ui_notification_cell(0, 3, 13, 9), "notice hid adjacent artwork");
+        if (k != 3)
+            expect(khdays_ui_notification_cell(0, 1, 12, 9), "notice left native text visible");
+        if (k == 3) {
+            for (int tick = 0; tick < 15; ++tick)
+                step(false);
+            khdays_ui_notification_commands(result);
+            expect(result[2].words[KSI_CLEAR] && khdays_ui_notification_owns(3),
+                   "locked-on loop stopped before native dismissal");
+        }
+        khdays_ui_notification_layout(request.data(), 0);
+        expect(!khdays_ui_notification_owns(k), "dismissed notice kept suppressing native UI");
+        for (int tick = 0; tick < 3; ++tick) {
+            step(false);
+            expect(khdays_ui_notification_cell(0, 3, 12, 9), "closed notice flashed its pending native artwork");
+            if (k != 3)
+                expect(khdays_ui_notification_cell(0, 1, 12, 9), "closed notice flashed pending native text");
+        }
+        for (auto &m : bg_maps)
+            for (int y = 7; y < 10; ++y)
+                for (int x = 0; x < 13; ++x)
+                    m[y * 32 + x] = 0;
+        step(false);
+        expect(!khdays_ui_notification_cell(0, 3, 12, 9) && !khdays_ui_notification_cell(0, 1, 12, 9),
+               "notice mask survived native tilemap clearing");
+        for (auto &m : bg_maps)
+            m.fill(1);
+        expect(!khdays_ui_notification_cell(0, 3, 12, 9), "retired notice hid a later copy of the same art");
+    }
+    step(false);
+    khdays_ui_notification_commands(result);
+    expect(!result[2].words[KSI_CLEAR], "dismissed looping lock caption kept rendering");
+    request[0] = 72;
+    khdays_ui_notification_layout(request.data(), 1);
+    ++caption_epoch;
+    step(false);
+    expect(!khdays_ui_notification_box(2, &submitted), "notice survived scene recreation");
 }
 void reference(const char *filename)
 {
@@ -174,6 +265,21 @@ SequenceAsset load_sequence_asset(const std::filesystem::path &, const std::stri
 }
 } // namespace khdays::render::kh2
 extern "C" {
+int khdays_bg_text_layer(int engine, int bg, KhdaysBgLayer *layer)
+{
+    if (engine || (bg != 1 && bg != 3))
+        return 0;
+    *layer = {bg == 3 ? 0x2800u : 0x2000u, bg == 3 ? 0x1000u : 0u, 32, 32, 0, 0, 0, 0};
+    return 1;
+}
+unsigned khdays_bg_map_entry(int, const KhdaysBgLayer *layer, int x, int y)
+{
+    return bg_maps[layer->chars == 0x1000u][y * 32 + x];
+}
+const unsigned char *khdays_bg_memory(int engine, unsigned address)
+{
+    return !engine && address < bg_pixels.size() ? bg_pixels.data() + address : nullptr;
+}
 unsigned khdays_ui_information_epoch(void)
 {
     return caption_epoch;
@@ -248,7 +354,10 @@ int main(int argc, char **argv)
         missing = argc > 1 && std::string(argv[1]) == "--missing";
         settings = std::filesystem::temp_directory_path() /
                    (std::string("khdays-obtained") + (argc > 1 ? argv[1] : "") + ".json");
-        std::ofstream(settings) << (legacy ? "{}" : R"({"obtained":{"enabled":true}})");
+        std::ofstream(settings)
+            << (legacy
+                    ? "{}"
+                    : R"({"obtained":{"enabled":true},"backpack_full":{"enabled":true,"animation":76},"breakthrough":{"enabled":true,"animation":76},"locked_on":{"enabled":true,"animation":76}})");
         if (argc == 3 && std::string(argv[1]) == "--reference")
             reference(argv[2]);
         else if (missing || legacy) {
@@ -256,8 +365,12 @@ int main(int argc, char **argv)
             step();
             expect(!khdays_ui_obtained_enabled() && !program.words[KSI_CLEAR],
                    "missing/legacy replacement broke fallback");
-        } else
+            for (int k = 1; k <= 3; ++k)
+                expect(!khdays_ui_notification_enabled(k), "new notice enabled without an asset");
+        } else {
             test();
+            notifications();
+        }
         std::filesystem::remove(settings);
         std::cout << "Obtained animation, cached text, parent alpha and native fallback passed\n";
         return 0;

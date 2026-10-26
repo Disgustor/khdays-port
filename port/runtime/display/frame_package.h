@@ -134,6 +134,7 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage reticle_images[5];
     KhdaysSequenceImage information_images[2];
     KhdaysSequenceImage obtained_image;
+    KhdaysSequenceImage notification_images[3];
     KhdaysSequenceImage mission_panel_image;
     KhdaysSequenceImage minimap_images[4];
     KhdaysSequenceImage radar_image;

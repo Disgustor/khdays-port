@@ -156,6 +156,11 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
             }
             const uint32_t lower = e != p->upper ? KOF_LOWER : 0;
             const unsigned *pickup = p->obtained_image.words;
+            for (int notice = 0; notice < 3; ++notice) {
+                const unsigned *candidate = p->notification_images[notice].words;
+                if (candidate[KSI_ANCHORED] && candidate[KSI_OUTPUT] == r[KE_IMAGE])
+                    pickup = candidate;
+            }
             const int obtained = pickup[KSI_ANCHORED] && pickup[KSI_OUTPUT] == r[KE_IMAGE];
             if (obtained) {
                 memcpy(&anchor_x, pickup + KSI_ANCHOR_X, 4);

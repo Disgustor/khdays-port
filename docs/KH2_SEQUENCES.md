@@ -936,3 +936,46 @@ information priority, and restoration of the original crop. In-game validation
 should cover a normal mission, a day list, challenge/Mission Mode, simultaneous
 chest/unity/rank counters, pause, and entering/exiting a map, with the mod both
 on and off.
+
+## Optional field notices
+
+`backpack_full`, `breakthrough`, and `locked_on` in `gauge.json` use the same
+renderer and settings as `obtained`: `archive`, `texture`, `entry`, `animation`,
+`scale` (0.65), `offset_x/y`, `source_origin_x/y`, `frames_per_tick`,
+`text_offset_x/y`, and `text_scale`. All three default to `enabled: false` and
+`animation: -1`; the importer adds these settings without enabling them or
+inventing artwork. Select a clip in your own mod archive before enabling one.
+Text-bearing clips need an active/dummy track. Its position, color alpha and
+clip parameters attach Days' text, including font replacements, to the artwork.
+`locked_on` replaces both the baked label and its animated icon, so that clip
+should include both. It does not require a text anchor.
+
+`loop` defaults to false for the backpack and breakthrough announcements and
+true for the locked-on caption. A looping clip returns to its authored restart
+frame and ends when Days dismisses the native notice. Non-looping clips use the
+same full one-shot lifetime as obtained. Pause freezes playback, and scene,
+menu, movie and tutorial transitions cancel it. Missing files or invalid clips
+retain the original drawing. Single-screen placement uses the same HUD scale
+as obtained; the native anchors also work in dual-screen mode.
+
+The adapter observes `Ov002_BlitTileRegion` without changing its writes. The
+pinned Days `UI/btl/main.p2` entry 0 identifies the backpack panel as tags 78/93,
+the breakthrough rectangle as 72, and the alternating locked-on frames as
+60/61. The complete live rectangle is suppressed on BG3, with the announcement
+text on BG1 also suppressed. Other layers and neighboring cells remain intact.
+`Ov002_BuildTextItem` draws localized `UI/btl/<language>/text.s.z` record 8,
+"New breakthrough!"; its glyph operations are retained separately from its
+background. Backpack item names use the existing private pickup capture and
+its shifted cache placement. No inventory, mission, or targeting logic changes.
+
+The synthetic obtained tests also exercise these notices, their native layout
+bounds, dismissal, scene reset, text attachment, and missing/disabled fallback.
+
+Notification suppression outlives the native close request: the tilemap clear is
+uploaded later. All four replacements retain the exact visible native map
+entries and character bytes independently on BG1/BG3 until those cells change.
+This hides the last resident DS picture and glyphs without delaying the KH2
+animation or masking later content that reuses the same area. Scene/context
+resets and disabled or invalid replacements release this coverage. Synthetic
+tests delay clears across multiple frames, clear art/text independently, and
+check both map-entry changes and in-place character clearing.

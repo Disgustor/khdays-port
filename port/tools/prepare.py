@@ -2066,6 +2066,7 @@ for _function, _scope in (
     ("DrawMessageCaption", "field.hud.status"),
     ("ShowNoticeText", "field.hud.status"),
     ("DrawPanelRowText", "field.command"),
+    ("BuildTextItem", "field.breakthrough"),
 ):
     _name = f"Ov002_{_function}"
     UI_HOOKS[f"src/overlays/scenes/ov002_field/{_name}.c"] = [(_name, "text", _scope, "scope")]
@@ -2580,6 +2581,18 @@ FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_PanelDrawSlotCursor.c"] = [
         "        FreeFieldAt8((char *)narrow);\n"
         "        khdays_ui_text_scope_pop();\n"
         "    }\n}",
+    ),
+]
+
+# Observe layout placement without changing the native tilemap or gameplay callbacks.
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_BlitTileRegion.c"] = [
+    (
+        "void Ov002_BlitTileRegion(",
+        "extern void khdays_ui_notification_layout(const void *request, int shown);\nvoid Ov002_BlitTileRegion(",
+    ),
+    (
+        "    Ov002_GetItemFlag(pReq->nDest);",
+        "    khdays_ui_notification_layout(pReq, nFlag);\n    Ov002_GetItemFlag(pReq->nDest);",
     ),
 ]
 

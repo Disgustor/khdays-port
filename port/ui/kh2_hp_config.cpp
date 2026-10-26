@@ -128,7 +128,8 @@ class Reader {
                     const bool allowed =
                         (prefix.empty() &&
                          (key == "party" || key == "enemy" || key == "reticles" || key == "information" ||
-                          key == "obtained" || key == "mission_panel" || label)) ||
+                          key == "obtained" || key == "backpack_full" || key == "breakthrough" || key == "locked_on" ||
+                          key == "mission_panel" || label)) ||
                         (prefix == "reticles." && (key == "soft_lock" || key == "hard_lock" || key == "interact" ||
                                                    key == "chain" || key == "error")) ||
                         (prefix == "party." && (key == "slots" || label)) ||
@@ -286,6 +287,9 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
     extract("reticles.");
     extract("information.");
     extract("obtained.");
+    extract("backpack_full.");
+    extract("breakthrough.");
+    extract("locked_on.");
     extract("mission_panel.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
@@ -479,15 +483,20 @@ InformationConfig load_information_config(const std::filesystem::path &path)
         throw std::runtime_error("gauge JSON: unknown information key " + o.begin()->first);
     return c;
 }
-ObtainedConfig load_obtained_config(const std::filesystem::path &path)
+ObtainedConfig load_notification_config(const std::filesystem::path &path, const std::string &name)
 {
+    if (name != "obtained" && name != "backpack_full" && name != "breakthrough" && name != "locked_on")
+        throw std::runtime_error("unknown notification section");
     const auto root = load_hp_gauge_config(path);
     Object o;
     for (const auto &[key, value] : read_file(path))
-        if (key.starts_with("obtained."))
-            o.emplace(key.substr(9), value);
+        if (key.starts_with(name + "."))
+            o.emplace(key.substr(name.size() + 1), value);
     ObtainedConfig c;
-    c.enabled = !o.empty();
+    c.enabled = name == "obtained" && !o.empty();
+    if (name != "obtained")
+        c.animation = -1;
+    c.loop = name == "locked_on";
     c.archive = root.archive;
     c.texture = root.texture;
     c.entry = root.entry;
@@ -496,9 +505,10 @@ ObtainedConfig load_obtained_config(const std::filesystem::path &path)
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
         if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: obtained resources must be local file names");
+            throw std::runtime_error("gauge JSON: " + name + " resources must be local file names");
     }
-    c.animation = int(number(o, "animation", c.animation, 0, 65535, true));
+    c.animation = int(number(o, "animation", c.animation, -1, 65535, true));
+    c.loop = get(o, "loop", c.loop);
     for (auto [key, field] : {std::pair{"offset_x", &c.offset_x},
                               {"offset_y", &c.offset_y},
                               {"source_origin_x", &c.source_origin_x},
@@ -510,8 +520,12 @@ ObtainedConfig load_obtained_config(const std::filesystem::path &path)
     c.text_scale = float(number(o, "text_scale", c.text_scale, 0.1, 4));
     c.frames_per_tick = float(number(o, "frames_per_tick", c.frames_per_tick, 0.01, 8));
     if (!o.empty())
-        throw std::runtime_error("gauge JSON: unknown obtained key " + o.begin()->first);
+        throw std::runtime_error("gauge JSON: unknown " + name + " key " + o.begin()->first);
     return c;
+}
+ObtainedConfig load_obtained_config(const std::filesystem::path &path)
+{
+    return load_notification_config(path, "obtained");
 }
 MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
 {

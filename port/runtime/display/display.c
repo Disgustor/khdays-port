@@ -905,6 +905,7 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_kh2_enemy_commands(&p->enemy_image);
     khdays_ui_information_commands(p->information_images);
     khdays_ui_obtained_commands(&p->obtained_image);
+    khdays_ui_notification_commands(p->notification_images);
     khdays_ui_mission_panel_commands(&p->mission_panel_image);
     khdays_minimap_commands(p->minimap_images);
     khdays_minimap_radar_commands(&p->radar_image);
@@ -1128,6 +1129,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     p->sequence_image.words[KSI_COUNT] = 0;
     memset(p->information_images, 0, sizeof(p->information_images));
     memset(&p->obtained_image, 0, sizeof(p->obtained_image));
+    memset(p->notification_images, 0, sizeof(p->notification_images));
     memset(&p->mission_panel_image, 0, sizeof(p->mission_panel_image));
     memset(p->minimap_images, 0, sizeof(p->minimap_images));
     memset(&p->radar_image, 0, sizeof(p->radar_image));

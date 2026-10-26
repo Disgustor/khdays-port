@@ -49,11 +49,13 @@ struct ObtainedConfig final {
     bool enabled = false;
     std::string archive = "zz0field.2dd", texture = "US_zz0field_2dd1.png", entry = "gaug";
     int animation = 76;
+    bool loop = false;
     float offset_x = 0, offset_y = 0, scale = 0.65f, frames_per_tick = 1;
     float source_origin_x = 0, source_origin_y = 0;
     float text_offset_x = 0, text_offset_y = 0, text_scale = 1;
 };
 ObtainedConfig load_obtained_config(const std::filesystem::path &path);
+ObtainedConfig load_notification_config(const std::filesystem::path &path, const std::string &name);
 struct MissionPanelConfig final {
     bool enabled = false;
     std::string archive = "mission.2dd", texture = "mission.png", entry = "miss";

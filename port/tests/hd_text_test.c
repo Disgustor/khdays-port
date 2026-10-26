@@ -13,7 +13,7 @@ int khdays_ui_mission_panel_cell(int engine, int bg, int x, int y)
     (void)x;
     return mission_panel_owned && engine == 1 && (bg == 0 || bg == 2) && y >= 19 && y < 24;
 }
-static int obtained_sequence_enabled, obtained_sequence_owned, obtained_sequence_calls;
+static int obtained_sequence_enabled, obtained_sequence_owned, obtained_sequence_calls, retiring_notice;
 static unsigned obtained_sequence_ink;
 int khdays_ui_obtained_enabled(void)
 {
@@ -39,6 +39,44 @@ int khdays_ui_obtained_text(const KhdaysUiElement *e, const unsigned *rgba, int 
     obtained_sequence_ink = 0;
     for (int i = 0; i < w * h; ++i)
         obtained_sequence_ink |= rgba[i];
+    return 1;
+}
+static int notification_enabled[4], notification_owned[4], notification_calls[4];
+int khdays_ui_notification_enabled(int k)
+{
+    return notification_enabled[k];
+}
+void khdays_ui_notification_request(int k, int present)
+{
+    if (!present)
+        notification_owned[k] = 0;
+}
+int khdays_ui_notification_owns(int k)
+{
+    return notification_owned[k];
+}
+int khdays_ui_notification_box(int k, KhdaysUiElement *out)
+{
+    if (!notification_enabled[k])
+        return 0;
+    *out = (KhdaysUiElement){"hud.notification", 0, 3, 0, 64, 96, 16, -1};
+    return 1;
+}
+int khdays_ui_notification_cell(int engine, int bg, int x, int y)
+{
+    return !engine && (bg == 1 || bg == 3) && (notification_owned[1] || obtained_sequence_owned || retiring_notice) &&
+           x < 13 && y >= 7 && y < 10;
+}
+int khdays_ui_notification_text(int k, const KhdaysUiElement *e, const unsigned *rgba, int w, int h, unsigned v)
+{
+    (void)e;
+    (void)v;
+    unsigned ink = 0;
+    for (int i = 0; i < w * h; ++i)
+        ink |= rgba[i];
+    if (ink)
+        ++notification_calls[k];
+    notification_owned[k] = 1;
     return 1;
 }
 unsigned khdays_ui_information_epoch(void)
@@ -1112,6 +1150,16 @@ static void obtained_popup(void)
     CHECK(suppressed[7 * 32] && suppressed[9 * 32 + 12] && !suppressed[9 * 32 + 13] && !suppressed[10 * 32 + 12]);
     for (int bg = 0; bg < 4; ++bg)
         CHECK(suppressed_layers[bg][7 * 32 + 12] == (bg == 1 || bg == 3));
+    obtained_sequence_owned = 0;
+    retiring_notice = 1;
+    const int ended_count = submission_count;
+    emit_obtained();
+    CHECK(submission_count == ended_count); /* Never revive the old private text plane after a sequence. */
+    KhdaysBgLayer ending_layer;
+    CHECK(khdays_bg_text_layer(0, 1, &ending_layer));
+    CHECK(obtained_cell(c, &ending_layer, 12, 7));
+    retiring_notice = 0;
+    obtained_sequence_owned = 1;
     KhdaysBgLayer pickup_layer;
     CHECK(khdays_bg_text_layer(0, 1, &pickup_layer));
     CHECK(obtained_cell(c, &pickup_layer, 12, 7) && !obtained_cell(c, &pickup_layer, 13, 7));
@@ -1127,6 +1175,40 @@ static void obtained_popup(void)
     memset(suppressed_layers, 0, sizeof(suppressed_layers));
     emit();
     CHECK(!suppressed_layers[3][7 * 32 + 12]);
+    /* Backpack announcements alias the same item cache one tile farther right. */
+    notification_enabled[1] = 1;
+    CHECK(khdays_ui_text_obtained_wants(0, 0));
+    cc = (DsCanvas *)(ram + 8200);
+    *cc = *(const DsCanvas *)(ram + 16);
+    cc->char_base = 9000;
+    c = canvas_of(cc, "backpack name");
+    khdays_ui_text_scope_push("field.obtained");
+    draw(0);
+    khdays_ui_text_scope_pop();
+    khdays_ui_text_obtained_capture(surface);
+    for (int row = 0; row < 2; ++row)
+        for (int col = 0; col < 8; ++col)
+            map_cells[(row + 8) * 32 + col + 2] = (uint16_t)(0xf250u + row * 8 + col);
+    emit();
+    CHECK(notification_calls[1] && notification_owned[1]);
+    CHECK(suppressed_layers[3][7 * 32 + 12]);
+    notification_enabled[1] = notification_owned[1] = 0;
+    const int fallback_count = submission_count;
+    emit_obtained();
+    CHECK(submission_count == fallback_count); /* Keep the native backpack text if its replacement fails. */
+    /* The recon line keeps native glyphs even without an HD font mapping. */
+    notification_enabled[2] = 1;
+    c = canvas_of(cc, "breakthrough line");
+    khdays_ui_text_scope_push("field.breakthrough");
+    draw(0);
+    khdays_ui_text_scope_pop();
+    CHECK(c->notification == 2 && c->op_count && c->ops[0].native_glyph);
+    memcpy(vram + address, ram + 9000, c->bytes);
+    chars_loaded(0, 1, ram + 9000, address, c->bytes);
+    CHECK(c->display_notification == 2);
+    prepare_breakthrough(2);
+    CHECK(notification_calls[2]);
+    notification_enabled[2] = notification_owned[2] = 0;
     available_glyphs = 1;
     obtained_reset();
     test_mappings = 1;

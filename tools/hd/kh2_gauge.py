@@ -68,7 +68,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         converted, party_clips = add_party_gauges(converted)
         config = deepcopy(defaults)
         config.update(archive="zz0field.2dd", texture=texture, source_origin_x=0, source_origin_y=0)
-        for name in ("player_icon", "limit_text", "enemy", "obtained"):
+        for name in ("player_icon", "limit_text", "enemy", "obtained", "backpack_full", "breakthrough", "locked_on"):
             config[name].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config["reticles"].update(archive="zz0field.2dd", texture=reticle_texture, entry="fiel")
         config["information"].update(archive="zz0field.2dd", texture=texture, entry="gaug")
@@ -78,7 +78,16 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         previous = settings / language / "gauge.json" if settings else None
         resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}
         # Earlier converters accidentally copied these root-only sections into party settings.
-        party_excluded = resources | {"enemy", "reticles", "information", "obtained", "mission_panel"}
+        party_excluded = resources | {
+            "enemy",
+            "reticles",
+            "information",
+            "obtained",
+            "backpack_full",
+            "breakthrough",
+            "locked_on",
+            "mission_panel",
+        }
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))
             if not isinstance(custom, dict) or set(custom) - set(defaults):

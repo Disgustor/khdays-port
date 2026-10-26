@@ -960,41 +960,46 @@ static void test_obtained_image(void)
     put_float(record, KE_H, 70);
     p->elements[0].records = record;
     p->elements[0].count = 1;
-    p->obtained_image.words[KSI_OUTPUT] = 77;
-    p->obtained_image.words[KSI_ANCHORED] = 1;
-    put_float(p->obtained_image.words, KSI_ANCHOR_X, 0);
-    put_float(p->obtained_image.words, KSI_ANCHOR_Y, 56);
     mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
     khdays_composition_load();
-    for (int size = 1; size <= 8; size *= 2) {
-        khdays_composition_set_hud_size(size);
-        KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
-        KhdaysComposition comp;
-        khdays_composition_for(&s, 342, &comp);
-        float root_x = 0, root_y = 0;
-        int found = 0;
-        for (int i = 0; i < comp.shape_count; ++i) {
-            const uint32_t *w = comp.shapes[i].words;
-            if (w[KO_FLAGS] & (KOF_LOWER | KOF_3D | KOF_IMAGE))
-                continue;
-            const float sx = word_float(w, KO_SRC_X), sy = word_float(w, KO_SRC_Y);
-            if (sx <= 0 && sx + word_float(w, KO_SRC_W) > 0 && sy <= 56 && sy + word_float(w, KO_SRC_H) > 56) {
-                root_x = word_float(w, KO_DST_X1) - sx * word_float(w, KO_SCALE_X);
-                root_y = word_float(w, KO_DST_Y1) + (56 - sy) * word_float(w, KO_SCALE_Y);
-                found = 1;
-                break;
+    for (int notice = 0; notice < 4; ++notice) {
+        memset(&p->obtained_image, 0, sizeof(p->obtained_image));
+        memset(p->notification_images, 0, sizeof(p->notification_images));
+        unsigned *words = notice ? p->notification_images[notice - 1].words : p->obtained_image.words;
+        words[KSI_OUTPUT] = 77;
+        words[KSI_ANCHORED] = 1;
+        put_float(words, KSI_ANCHOR_X, 0);
+        put_float(words, KSI_ANCHOR_Y, 56);
+        for (int size = 1; size <= 8; size *= 2) {
+            khdays_composition_set_hud_size(size);
+            KhdaysSituation s = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+            KhdaysComposition comp;
+            khdays_composition_for(&s, 342, &comp);
+            float root_x = 0, root_y = 0;
+            int found = 0;
+            for (int i = 0; i < comp.shape_count; ++i) {
+                const uint32_t *w = comp.shapes[i].words;
+                if (w[KO_FLAGS] & (KOF_LOWER | KOF_3D | KOF_IMAGE))
+                    continue;
+                const float sx = word_float(w, KO_SRC_X), sy = word_float(w, KO_SRC_Y);
+                if (sx <= 0 && sx + word_float(w, KO_SRC_W) > 0 && sy <= 56 && sy + word_float(w, KO_SRC_H) > 56) {
+                    root_x = word_float(w, KO_DST_X1) - sx * word_float(w, KO_SCALE_X);
+                    root_y = word_float(w, KO_DST_Y1) + (56 - sy) * word_float(w, KO_SCALE_Y);
+                    found = 1;
+                    break;
+                }
             }
-        }
-        CHECK(found);
-        const float scale = .766667f * khdays_composition_hud_factor();
-        khdays_onescreen_images(p, &s, &comp);
-        CHECK(image_shapes(&comp) == 1);
-        for (int i = 0; i < comp.shape_count; ++i) {
-            const uint32_t *w = comp.shapes[i].words;
-            if ((w[KO_FLAGS] & KOF_IMAGE) && w[KO_KEYS] == 77) {
-                CHECK(fabsf(word_float(w, KO_DST_X1) - (root_x - 2 * scale)) < .001f);
-                CHECK(fabsf(word_float(w, KO_DST_Y1) - (root_y - 2 * scale)) < .001f);
-                CHECK(fabsf(word_float(w, KO_DST_X2) - word_float(w, KO_DST_X1) - 178 * scale) < .001f);
+            CHECK(found);
+            const float scale = .766667f * khdays_composition_hud_factor();
+            khdays_onescreen_images(p, &s, &comp);
+            CHECK(image_shapes(&comp) == 1);
+            for (int i = 0; i < comp.shape_count; ++i) {
+                const uint32_t *w = comp.shapes[i].words;
+                if ((w[KO_FLAGS] & KOF_IMAGE) && w[KO_KEYS] == 77) {
+                    CHECK(fabsf(word_float(w, KO_DST_X1) - (root_x - 2 * scale)) < .001f);
+                    CHECK(fabsf(word_float(w, KO_DST_Y1) - (root_y - 2 * scale)) < .001f);
+                    CHECK(fabsf(word_float(w, KO_DST_X2) - word_float(w, KO_DST_X1) - 178 * scale) < .001f);
+                }
             }
         }
     }

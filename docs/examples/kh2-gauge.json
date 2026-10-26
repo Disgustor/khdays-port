@@ -245,7 +245,8 @@
     "frames_per_tick": 1,
     "text_offset_x": 0,
     "text_offset_y": 0,
-    "text_scale": 1
+    "text_scale": 1,
+    "loop": false
   },
   "enemy": {
     "enabled": true,
@@ -322,5 +323,56 @@
     "minimum_marker_y": 50.0,
     "counter_text_offset_y": 0,
     "counters_scale": 1
+  },
+  "backpack_full": {
+    "enabled": false,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "animation": -1,
+    "scale": 0.65,
+    "offset_x": 0,
+    "offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "text_offset_x": 0,
+    "text_offset_y": 0,
+    "text_scale": 1,
+    "loop": false
+  },
+  "breakthrough": {
+    "enabled": false,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "animation": -1,
+    "scale": 0.65,
+    "offset_x": 0,
+    "offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "text_offset_x": 0,
+    "text_offset_y": 0,
+    "text_scale": 1,
+    "loop": false
+  },
+  "locked_on": {
+    "enabled": false,
+    "archive": "zz0field.2dd",
+    "texture": "US_zz0field_2dd1.png",
+    "entry": "gaug",
+    "animation": -1,
+    "scale": 0.65,
+    "offset_x": 0,
+    "offset_y": 0,
+    "source_origin_x": 0,
+    "source_origin_y": 0,
+    "frames_per_tick": 1,
+    "text_offset_x": 0,
+    "text_offset_y": 0,
+    "text_scale": 1,
+    "loop": true
   }
 }

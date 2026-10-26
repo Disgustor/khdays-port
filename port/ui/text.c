@@ -133,6 +133,7 @@ typedef struct Canvas {
     MappedImage *extra;
     uint32_t button_signature; /* khdays_button_icons_signature its button icons were drawn with */
     int information, display_information;
+    int notification, display_notification;
     unsigned information_epoch, display_information_epoch;
     uint32_t *information_pixels;
     size_t information_room;
@@ -142,7 +143,7 @@ typedef struct Canvas {
 
 static struct {
     Canvas canvas;
-    int active, slot, ready, bound, source_valid;
+    int active, slot, ready, bound, source_valid, notification, sequence;
     unsigned key;
     uint32_t address;
     KhdaysRef owner, owner_buffer;
@@ -354,18 +355,23 @@ static void obtained_written(int engine, uint32_t address, uint32_t bytes)
     }
 }
 
+static int pickup_enabled(void)
+{
+    return obtained.notification ? khdays_ui_notification_enabled(1) : khdays_ui_obtained_enabled();
+}
+static int pickup_owns(void)
+{
+    return obtained.notification ? khdays_ui_notification_owns(1) : khdays_ui_obtained_owns();
+}
 static int obtained_cell(const Canvas *c, const KhdaysBgLayer *l, int x, int y)
 {
-    if (khdays_ui_mission_panel_cell(c->engine, c->bg, x, y))
+    if (khdays_ui_mission_panel_cell(c->engine, c->bg, x, y) ||
+        (c != &obtained.canvas &&
+         khdays_ui_notification_cell(c->engine, c->bg, (x % l->wt + l->wt) % l->wt, (y % l->ht + l->ht) % l->ht)))
         return 1;
-    if (c != &obtained.canvas && c->engine == 0 && (c->bg == 1 || c->bg == 3) && khdays_ui_obtained_owns()) {
-        const int cx = (x % l->wt + l->wt) % l->wt, cy = (y % l->ht + l->ht) % l->ht;
-        if (cx < 13 && cy >= 7 && cy < 10)
-            return 1;
-    }
-    return obtained.ready && c != &obtained.canvas && c->engine == 0 && c->bg == 1 &&
-           (x % l->wt + l->wt) % l->wt >= 1 && (x % l->wt + l->wt) % l->wt < 9 && (y % l->ht + l->ht) % l->ht >= 8 &&
-           (y % l->ht + l->ht) % l->ht < 10;
+    return !obtained.notification && !obtained.sequence && obtained.ready && c != &obtained.canvas && c->engine == 0 &&
+           c->bg == 1 && (x % l->wt + l->wt) % l->wt >= 1 && (x % l->wt + l->wt) % l->wt < 9 &&
+           (y % l->ht + l->ht) % l->ht >= 8 && (y % l->ht + l->ht) % l->ht < 10;
 }
 
 /* A canvas can outlive its source buffer: the game often uploads its characters
@@ -495,14 +501,15 @@ void khdays_ui_text_scope_pop(void)
         --operation_depth;
 }
 
-static int obtained_wants(unsigned int slot, int announcement, unsigned key)
+static int obtained_wants(unsigned int slot, int announcement, unsigned key, int notification)
 {
-    const int sequence = khdays_ui_obtained_enabled();
+    const int sequence = notification ? khdays_ui_notification_enabled(1) : khdays_ui_obtained_enabled();
     if (!announcement || slot >= 24 || (!hd_enabled() && !sequence)) {
         obtained_reset();
         return 0;
     }
-    if (obtained.active && obtained.slot == (int)slot && obtained.key == key && obtained.canvas.seen)
+    if (obtained.active && obtained.slot == (int)slot && obtained.key == key && obtained.notification == notification &&
+        obtained.sequence == sequence && obtained.canvas.seen)
         return 0;
     obtained_reset();
     double command_offset, popup_offset;
@@ -526,6 +533,8 @@ static int obtained_wants(unsigned int slot, int announcement, unsigned key)
     if (!sequence && (!different || !replacement))
         return 0;
     obtained.active = 1;
+    obtained.notification = notification;
+    obtained.sequence = sequence;
     obtained.slot = (int)slot;
     obtained.key = key;
     return 1;
@@ -548,9 +557,11 @@ static int obtained_item_key(unsigned slot, unsigned *key)
 int khdays_ui_text_obtained_wants(unsigned int slot, int announcement)
 {
     unsigned key = 0;
-    const int valid = announcement && obtained_item_key(slot, &key);
-    khdays_ui_obtained_request(valid);
-    return obtained_wants(slot, valid, key);
+    const int valid = obtained_item_key(slot, &key);
+    const int backpack = !announcement && khdays_ui_notification_enabled(1);
+    khdays_ui_obtained_request(valid && announcement);
+    khdays_ui_notification_request(1, valid && backpack);
+    return obtained_wants(slot, valid && (announcement || backpack), key, backpack);
 }
 
 void khdays_ui_text_obtained_capture(const void *surface)
@@ -1061,14 +1072,17 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
     c->before_glyph = 0;
     if (operation_depth && !operation_overflow)
         c->information = strcmp(operation_scopes[operation_depth - 1], "field.hud.information") == 0;
+    if (operation_depth && !operation_overflow)
+        c->notification = strcmp(operation_scopes[operation_depth - 1], "field.breakthrough") == 0 ? 2 : 0;
     if (c->information)
         c->information_epoch = khdays_ui_information_epoch();
     const int pickup = operation_depth && !operation_overflow &&
                        strcmp(operation_scopes[operation_depth - 1], "field.obtained") == 0 &&
-                       khdays_ui_obtained_enabled();
-    if ((c->information || pickup) && !path)
+                       (khdays_ui_obtained_enabled() || khdays_ui_notification_enabled(1));
+    const int notice = c->notification && khdays_ui_notification_enabled(c->notification);
+    if ((c->information || pickup || notice) && !path)
         path = "";
-    if ((!hd_enabled() && !c->information && !pickup) || !path || !font || !glyph || c->ops_disabled) {
+    if ((!hd_enabled() && !c->information && !pickup && !notice) || !path || !font || !glyph || c->ops_disabled) {
         fallback_glyph(c, font, glyph, x, y);
         return;
     }
@@ -1101,7 +1115,7 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
        it): the player's input is drawn in its place, the glyph itself when there is no icon */
     int piece = 0;
     const int button = !native || small ? glyph_button(font, index, &piece) : KHDAYS_BUTTON_NONE;
-    if (native && !button && ((!fitted && !c->information && !pickup) || !small)) {
+    if (native && !button && ((!fitted && !c->information && !pickup && !notice) || !small)) {
         fallback_glyph(c, font, glyph, x, y);
         return;
     }
@@ -1430,6 +1444,7 @@ void khdays_ui_text_memory_copy(const void *src_host, void *dst_host, unsigned i
         if (to >= 0 && !canvases[to].scrolling) {
             Canvas *target = &canvases[to];
             target->information = 0;
+            target->notification = 0;
             target->op_count = target->ops_disabled = 0;
             memcpy(target->source, dst_host, size);
             memcpy(target->base, dst_host, size);
@@ -1458,6 +1473,7 @@ void khdays_ui_text_memory_copy(const void *src_host, void *dst_host, unsigned i
     }
     Canvas *target = &canvases[to];
     target->information = source->information;
+    target->notification = source->notification;
     target->information_epoch = source->information_epoch;
     if (target->scrolling || target->area_w != source->area_w || target->area_h != source->area_h ||
         target->param != source->param || target->bpp != source->bpp) {
@@ -1697,6 +1713,7 @@ static void publish_rect(Canvas *c, int x, int y, int w, int h)
 static void publish_range(Canvas *c, uint32_t at, uint32_t size)
 {
     c->display_information = c->information;
+    c->display_notification = c->notification;
     c->display_information_epoch = c->information_epoch;
     const uint32_t end = size < c->bytes - at ? at + size : c->bytes;
     const uint32_t tile_bytes = 8u * c->bpp;
@@ -2863,8 +2880,8 @@ static void prepare_obtained(int scale)
     obtained.ready = 0;
     Canvas *c = &obtained.canvas;
     KhdaysBgLayer l;
-    if (!obtained.active || !c->seen || (!hd_enabled() && !khdays_ui_obtained_enabled()) ||
-        !khdays_bg_text_layer(0, 1, &l) || l.colors256)
+    if (!obtained.active || !c->seen || (!hd_enabled() && !pickup_enabled()) || !khdays_bg_text_layer(0, 1, &l) ||
+        l.colors256)
         return;
     unsigned key;
     if (!obtained_item_key((unsigned)obtained.slot, &key) || key != obtained.key)
@@ -2898,9 +2915,9 @@ static void prepare_obtained(int scale)
             const uint32_t offset = (uint32_t)(row * 8 + col);
             const uint32_t k = (address - owner->vram) / 32u + offset;
             const uint32_t tile = (k / (uint32_t)owner->param) * (uint32_t)owner->area_w + k % (uint32_t)owner->param;
-            const uint32_t entry = khdays_bg_map_entry(0, &l, col + 1, row + 8);
+            const uint32_t entry = khdays_bg_map_entry(0, &l, col + (obtained.notification ? 2 : 1), row + 8);
             if ((entry & 0x3ffu) != first + offset || tile >= (uint32_t)(owner->area_w * owner->area_h) ||
-                (!khdays_ui_obtained_enabled() && owner->owned[tile] != UINT64_MAX) ||
+                (!pickup_enabled() && owner->owned[tile] != UINT64_MAX) ||
                 !khdays_bg_memory(0, address + offset * 32u) || khdays_tiles2d_bg_tile(0, address + offset * 32u))
                 return;
         }
@@ -2908,24 +2925,20 @@ static void prepare_obtained(int scale)
     c->bg = 1;
     c->vram = address;
     const uint32_t palette = khdays_ui_palette_hash(0);
-    make_image(c, &l, 1, 8);
+    make_image(c, &l, obtained.notification ? 2 : 1, 8);
     if (c->cells)
         build_hd(c, scale, palette);
-    make_image(c, &l, 1, 8);
-    obtained.ready = c->image >= 0 && c->cells && (!c->display_count || c->hd_ready || khdays_ui_obtained_enabled());
+    make_image(c, &l, obtained.notification ? 2 : 1, 8);
+    obtained.ready = c->image >= 0 && c->cells && (!c->display_count || c->hd_ready || pickup_enabled());
 }
 
-/* Retain glyphs independently of native tiles so the sequence can finish its own exit. */
-static void prepare_obtained_sequence(int scale)
+/* Cache glyph-only planes for both pickup variants and the recon announcement. */
+static int notification_glyphs(Canvas *c, int scale, unsigned key, unsigned *version)
 {
-    Canvas *c = &obtained.canvas;
-    KhdaysBgLayer l;
-    if (!obtained.ready || !khdays_ui_obtained_enabled() || !c->display_count || !khdays_bg_text_layer(0, 1, &l))
-        return;
     const int w = c->area_w * 8 * scale, h = c->area_h * 8 * scale;
     const size_t count = (size_t)w * h;
     uint32_t signature = (khdays_ui_palette_hash(0) ^ c->version) * 16777619u ^ (unsigned)scale;
-    signature = (signature ^ obtained.key) * 16777619u;
+    signature = (signature ^ key) * 16777619u;
     for (int i = 0; i < c->display_count; ++i) {
         const unsigned char *bytes = (const unsigned char *)&c->display_ops[i];
         for (size_t k = 0; k < sizeof(GlyphOp); ++k)
@@ -2934,7 +2947,7 @@ static void prepare_obtained_sequence(int scale)
     if (count > c->information_room) {
         uint32_t *grown = realloc(c->information_pixels, count * sizeof(uint32_t));
         if (!grown)
-            return;
+            return 0;
         c->information_pixels = grown;
         c->information_room = count;
         c->information_scale = 0;
@@ -2952,18 +2965,56 @@ static void prepare_obtained_sequence(int scale)
         c->information_version = signature;
         c->information_scale = scale;
     }
+    *version = signature;
+    return 1;
+}
+
+/* Retain glyphs independently of native tiles so the sequence can finish its own exit. */
+static void prepare_obtained_sequence(int scale)
+{
+    Canvas *c = &obtained.canvas;
+    KhdaysBgLayer l;
+    if (!obtained.ready || !pickup_enabled() || !c->display_count || !khdays_bg_text_layer(0, 1, &l))
+        return;
+    unsigned signature;
+    if (!notification_glyphs(c, scale, obtained.key, &signature))
+        return;
+    const int w = c->area_w * 8 * scale, h = c->area_h * 8 * scale;
     const int lw = l.wt * 8, lh = l.ht * 8;
     const int x = ((-l.hofs % lw) + lw) % lw, y = (((56 - l.vofs) % lh) + lh) % lh;
     KhdaysUiElement e = {
         "hud.obtained", 0, 1, x < 256 ? (float)x : (float)(x - lw), y < 192 ? (float)y : (float)(y - lh), 104, 24, -1};
-    khdays_ui_obtained_text(&e, c->information_pixels, w, h, signature);
+    if (obtained.notification)
+        khdays_ui_notification_text(1, &e, c->information_pixels, w, h, signature);
+    else
+        khdays_ui_obtained_text(&e, c->information_pixels, w, h, signature);
+}
+
+static void prepare_breakthrough(int scale)
+{
+    KhdaysUiElement box;
+    if (!khdays_ui_notification_box(2, &box))
+        return;
+    for (int index = 0; index < canvas_count; ++index) {
+        Canvas *c = &canvases[index];
+        if (c->display_notification != 2 || !c->display_count || c->area_w > 64 || c->area_h > 16 ||
+            (!c->pending && !c->in_vram))
+            continue;
+        unsigned signature;
+        if (!notification_glyphs(c, scale, 2, &signature))
+            return;
+        const int w = c->area_w * 8 * scale, h = c->area_h * 8 * scale;
+        khdays_ui_notification_text(2, &box, c->information_pixels, w, h, signature);
+        break;
+    }
 }
 
 static void emit_obtained(void)
 {
     Canvas *c = &obtained.canvas;
     KhdaysBgLayer l;
-    if (khdays_ui_obtained_owns() || !obtained.ready || !khdays_bg_text_layer(0, 1, &l))
+    if (obtained.notification || obtained.sequence || pickup_owns() || !obtained.ready ||
+        !khdays_bg_text_layer(0, 1, &l))
         return;
     const int lw = l.wt * 8, lh = l.ht * 8;
     const int x = ((8 - l.hofs) % lw + lw) % lw;
@@ -3096,6 +3147,7 @@ static void emit(void)
     khdays_ui_obtained_begin();
     prepare_obtained(scale);
     prepare_obtained_sequence(scale);
+    prepare_breakthrough(scale);
     for (int i = 0; i < canvas_count; ++i) {
         Canvas *c = &canvases[i];
         KhdaysUiElement e;
@@ -3280,11 +3332,10 @@ static void emit(void)
     }
     khdays_ui_information_end();
     emit_obtained();
-    if (khdays_ui_obtained_owns())
-        /* The layout's kind 3 routes the picture to BG3; cached item text uses BG1. */
-        for (int bg = 1; bg <= 3; bg += 2)
-            for (int row = 7; row < 10; ++row)
-                for (int col = 0; col < 13; ++col)
+    for (int bg = 1; bg <= 3; bg += 2)
+        for (int row = 0; row < 24; ++row)
+            for (int col = 0; col < 32; ++col)
+                if (khdays_ui_notification_cell(0, bg, col, row))
                     khdays_ui_left_out_cell(KHDAYS_UI_TEXT, 0, bg, col, row);
     khdays_ui_obtained_end();
     if (profile) {

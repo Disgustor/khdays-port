@@ -954,7 +954,9 @@ should include both. It does not require a text anchor.
 true for the locked-on caption. A looping clip returns to its authored restart
 frame and ends when Days dismisses the native notice. Non-looping clips use the
 same full one-shot lifetime as obtained. Pause freezes playback, and scene,
-menu, movie and tutorial transitions cancel it. Missing files or invalid clips
+menu and native-panel recreation cancel it. Temporary HUD hiding during movies,
+events or tutorials preserves pending requests and ongoing playback, without
+drawing over those screens. Missing files or invalid clips
 retain the original drawing. Single-screen placement uses the same HUD scale
 as obtained; the native anchors also work in dual-screen mode.
 
@@ -970,6 +972,13 @@ its shifted cache placement. No inventory, mission, or targeting logic changes.
 
 The synthetic obtained tests also exercise these notices, their native layout
 bounds, dismissal, scene reset, text attachment, and missing/disabled fallback.
+They also check notifications requested while the HUD is hidden and notifications
+hidden mid-animation, including the obtained, backpack, recon and locked-on boxes.
+
+Pending notifications claim their native box immediately, before text is ready.
+The obtained/backpack sequences use their private captured glyphs independently
+of the original item-name tilemap. This prevents DS artwork appearing while the
+native upper INFORMATION banner restores the HUD layers in separate uploads.
 
 Notification suppression outlives the native close request: the tilemap clear is
 uploaded later. All four replacements retain the exact visible native map

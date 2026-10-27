@@ -135,11 +135,11 @@ struct Notification {
     }
     bool suppress(int bg, int x, int y)
     {
-        if ((!started && !retiring) || (bg != 1 && bg != 3) || (kind == 3 && bg != 3) || x < 0 || x >= 32 || y < 0 ||
-            y >= 24 || !allowed)
+        if ((!pending && !started && !retiring) || (bg != 1 && bg != 3) || (kind == 3 && bg != 3) || x < 0 || x >= 32 ||
+            y < 0 || y >= 24 || !allowed)
             return false;
         const auto &r = regions[kind];
-        const bool live = started && native && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+        const bool live = (pending || started) && native && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
         auto &cell = native_cells[(bg == 3 ? 32 * 24 : 0) + y * 32 + x];
         if ((!live && !cell.valid) || !enabled())
             return false;
@@ -206,12 +206,13 @@ struct Notification {
         const auto overlay = [&](int id) { return (context.overlays & (1ull << id)) != 0; };
         const bool event = context.event_status >= 0 && !(context.event_status & 8) &&
                            (khdays_situation_ran(&context, KHDAYS_UPD_Ov023_SceneRun) || context.pause_mode);
-        allowed = context.scene == 2 && overlay(2) && !context.movie && !context.tutorial && !event &&
-                  context.camp_screen == KHDAYS_CAMP_NONE && !overlay(8) && !overlay(25) && !overlay(26) &&
-                  !overlay(27);
+        const bool field = context.scene == 2 && overlay(2) && context.camp_screen == KHDAYS_CAMP_NONE && !overlay(8) &&
+                           !overlay(25) && !overlay(26) && !overlay(27);
+        const bool was_allowed = allowed;
+        allowed = field && !context.movie && !context.tutorial && !event;
         // The existing native-panel reset hook advances this epoch across map/HUD recreation.
         const unsigned epoch = khdays_ui_information_epoch();
-        if (!allowed || !enabled() || frame < previous || context_epoch != epoch) {
+        if (!field || !enabled() || frame < previous || context_epoch != epoch) {
             if (active || pending || started)
                 khdays_ui_changed();
             if (started || retiring)
@@ -219,6 +220,12 @@ struct Notification {
             pending = active = started = native = false;
             retiring = false;
             program = {};
+        }
+        // Hiding the HUD does not dismiss its native notification or repeat its request on return.
+        if (!allowed) {
+            program = {};
+            if (was_allowed)
+                khdays_ui_changed();
         }
         context_epoch = epoch;
         if (active && !khdays_link_paused() && frame >= previous)
@@ -294,7 +301,7 @@ struct Notification {
     }
     int owns()
     {
-        return allowed && started && native && enabled();
+        return allowed && (pending || started) && native && enabled();
     }
     void end()
     {

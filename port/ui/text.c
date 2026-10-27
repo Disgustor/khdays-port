@@ -2974,7 +2974,10 @@ static void prepare_obtained_sequence(int scale)
 {
     Canvas *c = &obtained.canvas;
     KhdaysBgLayer l;
-    if (!obtained.ready || !pickup_enabled() || !c->display_count || !khdays_bg_text_layer(0, 1, &l))
+    unsigned key;
+    /* The private glyphs do not depend on the aliased item tiles being restored after INFORMATION. */
+    if (!obtained.active || !pickup_enabled() || !c->display_count ||
+        !obtained_item_key((unsigned)obtained.slot, &key) || key != obtained.key || !khdays_bg_text_layer(0, 1, &l))
         return;
     unsigned signature;
     if (!notification_glyphs(c, scale, obtained.key, &signature))

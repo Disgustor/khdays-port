@@ -75,6 +75,11 @@ void step(bool text = true, unsigned revision = 1)
 void test()
 {
     khdays_ui_obtained_request(1);
+    step(false);
+    expect(khdays_ui_obtained_owns() && khdays_ui_notification_cell(0, 3, 0, 7) &&
+               khdays_ui_notification_cell(0, 1, 0, 7),
+           "pickup exposed native art while waiting for restored text tiles");
+    expect(!program.words[KSI_CLEAR], "pickup started before its captured text was available");
     step();
     expect(khdays_ui_obtained_owns() && program.words[KSI_COUNT] == 1, "pickup did not start");
     expect(number(KSI_TEXT_ALPHA) == 0 && program.words[KSI_TEXT_INSERT] == 2, "text did not follow intro alpha/order");
@@ -149,6 +154,7 @@ void notifications()
     for (int k = 1; k <= 3; ++k) {
         request[0] = short(k == 1 ? 78 : k == 2 ? 72 : 60);
         khdays_ui_notification_layout(request.data(), 1);
+        expect(khdays_ui_notification_cell(0, 3, 12, 9), "notice exposed its box before the text layer was restored");
         khdays_ui_obtained_begin();
         KhdaysUiElement box{};
         expect(khdays_ui_notification_box(k, &box), "notice did not follow native layout");
@@ -196,6 +202,78 @@ void notifications()
     ++caption_epoch;
     step(false);
     expect(!khdays_ui_notification_box(2, &submitted), "notice survived scene recreation");
+}
+void hidden_hud()
+{
+    for (int reason = 0; reason < 3; ++reason) {
+        ++caption_epoch;
+        step(false);
+        const auto hide = [&] {
+            context.tutorial = reason == 0;
+            context.movie = reason == 1;
+            context.event_status = reason == 2 ? 0 : -1;
+            const unsigned update = KHDAYS_UPD_Ov023_SceneRun;
+            context.updates[update / 64] |= 1ull << (update % 64);
+        };
+        const auto show = [&] {
+            context.tutorial = context.movie = 0;
+            context.event_status = -1;
+            context.updates[KHDAYS_UPD_Ov023_SceneRun / 64] = 0;
+        };
+        hide();
+        step(false);
+        khdays_ui_obtained_request(1);
+        step();
+        step(false);
+        expect(!program.words[KSI_CLEAR] && !khdays_ui_obtained_owns(), "hidden pickup rendered over the HUD");
+        show();
+        step();
+        expect(program.words[KSI_CLEAR] && khdays_ui_obtained_owns(), "hidden pickup request was lost on return");
+        expect(khdays_ui_notification_cell(0, 3, 0, 7), "restored pickup exposed the native background");
+        step();
+        const float alpha = number(KSI_TEXT_ALPHA);
+        hide();
+        step(false);
+        expect(!program.words[KSI_CLEAR], "active pickup remained visible while hidden");
+        show();
+        step();
+        expect(program.words[KSI_CLEAR] && number(KSI_TEXT_ALPHA) > alpha,
+               "active pickup was lost or restarted after temporary HUD hiding");
+
+        std::array<short, 14> request{};
+        request[8] = 11;
+        request[2] = 7;
+        request[5] = 13;
+        request[6] = 3;
+        std::vector<unsigned> ink(64 * scale * 16 * scale, 0xffffffffu);
+        for (int k = 1; k <= 3; ++k) {
+            hide();
+            step(false);
+            request[0] = short(k == 1 ? 78 : k == 2 ? 72 : 60);
+            khdays_ui_notification_layout(request.data(), 1);
+            step(false);
+            expect(!khdays_ui_notification_owns(k), "hidden notification retained visible ownership");
+            show();
+            step(false);
+            KhdaysUiElement box{};
+            expect(khdays_ui_notification_box(k, &box), "hidden notification lost its native layout");
+            if (k != 3)
+                khdays_ui_notification_text(k, &box, ink.data(), 64 * scale, 16 * scale, 1);
+            khdays_ui_obtained_end();
+            KhdaysSequenceImage result[3]{};
+            khdays_ui_notification_commands(result);
+            expect(result[k - 1].words[KSI_CLEAR] && khdays_ui_notification_owns(k),
+                   "notification fell back to native art after HUD return");
+            hide();
+            step(false);
+            show();
+            step(false);
+            khdays_ui_notification_commands(result);
+            expect(result[k - 1].words[KSI_CLEAR] && khdays_ui_notification_cell(0, 3, 12, 9),
+                   "active notification was lost while the HUD was hidden");
+            khdays_ui_notification_layout(request.data(), 0);
+        }
+    }
 }
 void reference(const char *filename)
 {
@@ -370,6 +448,7 @@ int main(int argc, char **argv)
         } else {
             test();
             notifications();
+            hidden_hud();
         }
         std::filesystem::remove(settings);
         std::cout << "Obtained animation, cached text, parent alpha and native fallback passed\n";

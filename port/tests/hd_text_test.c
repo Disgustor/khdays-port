@@ -1145,6 +1145,12 @@ static void obtained_popup(void)
     memcpy(vram + address, ram + 1024, c->bytes);
     chars_loaded(0, 1, ram + 1024, address, c->bytes);
     memset(suppressed_layers, 0, sizeof(suppressed_layers));
+    const uint16_t saved_item_cell = map_cells[8 * 32 + 1];
+    map_cells[8 * 32 + 1] = 0; /* INFORMATION returns BG3 before the aliased BG1 item tiles. */
+    const int before_restore = obtained_sequence_calls;
+    emit();
+    CHECK(!obtained.ready && obtained_sequence_calls == before_restore + 1 && obtained_sequence_ink);
+    map_cells[8 * 32 + 1] = saved_item_cell;
     emit();
     CHECK(obtained_sequence_calls && obtained_sequence_ink);
     CHECK(suppressed[7 * 32] && suppressed[9 * 32 + 12] && !suppressed[9 * 32 + 13] && !suppressed[10 * 32 + 12]);
@@ -1189,6 +1195,12 @@ static void obtained_popup(void)
     for (int row = 0; row < 2; ++row)
         for (int col = 0; col < 8; ++col)
             map_cells[(row + 8) * 32 + col + 2] = (uint16_t)(0xf250u + row * 8 + col);
+    const uint16_t saved_backpack_cell = map_cells[8 * 32 + 2];
+    map_cells[8 * 32 + 2] = 0;
+    const int backpack_before_restore = notification_calls[1];
+    emit();
+    CHECK(!obtained.ready && notification_calls[1] == backpack_before_restore + 1);
+    map_cells[8 * 32 + 2] = saved_backpack_cell;
     emit();
     CHECK(notification_calls[1] && notification_owned[1]);
     CHECK(suppressed_layers[3][7 * 32 + 12]);

@@ -336,6 +336,16 @@ add_test(NAME khdays-kh2-enemy-missing COMMAND khdays-kh2-enemy-test --missing)
 add_test(NAME khdays-kh2-enemy-legacy COMMAND khdays-kh2-enemy-test --no-config)
 add_test(NAME khdays-kh2-enemy-reference COMMAND khdays-kh2-enemy-test --reference)
 
+add_executable(khdays-heart-points-test tests/heart_points_test.cpp ui/heart_points.cpp)
+target_link_libraries(khdays-heart-points-test PRIVATE khdays-kh2-gauge)
+target_compile_options(khdays-heart-points-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-heart-points COMMAND khdays-heart-points-test)
+add_test(NAME khdays-heart-points-missing COMMAND khdays-heart-points-test --missing)
+add_test(NAME khdays-heart-points-disabled COMMAND khdays-heart-points-test --disabled)
+add_test(NAME khdays-heart-points-pickup-loop COMMAND khdays-heart-points-test --pickup-loop)
+add_test(NAME khdays-heart-points-final-tick COMMAND khdays-heart-points-test --final-tick)
+add_test(NAME khdays-heart-points-native-chain COMMAND khdays-heart-points-test --native-chain)
+
 add_executable(khdays-kh2-reticles-test tests/kh2_reticles_test.cpp ui/kh2_reticles.cpp)
 add_executable(khdays-kh2-information-test tests/kh2_information_test.cpp ui/kh2_information.cpp)
 target_link_libraries(khdays-kh2-information-test PRIVATE khdays-kh2-gauge)
@@ -375,8 +385,8 @@ target_include_directories(khdays-kh2-limit-timing-test PRIVATE "${DECOMP}/inclu
 target_compile_options(khdays-kh2-limit-timing-test PRIVATE /W4 /std:c17)
 add_test(NAME khdays-kh2-limit-timing COMMAND khdays-kh2-limit-timing-test)
 
-add_executable(khdays-kh2-gpu-test tests/kh2_sequence_gpu_test.cpp host/render/kh2_sequence_gpu.c host/render/gpu_hd.c host/render/gpu_raster3d.c)
-target_link_libraries(khdays-kh2-gpu-test PRIVATE khdays-kh2-gauge khdays-gpu SDL3::SDL3)
+add_executable(khdays-kh2-gpu-test tests/kh2_sequence_gpu_test.cpp ui/heart_points.cpp host/render/kh2_sequence_gpu.c host/render/gpu_hd.c host/render/gpu_raster3d.c)
+target_link_libraries(khdays-kh2-gpu-test PRIVATE khdays-kh2-gauge khdays-gpu khdays-gfx SDL3::SDL3)
 target_compile_options(khdays-kh2-gpu-test PRIVATE
     $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
     $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
@@ -589,6 +599,9 @@ add_executable(khdays-native
     ui/hud.c
     ui/kh2_hp_hud.cpp
     ui/kh2_enemy_hud.cpp
+    ui/heart_points.cpp
+    tools/heart_model_export.cpp
+    ../assets/src/animation.cpp
     ui/kh2_reticles.cpp
     ui/kh2_information.cpp
     ui/kh2_obtained.cpp

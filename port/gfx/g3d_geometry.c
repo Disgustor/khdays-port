@@ -961,6 +961,11 @@ static void finish_mod_polygon(List *out, const KhdaysG3dClipVertex *v, int n, c
     /* clipped on every side but the far one: a big floor triangle reaching past it must not vanish */
     memcpy(a, v, sizeof(*v) * n);
     for (int axis = 0; axis < 3 && count > 0; ++axis) {
+        /* Sequence HUD bounds can extend beyond the DS view before one-screen placement. */
+        if (axis < 2 &&
+            (in->flags & (KHDAYS_G3D_SEQUENCE | KHDAYS_G3D_HUD)) == (KHDAYS_G3D_SEQUENCE | KHDAYS_G3D_HUD)) {
+            continue;
+        }
         if (axis == 2) {
             memcpy(b, a, sizeof(*a) * (size_t)count);
         } else {

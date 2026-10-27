@@ -979,3 +979,136 @@ animation or masking later content that reuses the same area. Scene/context
 resets and disabled or invalid replacements release this coverage. Synthetic
 tests delay clears across multiple frames, clear art/text independently, and
 check both map-entry changes and in-place character clearing.
+
+## Heart point counter
+
+`heart_points` in `gauge.json` replaces Ov002's heart-counter nodes with GPU SEQD
+commands in the original 3D HUD layer. Missing/disabled/invalid replacements and
+the reference-only renderer keep the native draws. Exact node matching leaves
+the shared-sheet countdown, world markers and HP/MP follower untouched. The
+existing HUD composition places the counter in one-screen mode; animation bounds
+use a stable composition anchor, so expanding effects do not change its placement.
+
+The pack builder runs `tools/hd/heart_points.py` against the user's extracted
+Days data. It writes `hearts.png` (256x128), `hearts.2dd` (BAR `hart` image/sequence
+entries, types 0x18/0x19), and `hearts-reference.json`. The atlas includes 32 source
+textures, assembled with their own palettes. Material texture transforms and
+repeating/mirrored coordinates become explicit cropped/flipped parts in sprite
+groups. The unused minus and HP/MP frame art are included for editing; exporting
+those textures does not replace their other native uses. No game art is tracked.
+
+The model conversion is headless: `khdays-native --export-heart-model INPUT OUTPUT`
+uses the existing BMD0/BCA0 decoders. It does not run the game. Source provenance:
+`UI/hcnt/arc` entries 0-6 and localized `UI/hcnt/arc_<language>` entries 0-2;
+`Ov002_SceneResetPanelWidgets`, `Ov002_SceneDrawPanelWidgets`,
+`Ov002_SceneStepPanelCounters`, `Ov002_SceneDrawPanelRowCounts`,
+`Ov002_SceneStepPanelBackdrop`, `Ov002_SceneStepPanelFlash`,
+`Ov002_SceneStepPanelRowFx`, and `Ov002_SceneStepPanelBlink` in the pinned
+`external/khdays-decomp` revision. Native fields named tint/depth in several of
+these functions are model scale vectors; they are not RGB colors.
+
+Days supplies the displayed total, visibility and pickup/row/bonus triggers;
+replacement motion, alpha, scale, loop flags and durations come from the 2DD.
+The original total remains capped at 9999 (`Ov002_MaxValueForDigits(4)`), and the
+native queue has ten floating rows. Both reward row types select the plus sign:
+white ordinary rows and cyan bonus rows. The counter's two original joint tracks
+have 18 and 12 frames; their material alpha tracks are converted with them.
+The remaining effects are generated from the native code/overlay tween tables.
+The generated timing uses the normal Days update rate of 30 frames per second.
+
+The 43 default animation assignments are:
+
+| Clips | Setting(s) | Purpose |
+| --- | --- | --- |
+| 0-1 | `heart_idle`, `heart_active` | Held first pose and free-running heart, respectively |
+| 2 | `pickup` | Pickup light/ring cycle; native count-up holds it open |
+| 3 | `background` | Counter underline/background |
+| 4-7 | `streak`, `particles_0` through `particles_2` | Bonus effects |
+| 8-10 | `chain_intro`, `chain_loop`, `chain_outro` | Localized CHAIN label |
+| 11 | `bonus` | Localized BONUS flash |
+| 12-21 | `digit_0` through `digit_9` | Total's digits |
+| 22-31 | `small_digit_0` through `small_digit_9` | Floating reward digits |
+| 32-33 | `minus`, `plus` | Symbols; minus is available but unused by default |
+| 34-35 | `gain`, `bonus_gain` | Floating row's active anchor and color/alpha |
+| 36-39 | `total_gain`, `total_loss`, `total_gain_medium`, `total_gain_large` | Total-digit active anchors |
+| 40 | `heart_grow` | Heart's growth anchor; returns to resting size after 150 ms |
+| 41 | `total_gain_final` | Final increment's scale pulse, with opaque digits |
+| 42 | `chain_warning` | Repeating 300 ms native warning fade |
+
+Edit `heart_points.animations` to reassign clips; `-1` omits a component. Common
+settings are `enabled`, `archive`, `texture` (PNG or DDS), `entry`, `scale`,
+`offset_x/y`, `source_origin_x/y` and `frames_per_tick`. Defaults use scale 0.65
+and retain Days placement. `total_x/y`, `digit_spacing`, `rows_x/y` and
+`row_spacing` expose numeric placement in native screen units; the root scale
+then scales the counter proportionally. Gain and total-motion clips use an empty
+sprite as an active anchor, like text anchors: their translation, scale and RGBA
+apply to the dynamically selected number sprites. Digit clips can animate too.
+
+Automated checks cover independent replacement lifetimes, pause, native fallback,
+shared-node exclusion, mirrored groups, fractional-frame interpolation, and
+GPU/reference output including W-buffer depth. Manual comparison is still needed
+for transient visual fidelity: steady totals, pickups of different magnitudes,
+white/cyan rows, CHAIN/BONUS refresh, pause, scene changes, and both screen modes.
+The code-generated total-digit pulse uses an editable 100 ms clip; it approximates
+the original gap-dependent 30-100 ms tween rather than overriding a mod's timeline
+from native tween completion. `total_loss` is neutral by default: native snap/reset
+updates do not start the increment pulse.
+
+The state audit follows `Sequence_UpdateTracks` and the actual node flag writes:
+`RewindWidget(0)` sets flag 2 and holds the first pose; `(1)` clears it and advances.
+The helper names and their earlier source comments imply the opposite. Pickup
+updates before drawing, so its exported twelve-frame cycle starts at source frame
+1; the active heart draws before updating and starts at frame 0. Both geometry
+and material alpha follow that order. The background and 22 digit/symbol clips
+use their static native models. Floating rows retain the native white/cyan tint,
+1000 ms movement/fade, and plus-sign placement.
+
+The flash and three particle clips sample their own native tween tables with the
+native phase scheduler: completed phases start on the next update, and drawings
+use the preceding update's sample. Their geometry comes from the source models,
+not assumed texture dimensions. A repeated bonus cannot interrupt an active
+effect; native phase state can queue its next cycle. BONUS uses native quadratic
+scale/alpha curves and includes its transparent 1000 ms endpoint. CHAIN's warning
+lasts 300 ms by default and follows each native fade-tween restart. The final
+removal uses a separate empty one-frame outro by default, so it does not extend
+the native warning past the label's disappearance. Older JSON files without
+`chain_warning` retain their `chain_outro` assignment for warnings. Growth uses native curve 3 and
+restores the base scale when finished. Every default clip is checked on the GPU
+at every integer frame, against the independent reference rasterizer.
+
+Only native sequence HUD polygons retain offscreen X/Y bounds before single-screen
+placement. This preserves enlarged art above the DS viewport until its final HUD
+position is known; original DS polygons and world reticles keep their normal clipping.
+
+The pickup is a held cycle, not a single shot: `SceneDrawPanelWidgets` keeps
++0x48 armed across animation wraps while +0xd58 says the count-up is moving.
+The replacement's default clip 2 therefore loops until the native hold ends,
+then completes its current custom cycle. Its rewind request arrives after the
+native widget draw, so it is applied on the next update. Animation 1 retains
+its separate +0xe4 state; growth while collecting is not sufficient to select it.
+
+CHAIN warning flashes repeatedly restart the backdrop tween at +0xfd0 even
+while the fading flag +0xd0 remains set. The controller follows the 64-bit
+start stamp at +0xfe0, including the native transparent boundary frame between
+warning cycles and immediate visibility when an active chain is refreshed.
+
+Total-digit opacity runs from 31 down to 16 and returns to 31 when the tween
+finishes; floating-row and CHAIN fades retain their native 5-bit alpha steps.
+The last increment starts a scale tween without restarting the opacity tween.
+New packs expose `total_gain_final` at clip 41 for that distinction. It defaults
+to -1 in older JSON files, which retain their existing normal-gain assignment.
+Snap/reset updates do not synthesize an animated count-up.
+
+The exporter compacts sampled conversion data before writing SEQD: identical
+parts, compound sprite groups, and empty anchors are shared; linear and cubic
+segments replace redundant frame records. Every accepted segment retains sampled
+integer translations, colors, and quantized quad positions. Curves with different
+scale/alpha progress retain the necessary separate keys because SEQD uses one
+time curve per element. The native evaluator compares every frame of compact
+and uncompacted output, including UVs, colors, durations and active anchors
+(anchor scales use a 0.0001 tolerance). `hearts-reference.json` also lists the
+sprite-group references of each animation so editor indices can be checked.
+
+Single-frame holds use positive half-open intervals, so editors never display
+zero-duration layers. The current 43-clip export reduces 315 animation records
+to 171, with 35 parts and 32 shared sprite groups.

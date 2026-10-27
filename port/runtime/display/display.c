@@ -23,6 +23,7 @@
 #include "../../ui/kh2_hud_labels.h"
 #include "../../ui/kh2_enemy_hud.h"
 #include "../../ui/kh2_reticles.h"
+#include "../../ui/heart_points.h"
 #include "../../ui/kh2_information.h"
 #include "../../ui/kh2_obtained.h"
 #include "../../ui/kh2_mission_panel.h"
@@ -670,7 +671,8 @@ static void capture_3d(KhdaysFramePackage *p)
         }
     }
     khdays_textures_mark(&p->list3d); /* the textures drawn instead (HD graphics) */
-    khdays_reticles_commands(&p->list3d, p->reticle_images);
+    khdays_reticles_commands(&p->list3d, p->sequence3d_images);
+    khdays_heart_commands(&p->list3d, p->sequence3d_images + KHDAYS_RETICLE_COUNT);
     p->list3d_serial = list3d_serial;
     p->list3d_time = list3d_time;
     p->list3d_cut = (uint8_t)list3d_cut;

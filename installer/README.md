@@ -202,3 +202,8 @@ keys the Proton mapping and finds the entry again to remove it. In `config.vdf` 
 tools live at `InstallConfigStore/Software/Valve/Steam/CompatToolMapping`, one block per app id; the
 port's entry is inserted into or removed from that block as text, so every other byte stays as
 Steam wrote it, and only when the block exists (the player has run a game under Proton).
+The HD menu/HUD build also runs `heart_points.py` against the extracted Days ROM.
+It assembles the heart counter's palettes into an editable PNG and creates its
+`hart` BAR image/sequence entries. The installed native executable provides a
+headless model-conversion command; the game is not started during conversion.
+Existing edited counter files and `gauge.json` settings are preserved on rebuild.

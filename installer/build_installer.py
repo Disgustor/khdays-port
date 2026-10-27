@@ -47,6 +47,8 @@ TOOLS = [
     "tools/hd/kh2_fonts.py",
     "tools/hd/kh2_gauge.py",
     "tools/hd/minimap_icons.py",
+    "tools/hd/heart_points.py",
+    "port/tools/heart_model_export.cpp",
     "port/tools/kh2_center_gauge.py",
     "port/tools/kh2_add_limit_gauge.py",
     "port/tools/kh2_add_limit_marker.py",

@@ -533,14 +533,49 @@ HOOKS = {
             "    khdays_io_store(0x0400044cu, 4, state->pSbc[1]);\n",
         ),
     ],
+    # Replace only the heart panel's own node draws; its bookkeeping and other widgets still run.
+    "main@0202aa9c": [  # Scene_DrawNode
+        (
+            "void Scene_DrawNode(SceneNode *node)\n{\n    SceneNode *child;\n",
+            "void Scene_DrawNode(SceneNode *node)\n{\n    SceneNode *child;\n"
+            "    { extern int khdays_heart_node(const void *node);\n"
+            "      if (khdays_heart_node(node)) return; }\n",
+        ),
+    ],
+    "ov002@0205f980": [  # Ov002_Hud_RewindWidget: repeated pickups restart the pulse
+        (
+            "    Ov002_RewindWidget",
+            "    { extern void khdays_heart_event(int kind, int row); khdays_heart_event(0, 0); }\n"
+            "    Ov002_RewindWidget",
+        ),
+    ],
+    "ov002@0205fc5c": [  # Ov002_SceneSpawnPanelRowCount: only after the row is actually allocated
+        (
+            "    s->aRowBusy[nRow] = 1;\n",
+            "    s->aRowBusy[nRow] = 1;\n"
+            "    { extern void khdays_heart_event(int kind, int row); khdays_heart_event(1, nRow); }\n",
+        ),
+    ],
+    "ov002@02060358": [  # Ov002_SceneStartPanelBlink
+        (
+            "    s = *(Ov002BlinkScene **)&data_ov002_0207f628;\n",
+            "    s = *(Ov002BlinkScene **)&data_ov002_0207f628;\n"
+            "    { extern void khdays_heart_event(int kind, int row); khdays_heart_event(2, 0); }\n",
+        ),
+    ],
     # The field's HUD panel draws its 3D pieces (the hearts counter, the countdown) with a camera of
     # its own: the port marks those polygons as the HUD's, so widescreen keeps them to the sides
     # (runtime/display/display.c khdays_hud_3d). Nothing the game computes changes.
     "ov002@020616a0": [  # Ov002_SceneStepPanel
         (
+            "    Ov002_SceneStepPanelBlink();\n",
+            "    Ov002_SceneStepPanelBlink();\n    { extern void khdays_heart_end(void); khdays_heart_end(); }\n",
+        ),
+        (
             "    Camera_CommitMatricesEx(s->aCamera, 0x3b33, -0x3b33, -0x4d9a, 0x4d9a);\n",
             "    Camera_CommitMatricesEx(s->aCamera, 0x3b33, -0x3b33, -0x4d9a, 0x4d9a);\n"
-            "    { extern void khdays_hud_3d(int on); khdays_hud_3d(1); }\n",
+            "    { extern void khdays_hud_3d(int on); khdays_hud_3d(1); }\n"
+            "    { extern void khdays_heart_begin(const void *context); khdays_heart_begin(s); }\n",
         ),
         (
             "    Ov002_DrawMarkerQueue(pCam);\n",

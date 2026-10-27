@@ -264,7 +264,7 @@ def tool_made_by(tool: str, template: list[str]) -> str:
         source = path.read_bytes()
         parts.append(source)
         waiting += [module + ".py" for module in IMPORTS.findall(source.decode("utf-8"))]
-    if tool == "kh2_gauge.py":
+    if tool in ("kh2_gauge.py", "heart_points.py"):
         parts += [(HERE.parent / rel).read_bytes() for rel in HD_MENU_SUPPORT]
     return hashlib.sha256(b"".join(parts)).hexdigest()
 
@@ -487,6 +487,7 @@ HD_MENU_TOOLS = [
     ("ddd_camp.py", ["{ddd}", "{mare}", "{settings}"]),
     ("kh2_fonts.py", ["{kh2}"]),
     ("kh2_gauge.py", ["{kh2_gauge}", "--settings", "{gauge_settings}"]),
+    ("heart_points.py", ["--settings", "{gauge_settings}"]),
     ("minimap_icons.py", ["--settings", "{minimap_settings}", "--kh2", "{kh2}"]),
 ]
 HD_MENU_SUPPORT = (
@@ -495,6 +496,7 @@ HD_MENU_SUPPORT = (
     "port/tools/kh2_add_limit_marker.py",
     "port/tools/kh2_add_party_gauges.py",
     "docs/examples/kh2-gauge.json",
+    "port/tools/heart_model_export.cpp",
 )
 HD_VIDEO_TOOLS = [
     ("theater_movies.py", ["{mare}", "--movies", "{movies}", "--videos", "--subtitles", "--music"]),
@@ -758,6 +760,7 @@ DATA_TOOLS = {
     "ddd_camp.py",
     "kh2_fonts.py",
     "minimap_icons.py",
+    "heart_points.py",
 }  # take --data
 
 MESSAGES.update(

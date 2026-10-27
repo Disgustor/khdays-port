@@ -512,7 +512,7 @@ float texel_footprint(Polygon p, Attrs at)
 // Blend native sequence elements with the scene, before any DS alpha quantization or alpha test.
 void plot_sequence(Polygon p, inout Pixel px, Attrs at, uint depth) {
     const uint program=p.pltt/4u;
-    if (program>=5u || seq_word(program,KSI_OUTPUT)!=p.pltt || seq_word(program,KSI_COUNT)>KSI_MAX_QUADS) return;
+    if (program>=KSI_3D_PROGRAMS || seq_word(program,KSI_OUTPUT)!=p.pltt || seq_word(program,KSI_COUNT)>KSI_MAX_QUADS) return;
     const float w=1.0f/at.iw;
     const float opacity=(float)((p.attr>>16)&31u)/31.0f*saturate(at.a*w);
     const float2 sample_at=float2(at.s,at.t)*w/128.0f*

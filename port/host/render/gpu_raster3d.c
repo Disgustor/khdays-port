@@ -164,7 +164,7 @@ int khdays_raster3d_open(SDL_GPUDevice *d)
     verts = make_buffer(verts_capacity * (Uint32)sizeof(KhdaysG3dVertex));
     vram = make_buffer(VRAM_BYTES);
     records = make_buffer((Uint32)RECORD_BYTES);
-    sequences = make_buffer((Uint32)sizeof(((KhdaysFramePackage *)0)->reticle_images));
+    sequences = make_buffer((Uint32)sizeof(((KhdaysFramePackage *)0)->sequence3d_images));
     tiles_capacity = 1u << 18;
     tiles = make_buffer(tiles_capacity * 4u);
     vram_valid = 0;
@@ -317,6 +317,8 @@ SDL_Texture *khdays_raster3d_texture(SDL_Renderer *renderer)
  * share a group in hud_group -- the digits of a number, a gauge and its
  * frame. With `over_2d`, the polygons shown over the 2D count too. Returns
  * how many polygons. */
+static const KhdaysSequenceImage *hud_programs;
+
 static int hud_pieces(const KhdaysG3dList *list, int over_2d)
 {
     int *const hud = hud_index, *const group = hud_group;
@@ -337,6 +339,15 @@ static int hud_pieces(const KhdaysG3dList *list, int over_2d)
         }
         y0[n] = p->ymin;
         y1[n] = p->ymax;
+        if ((p->flags & KHDAYS_G3D_SEQUENCE) && hud_programs != NULL && p->pltt / 4u < KSI_3D_PROGRAMS) {
+            const unsigned *words = hud_programs[p->pltt / 4u].words;
+            if (words[KSI_OUTPUT] == p->pltt && words[KSI_ANCHORED]) {
+                memcpy(&x0[n], words + KSI_ANCHOR_X, 4);
+                memcpy(&y0[n], words + KSI_ANCHOR_Y, 4);
+                x1[n] = x0[n];
+                y1[n] = y0[n];
+            }
+        }
         hud[n] = i;
         group[n] = n;
         ++n;
@@ -764,6 +775,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
     const int tiles_x = (columns + TILE - 1) / TILE;
     const int w = columns * scale, h = KHDAYS_FRAME_H * scale;
     const int scratch_ok = scratch_for(list);
+    hud_programs = p->sequence3d_images;
     KhdaysG3dList placed;
     /* In widescreen the HUD's polygons go to the sides; on one screen where the composition's 3D shapes
      * place them, or else where the game draws them. */
@@ -830,7 +842,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
         }
     }
     vram_valid = 1;
-    const uint32_t sequence_bytes = (uint32_t)sizeof(p->reticle_images);
+    const uint32_t sequence_bytes = (uint32_t)sizeof(p->sequence3d_images);
     size = poly_bytes + vert_bytes + tile_bytes + record_bytes + sequence_bytes +
            (uint32_t)nchanged * KHDAYS_FRAME_VRAM_PAGE;
     if (size > upload_size) {
@@ -865,7 +877,7 @@ static int draw(const KhdaysFramePackage *p, int scale, int texture_smoothing, i
                record_bytes);
     }
     at += record_bytes;
-    memcpy(mapped + at, p->reticle_images, sequence_bytes);
+    memcpy(mapped + at, p->sequence3d_images, sequence_bytes);
     at += sequence_bytes;
     for (int k = 0; k < nchanged; ++k) {
         const int n = changed[k];

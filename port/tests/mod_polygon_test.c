@@ -25,6 +25,35 @@ static KhdaysG3dClipVertex at(float x, float y, float w)
 
 static const uint32_t BOTH_SIDES = (31u << 16) | 0xc0u;
 
+static void sequence_hud_bounds(void)
+{
+    const KhdaysG3dClipVertex box[4] = {{-0.9f, 1.2f, -0.95f, 1, 63, 63, 63, 0, 0, 1},
+                                        {-0.5f, 1.2f, -0.95f, 1, 63, 63, 63, 128, 0, 1},
+                                        {-0.5f, 0.7f, -0.95f, 1, 63, 63, 63, 128, 128, 1},
+                                        {-0.9f, 0.7f, -0.95f, 1, 63, 63, 63, 0, 128, 1}};
+    for (int kind = 0; kind < 3; ++kind) {
+        khdays_g3d_reset();
+        khdays_g3d_set_hud(kind != 0);
+        if (kind == 2)
+            khdays_g3d_mod_polygon(box, 4, BOTH_SIDES, 0, 7, 1, 0);
+        else
+            khdays_g3d_sequence_polygon(box, 4, BOTH_SIDES, 7, 20);
+        const uint32_t swap = 0;
+        khdays_g3d_command(0x50, &swap);
+        khdays_g3d_vblank();
+        const KhdaysG3dList *list = khdays_g3d_shown();
+        CHECK(list->npolys == 1);
+        if (list->npolys == 1)
+            CHECK(kind == 1 ? list->polys[0].ymin < -19 : list->polys[0].ymin >= 0);
+        KhdaysG3dList replay = {0};
+        CHECK(khdays_g3d_finish(list, NULL, &replay));
+        CHECK(replay.npolys == 1);
+        if (replay.npolys == 1)
+            CHECK(kind == 1 ? replay.polys[0].ymin < -19 : replay.polys[0].ymin >= 0);
+        khdays_g3d_list_free(&replay);
+    }
+}
+
 static void native_triangle(unsigned alpha, unsigned id)
 {
     const uint32_t attr = (alpha << 16) | (id << 24) | 0xc0u, begin = 0;
@@ -147,6 +176,7 @@ int main(void)
     CHECK(replay.npolys == 1 && replay.polys[0].pltt == 19 && (replay.polys[0].flags & KHDAYS_G3D_SEQUENCE));
     khdays_g3d_list_free(&replay);
     marker_order();
+    sequence_hud_bounds();
     if (failures != 0) {
         fprintf(stderr, "%d checks failed\n", failures);
         return 1;

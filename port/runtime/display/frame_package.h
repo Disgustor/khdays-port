@@ -131,7 +131,7 @@ typedef struct KhdaysFramePackage {
     KhdaysSequenceImage party_images[3];
     KhdaysSequenceImage label_images[5];
     KhdaysSequenceImage enemy_image;
-    KhdaysSequenceImage reticle_images[5];
+    KhdaysSequenceImage sequence3d_images[KSI_3D_PROGRAMS];
     KhdaysSequenceImage information_images[2];
     KhdaysSequenceImage obtained_image;
     KhdaysSequenceImage notification_images[3];

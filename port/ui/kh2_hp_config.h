@@ -56,6 +56,59 @@ struct ObtainedConfig final {
 };
 ObtainedConfig load_obtained_config(const std::filesystem::path &path);
 ObtainedConfig load_notification_config(const std::filesystem::path &path, const std::string &name);
+inline constexpr std::array<const char *, 43> heart_clip_names{"heart_idle",
+                                                               "heart_active",
+                                                               "pickup",
+                                                               "background",
+                                                               "streak",
+                                                               "particles_0",
+                                                               "particles_1",
+                                                               "particles_2",
+                                                               "chain_intro",
+                                                               "chain_loop",
+                                                               "chain_outro",
+                                                               "bonus",
+                                                               "digit_0",
+                                                               "digit_1",
+                                                               "digit_2",
+                                                               "digit_3",
+                                                               "digit_4",
+                                                               "digit_5",
+                                                               "digit_6",
+                                                               "digit_7",
+                                                               "digit_8",
+                                                               "digit_9",
+                                                               "small_digit_0",
+                                                               "small_digit_1",
+                                                               "small_digit_2",
+                                                               "small_digit_3",
+                                                               "small_digit_4",
+                                                               "small_digit_5",
+                                                               "small_digit_6",
+                                                               "small_digit_7",
+                                                               "small_digit_8",
+                                                               "small_digit_9",
+                                                               "minus",
+                                                               "plus",
+                                                               "gain",
+                                                               "bonus_gain",
+                                                               "total_gain",
+                                                               "total_loss",
+                                                               "total_gain_medium",
+                                                               "total_gain_large",
+                                                               "heart_grow",
+                                                               "total_gain_final",
+                                                               "chain_warning"};
+struct HeartPointsConfig final {
+    bool enabled = false;
+    std::string archive = "hearts.2dd", texture = "hearts.png", entry = "hart";
+    std::array<int, 43> animations{};
+    float scale = .65f, offset_x = 0, offset_y = 0, source_origin_x = 0, source_origin_y = 0;
+    float frames_per_tick = 1;
+    float total_x = 16.533172f, total_y = 10.800396f, digit_spacing = 10.953388f;
+    float rows_x = 76.454646f, rows_y = 22.5193f, row_spacing = 7.087486f;
+};
+HeartPointsConfig load_heart_points_config(const std::filesystem::path &path);
 struct MissionPanelConfig final {
     bool enabled = false;
     std::string archive = "mission.2dd", texture = "mission.png", entry = "miss";

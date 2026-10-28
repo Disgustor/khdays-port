@@ -2511,6 +2511,22 @@ HOOKS["ov022@020a4490"] = [
         "        khdays_characters_speaker(-1, -1); }\n",
     )
 ]
+HOOKS["ov022@020a23a4"] = [
+    (  # Ov022_ScaleRowValues: the damage of a move a player overlay's own code makes (a Limit, a special)
+        "    kind = *(unsigned char *)(obj + 9);\n",
+        "    { extern int khdays_characters_own_moves(int seat, int kind, int factor);\n"
+        "      factor = khdays_characters_own_moves(*(unsigned char *)(obj + 9), *(int *)(obj + 0xc), factor); }\n"
+        "    kind = *(unsigned char *)(obj + 9);\n",
+    )
+]
+HOOKS["ov022@020a5570"] = [
+    (  # Ov022_RunComboContacts: the attack an actor's hits come from, for KHDAYS_TRACE_CHARACTERS
+        "    pRecord = pActor->pComboLock->pRecord;\n",
+        "    pRecord = pActor->pComboLock->pRecord;\n"
+        "    { extern void khdays_characters_attack(int seat, int kind, int attack);\n"
+        "      khdays_characters_attack(pActor->nId, ((int *)pActor)[3], *(u16 *)pRecord); }\n",
+    )
+]
 HOOKS["ov022@020a48c8"] = [
     (  # Ov022_SpawnVoiceCue: the cue of an actor's action
         "        Slot_Spawn(nHandlerId, nCue, pPos, nFlags);\n",

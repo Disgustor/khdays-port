@@ -328,6 +328,12 @@ Taken up (for the record of what the old names were):
     `Ov022_ComputeStrengthDamage`), not a face; with `Ov022_UnpackChannelGrid`'s `Channel` it is `nA`, whose
     `nB`/`nC` are the first and last frame, `nD`/`nE` the push out and up, and the mode-0 tail's `nA`-`nC` the
     hit's place, `nD` its radius, `nE` its spread's cosine (RUNTIME_MAP section 30, "Its attacks").
+  - `Ov002_GetPanelWord0220(nId, nValue)` sets the panel's HP gauge of seat `nId` (the panel's +0x220 holds
+    each seat's gauge's index into `data_ov002_0207f618`, `Ov002_SetGaugeValue`'s gauges): a setter, not a
+    getter. `data_ov002_0207f614` (the panel) and `data_ov002_0207f618` (its gauges) are 0 until the field's
+    panel is set up, while the battle's actors already exist (a script's set HP faulted there).
+  - `Ov022_ScaleRowValues(obj, factor, ...)` is the player overlays' own moves' damage (a Limit's hits, the
+    specials): the seat's strength and bonuses times `factor`.
   - `Ov022_BuildNodeGraph`'s graphs are a keyblade's combos (graph 0 the ground one, 1 the air one): `nValue`
     an attack's number in `cm.b`, `pLeft` the next attack, the pools the chain, its finisher and the branches.
 

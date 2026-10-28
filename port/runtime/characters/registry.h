@@ -34,6 +34,7 @@ typedef struct KhdaysCharacterAction {
     char *clip;    /* relative to the character's folder */
     int blend_ms;  /* from the clip before */
     int root_keep; /* the clip's own travel of its root kept (else the game's movement alone) */
+    int game_time; /* stretched to the game's animation's length (else at its own speed) */
 } KhdaysCharacterAction;
 
 /* A combo of the character's ([moveset] ground / air): the base's attacks in order (their records' numbers in its
@@ -79,6 +80,7 @@ typedef struct KhdaysCharacter {
     KhdaysCharacterCombo combos[2]; /* [moveset]: KHDAYS_CHARACTER_GROUND, KHDAYS_CHARACTER_AIR */
     KhdaysCharacterAttack *attacks;
     int attack_count;
+    float own_moves_damage; /* [limit] damage: its base's own moves' (its Limit's), times the base's (1 unchanged) */
     char *fallback;         /* the clip of an animation with none */
     char *weapon_bone;      /* skeleton = own: its bone the weapon follows; NULL: the base's hand's place */
     char *base_weapon_node; /* the base model's node the game puts the weapon on; NULL: its *_w_tg_R */

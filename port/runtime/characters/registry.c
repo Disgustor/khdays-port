@@ -188,7 +188,7 @@ static int add_mod(KhdaysCharacters *r, const char *id, const char *folder)
     return r->mod_count++;
 }
 
-enum Section { NONE, CHARACTER, MODEL, ACTIONS, SOUNDS, MOVESET, OTHER };
+enum Section { NONE, CHARACTER, MODEL, ACTIONS, SOUNDS, MOVESET, LIMIT, OTHER };
 
 /* An attack's number: 0 or more, and nothing else. */
 static int read_attack(const char *text, int *out)
@@ -273,12 +273,12 @@ static void read_moveset(KhdaysCharacter *c, const char *name, const char *value
     c->attacks[c->attack_count++] = a;
 }
 
-/* An [actions] line: `fallback = <clip>`, or `<the base's animation> = <clip> [blend <ms>] [root keep|remove]`.
- * A clip's path has no spaces. */
+/* An [actions] line: `fallback = <clip>`, or `<the base's animation> = <clip> [blend <ms>] [root keep|remove]
+ * [time own|game]`. A clip's path has no spaces. */
 static void read_action(KhdaysCharacter *c, const char *name, const char *value, char *why, size_t why_size)
 {
     char clip[512] = "", word[32] = "", rest[64] = "";
-    int blend_ms = KHDAYS_CHARACTER_BLEND_MS, root_keep = 0, used = 0;
+    int blend_ms = KHDAYS_CHARACTER_BLEND_MS, root_keep = 0, game_time = 0, used = 0;
     if (sscanf(value, "%511s%n", clip, &used) != 1) {
         snprintf(why, why_size, "%.60s: its clip missing", name);
         return;
@@ -305,8 +305,11 @@ static void read_action(KhdaysCharacter *c, const char *name, const char *value,
             blend_ms = (int)v;
         } else if (strcmp(word, "root") == 0 && (same_word(rest, "keep") || same_word(rest, "remove"))) {
             root_keep = same_word(rest, "keep");
+        } else if (strcmp(word, "time") == 0 && (same_word(rest, "own") || same_word(rest, "game"))) {
+            game_time = same_word(rest, "game");
         } else {
-            snprintf(why, why_size, "%.60s: %.30s %.30s is neither blend <ms> nor root keep|remove", name, word, rest);
+            snprintf(why, why_size, "%.60s: %.30s %.30s is not blend <ms>, root keep|remove or time own|game", name,
+                     word, rest);
             return;
         }
     }
@@ -326,6 +329,7 @@ static void read_action(KhdaysCharacter *c, const char *name, const char *value,
     a->clip = copy(clip);
     a->blend_ms = blend_ms;
     a->root_keep = root_keep;
+    a->game_time = game_time;
     if (a->game == NULL || a->clip == NULL) {
         free(a->game);
         free(a->clip);
@@ -380,6 +384,7 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
     memset(&c, 0, sizeof(c));
     c.base = -1;
     c.combos[KHDAYS_CHARACTER_GROUND].finisher = c.combos[KHDAYS_CHARACTER_AIR].finisher = -1;
+    c.own_moves_damage = 1.0f;
     if (!good_key(key)) {
         report(mod_id, key, 0, "its folder's name is not a key (letters, digits, '_' and '-' only)", context);
         return 0;
@@ -427,6 +432,7 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
                       : strcmp(s, "[actions]") == 0 ? ACTIONS
                       : strcmp(s, "[sounds]") == 0  ? SOUNDS
                       : strcmp(s, "[moveset]") == 0 ? MOVESET
+                      : strcmp(s, "[limit]") == 0   ? LIMIT
                                                     : OTHER;
             if (section == OTHER) {
                 char note[200];
@@ -466,6 +472,14 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
             read_sound(&c, name, value, why, sizeof(why));
         } else if (section == MOVESET) {
             read_moveset(&c, name, value, why, sizeof(why));
+        } else if (section == LIMIT && strcmp(name, "damage") == 0) {
+            char *number_end;
+            const float v = strtof(value, &number_end);
+            if (number_end == value || *number_end != '\0' || !(v >= 0.0f)) {
+                snprintf(why, sizeof(why), "damage %.40s: a number of times, 0 or more", value);
+            } else {
+                c.own_moves_damage = v;
+            }
         } else if (section == NONE) {
             snprintf(why, sizeof(why), "%.60s: before any part ([character] first)", name);
         } else if (section == CHARACTER && strcmp(name, "format") == 0) {

@@ -5288,3 +5288,13 @@ Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on 
   the finisher five hits of 1.5 sweeping round over frames 12-21. `Ov022_LinkActionAnims` keeps at most 64
   attacks of a keyblade's two graphs. The port writes a new character's `[moveset]` into its own copies of
   both (unpacked, rewritten, packed again as LZ11 literals) when the game starts.
+- **Its Limit** (seen 2026-10-28 in `missions_waves` with the HP kept low by a test mod, the tutorial's text:
+  hold A once the HP is in the yellow): Roxas's plays `b_ro_L000` as it starts, then `b_ro_L001` at each of
+  its hits with `b_ro_A003`/`b_ro_A004` between them, shouting `vo_rs02at01`/`vo_rs02at03`; the combo comes
+  back after it. Its animations are his folder's `li.p.z` (one BCA0) and its effects `li_e0`-`li_e3`,
+  `li_ea0` (`Ov030_BuildActorHandles`, `Ov030_initStateSlotsDispatch`, the paths written in ov030). Its
+  hits are not `cm.b`'s attacks (`Ov022_RunComboContacts` never runs during them): ov030's own code
+  (`Ov030_EmitTimelineEffect`: a hit every 6 frames, its damage `Ov022_ScaleRowValues` with factor 1.23,
+  1.17 for its other kind). Every player overlay makes its own moves' damage through
+  `Ov022_ScaleRowValues` (the actor's seat's strength and bonuses, capped at 999, times the factor), which
+  the port joins for a new character's `[limit] damage`.

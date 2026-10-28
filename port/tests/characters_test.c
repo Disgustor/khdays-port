@@ -203,7 +203,7 @@ static void own_skeleton_read(void)
                                "[actions]\nfallback = clips/idle.fbx\n"
                                "b_ro_A000 = clips/idle.fbx\n"
                                "b_ro_A001 = clips/run.fbx blend 120\n"
-                               "b_ro_B009 = clips/hit1.fbx root keep blend 0\n";
+                               "b_ro_B009 = clips/hit1.fbx root keep blend 0 time game\n";
     KhdaysCharacters r;
     Reports reports;
     memset(&r, 0, sizeof(r));
@@ -220,9 +220,9 @@ static void own_skeleton_read(void)
     const KhdaysCharacterAction *run = khdays_characters_action(c, "b_ro_A001");
     CHECK(run != NULL && strcmp(run->clip, "clips/run.fbx") == 0 && run->blend_ms == 120 && run->root_keep == 0);
     const KhdaysCharacterAction *hit = khdays_characters_action(c, "b_ro_B009");
-    CHECK(hit != NULL && hit->blend_ms == 0 && hit->root_keep == 1);
+    CHECK(hit != NULL && hit->blend_ms == 0 && hit->root_keep == 1 && hit->game_time == 1);
     const KhdaysCharacterAction *idle = khdays_characters_action(c, "b_ro_A000");
-    CHECK(idle != NULL && idle->blend_ms == KHDAYS_CHARACTER_BLEND_MS);
+    CHECK(idle != NULL && idle->blend_ms == KHDAYS_CHARACTER_BLEND_MS && idle->game_time == 0);
     CHECK(khdays_characters_action(c, "b_ro_A004") == NULL);
     khdays_characters_free(&r);
 
@@ -240,7 +240,7 @@ static void own_skeleton_read(void)
         {"[character]\nformat = 1\nbase = roxas\nname = A\n[model]\nfile = a.fbx\n[actions]\nb_ro_A000 = x.fbx blend soon\n",
          "not milliseconds", 8},
         {"[character]\nformat = 1\nbase = roxas\nname = A\n[model]\nfile = a.fbx\n[actions]\nb_ro_A000 = x.fbx loop yes\n",
-         "neither blend", 8},
+         "not blend <ms>", 8},
         {"[character]\nformat = 1\nbase = roxas\nname = A\n[model]\nfile = a.fbx\n[actions]\nb_ro_A000 = x.fbx root\n",
          "without its value", 8},
     };
@@ -308,7 +308,8 @@ static void moveset_read(void)
                                "ground finisher = 2\n"
                                "air finisher = 5\n"
                                "attack 1 = damage 2 reach 1.5 push 0\n"
-                               "attack 7 = push 3\n";
+                               "attack 7 = push 3\n"
+                               "[limit]\ndamage = 2.5\n";
     KhdaysCharacters r;
     Reports reports;
     memset(&r, 0, sizeof(r));
@@ -324,12 +325,14 @@ static void moveset_read(void)
           c->attacks[0].push == 0.0f);
     CHECK(c->attacks[1].id == 7 && c->attacks[1].damage == 1.0f && c->attacks[1].push == 3.0f);
     CHECK(khdays_moveset_wanted(c));
+    CHECK(c->own_moves_damage == 2.5f);
     khdays_characters_free(&r);
 
     memset(&r, 0, sizeof(r));
     CHECK(read_text(&r, "m", "plain", "[character]\nformat = 1\nbase = roxas\nname = A\n[model]\nfile = a.fbx\n",
                     &reports) == 1);
     CHECK(r.list[0].combos[0].finisher == -1 && !khdays_moveset_wanted(&r.list[0]));
+    CHECK(r.list[0].own_moves_damage == 1.0f); /* the base's */
     khdays_characters_free(&r);
 
     static const struct {

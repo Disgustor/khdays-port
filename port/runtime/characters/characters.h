@@ -53,6 +53,16 @@ int khdays_characters_file(const KhdaysCharacter *c, const char *relative, char 
  * for any other. */
 const KhdaysCharacter *khdays_characters_of_model(const char *name);
 
+/* The damage factor (fx32) of a move of seat `seat`'s actor, which plays as `kind`, that its base's own code makes
+ * (Ov022_ScaleRowValues's join: the player overlays' Limits and specials): a new character's [limit] damage
+ * times `factor`, else `factor`. */
+int khdays_characters_own_moves(int seat, int kind, int factor);
+
+/* Seat `seat`'s actor, which plays as `kind`, hits with attack `attack` (its record's number in cm.b:
+ * Ov022_RunComboContacts's join, each frame of it): told under KHDAYS_TRACE_CHARACTERS when it changes, for a new
+ * character's actor, so that its author can name the attacks in [moveset]. */
+void khdays_characters_attack(int seat, int kind, int attack);
+
 /* The game starts the sounds of seat `seat`'s actor, which plays as `kind` (Ov022_PlayEntityVoice's join), until
  * it is called again with -1. */
 void khdays_characters_speaker(int seat, int kind);

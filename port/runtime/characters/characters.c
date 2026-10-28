@@ -11,6 +11,7 @@
 #include "../scripts/manifest.h"
 #include "../scripts/mods_log.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -403,6 +404,33 @@ int khdays_characters_of(int slot, int kind)
         }
     }
     return c->number;
+}
+
+int khdays_characters_own_moves(int seat, int kind, int factor)
+{
+    const KhdaysCharacter *c = khdays_characters_numbered(khdays_characters_of(seat, kind));
+    if (c == NULL || kind != c->base || c->own_moves_damage == 1.0f) {
+        return factor;
+    }
+    static int told_factor = -1;
+    if (tracing && told_factor != factor) {
+        told_factor = factor;
+        khdays_log("characters: %s's own move: its damage factor %.3f times %.2f", c->identity, factor / 4096.0,
+                   c->own_moves_damage);
+    }
+    return (int)lroundf((float)factor * c->own_moves_damage);
+}
+
+void khdays_characters_attack(int seat, int kind, int attack)
+{
+    static int told[SEATS] = {-1, -1, -1, -1};
+    const KhdaysCharacter *c;
+    if (!tracing || seat < 0 || seat >= SEATS || told[seat] == attack ||
+        (c = khdays_characters_numbered(khdays_characters_of(seat, kind))) == NULL || kind != c->base) {
+        return;
+    }
+    told[seat] = attack;
+    khdays_log("characters: %s (seat %d) attacks with attack %d", c->identity, seat, attack);
 }
 
 /* The new character whose actor the game starts sounds for, NULL none. */

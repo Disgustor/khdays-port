@@ -77,13 +77,17 @@ given a clip of the character's own in `[actions]`:
 fallback = clips/002.fbx                    # any animation with no clip of its own
 b_ro_A000 = clips/002.fbx                   # standing
 b_ro_A001 = clips/004.fbx blend 120         # running
-b_ro_B009 = clips/200.fbx root keep         # the combo's first hit, its own forward step kept
+b_ro_B009 = clips/200.fbx root keep time game  # the combo's first hit: its forward step kept, timed
+                                               # to the game's
 ```
 
-- `<the base's animation> = <clip> [blend <ms>] [root keep|remove]`: the clip (its file's first animation, its
-  bones by name) plays at the same point as the game's animation, stretched to its own length, so a hit lands
-  when the game's does. `blend` (default 100 ms) is how long it blends from the pose before; the root's own travel
-  is removed (the game moves the character) unless `root keep`.
+- `<the base's animation> = <clip> [blend <ms>] [root keep|remove] [time own|game]`: the clip (its file's first
+  animation, its bones by name) plays while the game plays that animation. `time own` (the default): at the
+  speed it was made with, standing while the game holds its animation (the pause, a hit's stop), and looping
+  once the game's animation loops (standing, running); a clip longer than a one-off animation of the game's is
+  cut where the game goes on. `time game`: at the same point as the game's animation, stretched to its own
+  length, so that a hit lands when the game's does (for attacks). `blend` (default 100 ms) is how long it blends
+  from the pose before; the root's own travel is removed (the game moves the character) unless `root keep`.
 - The names: Roxas's standing `b_ro_A000`, running `b_ro_A001`, the ground combo `b_ro_B009`, `b_ro_B008`,
   `b_ro_B015` and `b_ro_A004` after it (seen; more as they are found). With `KHDAYS_TRACE_MODELS=1` and the session
   log on, the log names each animation as the game plays it and the clip shown; an animation with no clip is told
@@ -137,9 +141,35 @@ attack 10 = push 2                   # knocked twice as far
   attacks whose hits sweep (most of the combos'; RUNTIME_MAP section 30) can be changed.
 - Roxas's first keyblade's combo is `0 1`, finisher `2`; in the air `3 4`, finisher `5`; the others' attacks are
   numbered by keyblade (1000s for the second, 2000s for the third, ...). Any of the base's attacks can be used:
-  a keyblade's two combos may hold at most 64 attacks and 16 of their animations (the game's tables).
+  a keyblade's two combos may hold at most 64 attacks and 16 of their animations (the game's tables). With
+  `KHDAYS_TRACE_CHARACTERS=1` and the session log on, the log names each attack the character hits with as it
+  changes (`characters: local.ventus/ventus (seat 0) attacks with attack 1`).
 - A moveset that names an attack its base does not have, or passes those tables, is told in the mods' log and left
   out: the base's moves play. A mod's own `data/ci.b.z` or `data/cm.b.z` wins over it (told).
+
+## Its Limit (`[limit]`)
+
+The character's Limit is its base's (the game's own code for it, in the base's overlay): with its HP in the
+yellow, holding A starts it, and its attacks are its base's Limit's until the white line of its HP gauge runs out.
+What it shows and says is the character's own, as for its other moves:
+
+```ini
+[actions]
+b_ro_L000 = clips/212.fbx            # Roxas's Limit's start
+b_ro_L001 = clips/300.fbx time game  # each of its hits
+
+[limit]
+damage = 1.5                         # its Limit's damage, times its base's
+```
+
+- Roxas's Limit plays `b_ro_L000` as it starts and `b_ro_L001` at each of its hits, with `b_ro_A003` and
+  `b_ro_A004` between them (seen; `KHDAYS_TRACE_MODELS=1` names them for any base); its shouts are its base's
+  attack shouts (`seqarc/PLY_ROX/vo_rs02at01`, `vo_rs02at03`), which `[sounds]` gives files of its own.
+- `[limit] damage = <times>` -- the damage of the moves its base's own code makes (the Limit's hits, and any other
+  move of the base's own: `Ov022_ScaleRowValues`), times the base's. The combos' attacks are `[moveset]`'s.
+- Its effects and its animations' file are its base's, read from its base's folder (`ba/ch/ro/li*.p.z`: the
+  overlay names them itself), so `data/` does not replace them.
+- Its length, its button and the way it is started are its base's.
 
 ## Limits
 
@@ -151,5 +181,6 @@ character loads without the mod, its base standing in.
 ## Not yet
 
 - The game's own select (two screens, without the select's layout of the HD pieces) does not list them.
-- Attacks of their own (new kinds of moves, not the base's), their Limits, the studio's editor (spec 034's later
-  phases); the field's portrait and the results' model are still the base's.
+- Attacks of their own (new kinds of moves, not the base's) and a Limit of their own (its length, its kind of
+  hits: their base's code), the studio's editor (spec 034's later phases); the field's portrait and the results'
+  model are still the base's.

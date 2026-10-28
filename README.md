@@ -206,9 +206,9 @@ Your choices are kept in `saves/settings.ini`, a text file you may also edit
 by hand (`KHDAYS_SETTINGS=<path>` uses another file). If the port cannot read
 it, it starts with the defaults and keeps the old file as `settings.ini.bad`.
 
-**Enhancements** (Settings → Enhancements; all off by default, so the game
-plays as on the DS until you switch one on). Each does only what the game's
-own controls can do, through the same parts of the game:
+**Enhancements** (Settings → Enhancements). The control enhancements below
+are off by default. Each uses the game's own controls through the same parts
+of the game:
 
 - **Analog camera:** the right stick turns the field camera and tilts it, as
   far as the tilt of the stick, at up to the game's own turning speed
@@ -242,6 +242,16 @@ own controls can do, through the same parts of the game:
   field -- menus, tutorials, the pause -- there is no lock-on, and these
   buttons are the DS's R (lock on, next target) and L (previous target), so
   they turn pages as R and L do there.
+
+The same menu has live switches for HD fonts, KH2 minimap presentation, HUD
+sequences, the pause-menu target, and HUD/control during INFORMATION messages.
+These switches require the corresponding enabled mod assets and preserve native
+fallback when an asset is unavailable. Mission-panel visibility and its gameplay
+and pause anchors are saved here too. **UI padding**, off by default, removes
+the outer inset from an active HD HUD in single-screen mode. Changes use
+`saves/settings.ini`; they never rewrite mod JSON. See the
+[HUD preference reference](docs/KH2_SEQUENCES.md#live-enhancements-preferences)
+for defaults, precedence, and the INFORMATION transition exception.
 
 The **Kingdom Hearts II layout** (Settings → Gamepad preset; Kingdom Hearts
 III uses the same buttons for these actions) puts attack on the bottom face

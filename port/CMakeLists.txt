@@ -674,8 +674,8 @@ add_executable(khdays-native
 target_include_directories(khdays-native PRIVATE ../assets/include)
 # the frame decoder's state (runtime/movies/video.c)
 set_source_files_properties(runtime/movies/video.c PROPERTIES INCLUDE_DIRECTORIES "${MOBICLIP_PORTABLE}")
-# the port's wording holds the game's own texts in UTF-16 literals, written in UTF-8
-set_source_files_properties(runtime/core/text_patches.cpp PROPERTIES COMPILE_OPTIONS "/utf-8")
+# Game text and translated UI labels use Unicode literals in UTF-8 source files.
+set_source_files_properties(runtime/core/text_patches.cpp host/screens/ui_text.c PROPERTIES COMPILE_OPTIONS "/utf-8")
 # the window's areas (runtime/core/memory.c), the function references' table
 # (runtime/core/window.c), the DS addresses the port reads (khdays_ds_symbols.h)
 target_include_directories(khdays-native PRIVATE "${KHDAYS_GEN}")
@@ -960,7 +960,8 @@ khdays_fuzz_target(mods fuzz/fuzz_mods.c runtime/scripts/manifest.c runtime/scri
 # The static analysis (port/tools/analyze.py, in the Release tree's tests): the port's own sources of
 # each target compiled again with /analyze and their own flags, not linked, built only when asked;
 # not the decompilation's rewritten files, not the third parties'.
-set(KHDAYS_ANALYZED khdays-native khdays-gpu khdays-sound khdays-gfx khdays-host-input khdays-server)
+set(KHDAYS_ANALYZED khdays-native khdays-gpu khdays-sound khdays-gfx khdays-host-input khdays-server
+                   khdays-hud-settings khdays-kh2-sequence khdays-kh2-gauge khdays-kh2-portrait)
 set(KHDAYS_ANALYZE_TARGETS "")
 foreach(target IN LISTS KHDAYS_ANALYZED)
     get_target_property(sources ${target} SOURCES)

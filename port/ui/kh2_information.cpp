@@ -162,7 +162,8 @@ void disable(const char *reason)
         s.program = {};
     }
     upper_art_owned = false;
-    upper_art_cells = {};
+    for (auto &cells : upper_art_cells)
+        cells.fill({});
     khdays_ui_changed();
     khdays_log("kh2 information: %s; keeping the Days banner", reason);
 }

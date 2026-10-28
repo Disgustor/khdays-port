@@ -534,9 +534,9 @@ CTest includes the runtime suites, NFTR decoder and generator-hook checks, with
 separate fixtures per build directory. Release tests retain assertion checks.
 
 The same suites run under AddressSanitizer in the `port/build.py --asan` tree.
-There are nine synthetic suites: camp scope selection, canvas/VRAM behavior,
+There are ten synthetic suites: camp scope selection, canvas/VRAM behavior,
 layout following, metadata/routing, secondary fallback, rasterization,
-raster-cache bounds, NFTR decoding and generated SDK layout.
+raster-cache bounds, NFTR decoding, generated SDK layout and live layout reflow.
 
 Canvas tests also check ordinary PNGs with HD fonts disabled, partial uploads
 beside retained text, transparent and indexed art, flips, scrolling and image

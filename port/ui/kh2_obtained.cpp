@@ -62,7 +62,7 @@ struct Notification {
     void disable(const char *why)
     {
         asset.reset();
-        native_cells = {};
+        native_cells.fill({});
         retiring = false;
         pending = active = started = native = false;
         program = {};
@@ -221,7 +221,7 @@ struct Notification {
             if (active || pending || started)
                 khdays_ui_changed();
             if (started || retiring)
-                native_cells = {};
+                native_cells.fill({});
             pending = active = started = native = false;
             retiring = false;
             program = {};
@@ -229,7 +229,7 @@ struct Notification {
         if (!enabled()) {
             pending = native;
             if (started || retiring)
-                native_cells = {};
+                native_cells.fill({});
             active = started = retiring = false;
             program = {};
         }

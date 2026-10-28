@@ -21,6 +21,7 @@ extern "C" {
 #include <vector>
 
 namespace {
+bool hd_graphics = true;
 namespace gauge = khdays::ui::kh2;
 namespace seq = khdays::assets::kh2;
 std::vector<unsigned char> ram(0x02400000);
@@ -186,6 +187,10 @@ void configs(const std::filesystem::path &folder)
 } // namespace
 
 extern "C" {
+int khdays_textures_hd(void)
+{
+    return hd_graphics;
+}
 unsigned char *khdays_window = ram.data();
 int khdays_mods_find(const char *, char *out, int size)
 {
@@ -460,6 +465,20 @@ int main(int argc, char **argv)
             khdays_ui_kh2_enemy_reference(cpu);
             khdays_ui_kh2_enemy_emit();
             expect(emitted == 1 && suppressed.size() == 10, "enemy gauge required a reload after enabling");
+            hd_graphics = false;
+            khdays_ui_kh2_enemy_frame(208);
+            emitted = 0;
+            suppressed.clear();
+            khdays_ui_kh2_enemy_reference(cpu);
+            khdays_ui_kh2_enemy_emit();
+            expect(!khdays_ui_kh2_enemy_ready() && emitted == 0 && suppressed.empty(),
+                   "HD graphics off retained enemy drawing or suppression");
+            hd_graphics = true;
+            khdays_ui_kh2_enemy_frame(209);
+            khdays_ui_kh2_enemy_reference(cpu);
+            khdays_ui_kh2_enemy_emit();
+            expect(khdays_ui_kh2_enemy_ready() && emitted == 1 && suppressed.size() == 10,
+                   "HD graphics on required reloading the enemy gauge");
             enemy_cells = false;
             emitted = 0;
             suppressed.clear();

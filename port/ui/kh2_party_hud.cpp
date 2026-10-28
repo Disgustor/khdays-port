@@ -104,16 +104,6 @@ void load()
         asset.reset();
     }
 }
-std::uint32_t over(std::uint32_t under, std::uint32_t top)
-{
-    const float a = float(top >> 24) / 255, b = float(under >> 24) / 255 * (1 - a), sum = a + b;
-    if (sum == 0)
-        return 0;
-    std::uint32_t result = std::uint32_t(sum * 255 + 0.5f) << 24;
-    for (unsigned s = 0; s < 24; s += 8)
-        result |= std::uint32_t((float((top >> s) & 255) * a + float((under >> s) & 255) * b) / sum + 0.5f) << s;
-    return result;
-}
 } // namespace
 
 extern "C" void khdays_ui_kh2_party_frame(unsigned frame)
@@ -126,7 +116,7 @@ extern "C" void khdays_ui_kh2_party_frame(unsigned frame)
         auto &s = slots[std::size_t(i)];
         const bool was = s.valid;
         int icon = 0, hp = 0, maximum = 0, low = 0;
-        s.valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && configs[std::size_t(i)].enabled &&
+        s.valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && khdays_textures_hd() && configs[std::size_t(i)].enabled &&
                   khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
                   khdays_link_hud_portrait(i + 1, &icon, &hp, &maximum, &low);
         if (s.valid) {
@@ -319,9 +309,9 @@ extern "C" int khdays_ui_kh2_party_compose(int slot, const KhdaysUiElement *face
                     if (dx < 0 || dx >= width * scale || dy < 0 || dy >= height * scale)
                         continue;
                     auto &dst = pixels[std::size_t(dy) * std::size_t(width * scale) + std::size_t(dx)];
-                    dst = over(dst, khdays_ui_element_rgba(face, x, y));
+                    dst = render::source_over(dst, khdays_ui_element_rgba(face, x, y));
                     if (hd)
-                        dst = over(dst, khdays_ui_element_rgba(hd, x, y));
+                        dst = render::source_over(dst, khdays_ui_element_rgba(hd, x, y));
                 }
             auto *out = khdays_ui_image_begin(s.image);
             if (!out)

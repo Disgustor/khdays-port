@@ -133,16 +133,6 @@ void load()
     }
 }
 
-std::uint32_t over(std::uint32_t under, std::uint32_t top)
-{
-    const float a = float(top >> 24) / 255, b = float(under >> 24) / 255 * (1 - a), total = a + b;
-    if (total == 0)
-        return 0;
-    std::uint32_t out = std::uint32_t(total * 255 + 0.5f) << 24;
-    for (unsigned s = 0; s < 24; s += 8)
-        out |= std::uint32_t((float((top >> s) & 255) * a + float((under >> s) & 255) * b) / total + 0.5f) << s;
-    return out;
-}
 } // namespace
 
 extern "C" void khdays_ui_kh2_hp_frame(unsigned frame)
@@ -150,8 +140,9 @@ extern "C" void khdays_ui_kh2_hp_frame(unsigned frame)
     load();
     int hp = 0, maximum = 0;
     const bool was = valid;
-    valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
-            khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
+    valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && khdays_textures_hd() && asset &&
+            khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_overlay_loaded(2) &&
+            khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
             khdays_link_player_hp(&hp, &maximum) && maximum > 0;
     if (!valid) {
         gauge_slot = -1;
@@ -371,9 +362,9 @@ extern "C" int khdays_ui_kh2_hp_compose(const KhdaysUiElement *face, const Khday
                     if (dx < 0 || dx >= width * scale || dy < 0 || dy >= height * scale)
                         continue;
                     auto &dst = rgba[std::size_t(dy) * std::size_t(width * scale) + std::size_t(dx)];
-                    dst = over(dst, khdays_ui_element_rgba(face, x, y));
+                    dst = render::source_over(dst, khdays_ui_element_rgba(face, x, y));
                     if (hd)
-                        dst = over(dst, khdays_ui_element_rgba(hd, x, y));
+                        dst = render::source_over(dst, khdays_ui_element_rgba(hd, x, y));
                 }
             auto *out = khdays_ui_image_begin(image);
             if (!out)

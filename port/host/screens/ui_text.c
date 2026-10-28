@@ -83,13 +83,13 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_HUD_INFORMATION_HUD] = {"HUD and control during INFORMATION", "ATH et commandes pendant INFORMATION",
                                  "HUD und Steuerung bei INFORMATION", "HUD e comandi durante INFORMATION",
                                  "HUD y controles durante INFORMATION"},
-    [TXT_HUD_UI_PADDING] = {"UI padding", "Marges de l�interface", "UI-Rand", "Margini interfaccia",
+    [TXT_HUD_UI_PADDING] = {"UI padding", "Marges de l’interface", "UI-Rand", "Margini interfaccia",
                             "Margen de la interfaz"},
     [TXT_HUD_UI_PADDING_NOTE] =
         {"Single-screen HUD: off aligns the UI to the screen edges; on restores the original padding.",
-         "ATH sur un �cran : d�sactiv�, aligne l�interface sur les bords ; activ�, r�tablit les marges d�origine.",
-         "Einzelbildschirm-HUD: Aus richtet die UI am Bildschirmrand aus; Ein stellt den urspr�nglichen Rand wieder her.",
-         "HUD a schermo singolo: disattivato allinea l�interfaccia ai bordi; attivato ripristina i margini originali.",
+         "ATH sur un écran : désactivé, aligne l’interface sur les bords ; activé, rétablit les marges d’origine.",
+         "Einzelbildschirm-HUD: Aus richtet die UI am Bildschirmrand aus; Ein stellt den ursprünglichen Rand wieder her.",
+         "HUD a schermo singolo: disattivato allinea l’interfaccia ai bordi; attivato ripristina i margini originali.",
          "HUD en una pantalla: desactivado alinea la interfaz con los bordes; activado restaura el margen original."},
     [TXT_HUD_MISSION_VISIBILITY] = {"Mission panel visibility", "Visibilité du panneau de mission",
                                     "Sichtbarkeit der Missionsanzeige", "Visibilità pannello missione",
@@ -153,8 +153,7 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_HUD_ANCHOR_6] = {"Bottom left", "En bas à gauche", "Unten links", "In basso a sinistra",
                           "Abajo a la izquierda"},
     [TXT_HUD_ANCHOR_7] = {"Bottom", "En bas", "Unten", "In basso", "Abajo"},
-    [TXT_HUD_ANCHOR_8] = {"Bottom right", "En bas à droite", "Unten rechts", "In basso a destra",
-                          "Abajo a la derecha"},
+    [TXT_HUD_ANCHOR_8] = {"Bottom right", "En bas à droite", "Unten rechts", "In basso a destra", "Abajo a la derecha"},
 
     [TXT_SETTINGS] = {"Settings", "Réglages", "Einstellungen", "Impostazioni", "Ajustes"},
     [TXT_CONTROLS] = {"Controls", "Commandes", "Steuerung", "Comandi", "Controles"},
@@ -257,8 +256,8 @@ static const char *const texts[TXT_COUNT][5] = {
                                   "Befehlsmenü (im Feld; sonst Steuerkreuz)",
                                   "Menu comandi (sul campo; altrove la croce)",
                                   "Menú de comandos (en el campo; fuera, cruceta)"},
-    [TXT_PRESET_DS] = {"Use the DS layout (the default)", "Disposition de la DS (par défaut)",
-                       "DS-Belegung (Standard)", "Schema del DS (predefinito)", "Esquema de la DS (por defecto)"},
+    [TXT_PRESET_DS] = {"Use the DS layout (the default)", "Disposition de la DS (par défaut)", "DS-Belegung (Standard)",
+                       "Schema del DS (predefinito)", "Esquema de la DS (por defecto)"},
     [TXT_PRESET_KH2] = {"Use the Kingdom Hearts II layout", "Disposition de Kingdom Hearts II",
                         "Kingdom Hearts II-Belegung", "Schema di Kingdom Hearts II", "Esquema de Kingdom Hearts II"},
     [TXT_KH2_TITLE] = {"The Kingdom Hearts II layout:", "La disposition de Kingdom Hearts II :",
@@ -293,8 +292,7 @@ static const char *const texts[TXT_COUNT][5] = {
                             "%s > %s: %s (wie im neuen Spiel).", "%s > %s: %s (nuova partita).",
                             "%s > %s: %s (como en partida nueva)."},
     [TXT_KEYBOARD_UNCHANGED] = {"The keyboard is not changed.", "Le clavier ne change pas.",
-                                "Die Tastatur bleibt unverändert.", "La tastiera non cambia.",
-                                "El teclado no cambia."},
+                                "Die Tastatur bleibt unverändert.", "La tastiera non cambia.", "El teclado no cambia."},
     [TXT_ENH_CAMERA] = {"Analog camera", "Caméra analogique", "Analoge Kamera", "Telecamera analogica",
                         "Cámara analógica"},
     [TXT_ENH_CAMERA_NOTE] = {"The right stick turns the camera, as the game's own camera controls do.",
@@ -338,11 +336,10 @@ static const char *const texts[TXT_COUNT][5] = {
                              "Zona morta lev. destra (%)", "Zona muerta pal. derecha (%)"},
     [TXT_LEFT_HYSTERESIS] = {"Left stick hysteresis (%)", "Hystérésis stick gauche (%)", "Hysterese linker Stick (%)",
                              "Isteresi lev. sinistra (%)", "Histéresis pal. izquierda (%)"},
-    [TXT_RIGHT_HYSTERESIS] = {"Right stick hysteresis (%)", "Hystérésis stick droit (%)",
-                              "Hysterese rechter Stick (%)", "Isteresi lev. destra (%)",
-                              "Histéresis pal. derecha (%)"},
-    [TXT_CAMERA_SPEED] = {"Camera speed (%)", "Vitesse de la caméra (%)", "Kameratempo (%)",
-                          "Velocità telecamera (%)", "Velocidad de la cámara (%)"},
+    [TXT_RIGHT_HYSTERESIS] = {"Right stick hysteresis (%)", "Hystérésis stick droit (%)", "Hysterese rechter Stick (%)",
+                              "Isteresi lev. destra (%)", "Histéresis pal. derecha (%)"},
+    [TXT_CAMERA_SPEED] = {"Camera speed (%)", "Vitesse de la caméra (%)", "Kameratempo (%)", "Velocità telecamera (%)",
+                          "Velocidad de la cámara (%)"},
     [TXT_CAMERA_X] = {"Camera left/right", "Caméra gauche/droite", "Kamera links/rechts", "Telecamera sinistra/destra",
                       "Cámara izquierda/derecha"},
     [TXT_CAMERA_Y] = {"Camera up/down", "Caméra haut/bas", "Kamera hoch/runter", "Telecamera su/giù",
@@ -376,8 +373,7 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_PRESS_KEY] = {"Press a key", "Appuyez sur une touche", "Drücke eine Taste", "Premi un tasto",
                        "Pulsa una tecla"},
     [TXT_PRESS_BUTTON] = {"Press a gamepad button", "Appuyez sur un bouton de la manette",
-                          "Drücke eine Controller-Taste", "Premi un tasto del controller",
-                          "Pulsa un botón del mando"},
+                          "Drücke eine Controller-Taste", "Premi un tasto del controller", "Pulsa un botón del mando"},
     /* %s: "Press a key" or "Press a gamepad button"; %s: what it is for. */
     [TXT_PRESS_FOR] = {"%s for \"%s\"", "%s pour \"%s\"", "%s für \"%s\"", "%s per \"%s\"", "%s para \"%s\""},
     /* %s: how to cancel; %d: the seconds left. */
@@ -434,12 +430,11 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_QUIT_GAME] = {"Quit the game", "Quitter le jeu", "Spiel beenden", "Esci dal gioco", "Salir del juego"},
     [TXT_QUIT_GAME_Q] = {"Quit the game?", "Quitter le jeu ?", "Spiel beenden?", "Uscire dal gioco?",
                          "¿Salir del juego?"},
-    [TXT_QUIT_GAME_DETAIL] =
-        {"What has not been saved in the game is lost. The settings changed are kept.",
-         "Ce qui n'a pas été sauvegardé dans le jeu est perdu. Les réglages modifiés sont gardés.",
-         "Was im Spiel nicht gespeichert wurde, geht verloren. Geänderte Einstellungen bleiben.",
-         "Ciò che non è stato salvato nel gioco va perso. Le impostazioni cambiate restano.",
-         "Lo que no hayas guardado en la partida se pierde. Los ajustes cambiados se conservan."},
+    [TXT_QUIT_GAME_DETAIL] = {"What has not been saved in the game is lost. The settings changed are kept.",
+                              "Ce qui n'a pas été sauvegardé dans le jeu est perdu. Les réglages modifiés sont gardés.",
+                              "Was im Spiel nicht gespeichert wurde, geht verloren. Geänderte Einstellungen bleiben.",
+                              "Ciò che non è stato salvato nel gioco va perso. Le impostazioni cambiate restano.",
+                              "Lo que no hayas guardado en la partida se pierde. Los ajustes cambiados se conservan."},
     /* %s: the port's version (the VERSION file's). */
     [TXT_VERSION] = {"Version %s", "Version %s", "Version %s", "Versione %s", "Versión %s"},
     /* %s: the controller's name. */
@@ -552,8 +547,8 @@ static const char *const texts[TXT_COUNT][5] = {
                                 "Cómo se estiran las pantallas a la ventana."},
     [TXT_VIDEO_SHARP] = {"Sharp (DS)", "Net (DS)", "Scharf (DS)", "Nitido (DS)", "Nítido (DS)"},
     [TXT_VIDEO_SMOOTH] = {"Smooth", "Lissé", "Weich", "Morbido", "Suave"},
-    [TXT_VIDEO_TEXTURES] = {"3D texture smoothing", "Lissage des textures 3D", "3D-Texturglättung",
-                            "Filtro texture 3D", "Suavizado de texturas 3D"},
+    [TXT_VIDEO_TEXTURES] = {"3D texture smoothing", "Lissage des textures 3D", "3D-Texturglättung", "Filtro texture 3D",
+                            "Suavizado de texturas 3D"},
     [TXT_VIDEO_TEXTURES_NOTE] = {"The DS draws textures without smoothing.", "La DS dessine les textures sans lissage.",
                                  "Der DS zeichnet Texturen ohne Glättung.", "Il DS disegna le texture senza filtro.",
                                  "La DS dibuja las texturas sin suavizado."},
@@ -640,12 +635,11 @@ static const char *const texts[TXT_COUNT][5] = {
          "toda la pantalla. Pantalla completa: la pantalla solo para el juego, a la resolución del "
          "escritorio."},
     [TXT_VIDEO_SUBTITLES] = {"Subtitles", "Sous-titres", "Untertitel", "Sottotitoli", "Subtítulos"},
-    [TXT_VIDEO_SUBTITLES_NOTE] =
-        {"The subtitles over the game's movies. A new game asks for it too.",
-         "Les sous-titres des cinématiques du jeu. Une nouvelle partie le demande aussi.",
-         "Die Untertitel der Filmsequenzen des Spiels. Ein neues Spiel fragt auch danach.",
-         "I sottotitoli dei filmati del gioco. Anche una nuova partita lo chiede.",
-         "Los subtítulos de las películas del juego. También lo pregunta una partida nueva."},
+    [TXT_VIDEO_SUBTITLES_NOTE] = {"The subtitles over the game's movies. A new game asks for it too.",
+                                  "Les sous-titres des cinématiques du jeu. Une nouvelle partie le demande aussi.",
+                                  "Die Untertitel der Filmsequenzen des Spiels. Ein neues Spiel fragt auch danach.",
+                                  "I sottotitoli dei filmati del gioco. Anche una nuova partita lo chiede.",
+                                  "Los subtítulos de las películas del juego. También lo pregunta una partida nueva."},
     [TXT_VIDEO_BACKEND] = {"Graphics API", "API graphique", "Grafik-API", "API grafica", "API gráfica"},
     [TXT_VIDEO_BACKEND_AUTO] = {"Automatic", "Automatique", "Automatisch", "Automatica", "Automática"},
     [TXT_VIDEO_BACKEND_NOTE] = {"What draws the picture: Automatic is Direct3D 12 on Windows, Vulkan on a Steam Deck "
@@ -758,28 +752,26 @@ static const char *const texts[TXT_COUNT][5] = {
          "El nombre que ven los demás jugadores en multijugador, hasta 10 caracteres. Vacío: uno "
          "automático."},
     [TXT_ONLINE] = {"Online play", "Jeu en ligne", "Online-Spiel", "Gioco online", "Juego en línea"},
-    [TXT_ONLINE_NOTE] =
-        {"Play with others anywhere, through the server; on this PC and the local network no server is "
-         "needed.",
-         "Jouer avec d'autres n'importe où, par le serveur ; sur ce PC et le réseau local, aucun "
-         "serveur n'est nécessaire.",
-         "Mit anderen überall spielen, über den Server; auf diesem PC und im lokalen Netzwerk ist kein "
-         "Server nötig.",
-         "Giocare con altri ovunque, tramite il server; su questo PC e nella rete locale non serve "
-         "alcun server.",
-         "Jugar con otros desde cualquier sitio, a través del servidor; en este PC y en la red local "
-         "no hace falta servidor."},
+    [TXT_ONLINE_NOTE] = {"Play with others anywhere, through the server; on this PC and the local network no server is "
+                         "needed.",
+                         "Jouer avec d'autres n'importe où, par le serveur ; sur ce PC et le réseau local, aucun "
+                         "serveur n'est nécessaire.",
+                         "Mit anderen überall spielen, über den Server; auf diesem PC und im lokalen Netzwerk ist kein "
+                         "Server nötig.",
+                         "Giocare con altri ovunque, tramite il server; su questo PC e nella rete locale non serve "
+                         "alcun server.",
+                         "Jugar con otros desde cualquier sitio, a través del servidor; en este PC y en la red local "
+                         "no hace falta servidor."},
     [TXT_SERVER] = {"Server", "Serveur", "Server", "Server", "Servidor"},
-    [TXT_SERVER_NOTE] =
-        {"The address of the khdays-server to meet through (host, or host:port). Anyone can run one.",
-         "L'adresse du khdays-server par lequel se retrouver (hôte, ou hôte:port). N'importe qui peut "
-         "en lancer un.",
-         "Die Adresse des khdays-server, über den man sich trifft (Host oder Host:Port). Jeder kann "
-         "einen betreiben.",
-         "L'indirizzo del khdays-server tramite cui incontrarsi (host, o host:porta). Chiunque può "
-         "avviarne uno.",
-         "La dirección del khdays-server por el que encontrarse (host, o host:puerto). Cualquiera "
-         "puede abrir uno."},
+    [TXT_SERVER_NOTE] = {"The address of the khdays-server to meet through (host, or host:port). Anyone can run one.",
+                         "L'adresse du khdays-server par lequel se retrouver (hôte, ou hôte:port). N'importe qui peut "
+                         "en lancer un.",
+                         "Die Adresse des khdays-server, über den man sich trifft (Host oder Host:Port). Jeder kann "
+                         "einen betreiben.",
+                         "L'indirizzo del khdays-server tramite cui incontrarsi (host, o host:porta). Chiunque può "
+                         "avviarne uno.",
+                         "La dirección del khdays-server por el que encontrarse (host, o host:puerto). Cualquiera "
+                         "puede abrir uno."},
     [TXT_CHECK_UPDATES] = {"Check for updates", "Rechercher des mises à jour", "Nach Updates suchen",
                            "Cerca aggiornamenti", "Buscar actualizaciones"},
     [TXT_CHECK_UPDATES_NOTE] = {"Once a day, asks GitHub whether a newer version of the port is out, and says so on "
@@ -824,14 +816,13 @@ static const char *const texts[TXT_COUNT][5] = {
                                 "Tienes la %s; ha salido la %s. Descargar la instala: el juego se cierra, el "
                                 "instalador actualiza esta copia conservando tus partidas, ajustes y mods, y vuelve a "
                                 "abrir el juego."},
-    [TXT_UPDATE_GETTING] = {"Downloading %s", "Téléchargement de la %s", "%s wird heruntergeladen",
-                            "Download della %s", "Descargando la %s"},
+    [TXT_UPDATE_GETTING] = {"Downloading %s", "Téléchargement de la %s", "%s wird heruntergeladen", "Download della %s",
+                            "Descargando la %s"},
     [TXT_UPDATE_PROGRESS] = {"%d%% (%.1f of %.1f MB)", "%d %% (%.1f sur %.1f Mo)", "%d %% (%.1f von %.1f MB)",
                              "%d%% (%.1f di %.1f MB)", "%d %% (%.1f de %.1f MB)"},
     [TXT_UPDATE_FAILED] = {"The update could not be installed", "La mise à jour n'a pas pu être installée",
                            "Das Update konnte nicht installiert werden",
-                           "Non è stato possibile installare l'aggiornamento",
-                           "No se pudo instalar la actualización"},
+                           "Non è stato possibile installare l'aggiornamento", "No se pudo instalar la actualización"},
     [TXT_UPDATE_FAILED_DETAIL] = {"Its page has the installer, to download and run by hand. (%s)",
                                   "Sa page propose l'installateur, à télécharger et lancer vous-même. (%s)",
                                   "Auf ihrer Seite liegt das Installationsprogramm, zum Herunterladen und Ausführen "
@@ -909,25 +900,23 @@ static const char *const texts[TXT_COUNT][5] = {
          "copia del juego con tools/extract_data.py."},
     [TXT_PAUSE_RETRY] = {"Retry", "Réessayer", "Wiederholen", "Riprova", "Reintentar"},
     [TXT_SAVE_AUTOSAVE_TAG] = {"AUTO", "AUTO", "AUTO", "AUTO", "AUTO"},
-    [TXT_CAMP_BACK_TO_MENU] = {"Return to the main menu?", "Revenir au menu principal ?",
-                               "Zum Hauptmenü zurückkehren?", "Tornare al menu principale?",
-                               "¿Volver al menú principal?"},
+    [TXT_CAMP_BACK_TO_MENU] = {"Return to the main menu?", "Revenir au menu principal ?", "Zum Hauptmenü zurückkehren?",
+                               "Tornare al menu principale?", "¿Volver al menú principal?"},
     [TXT_HINTS_TEXT_KEYBOARD] = {"Type it   Backspace: erase   Enter: done   Esc: cancel",
                                  "Tapez-le   Retour arrière : effacer   Entrée : valider   Échap : annuler",
                                  "Eintippen   Rücktaste: löschen   Eingabe: fertig   Esc: abbrechen",
                                  "Scrivilo   Backspace: cancella   Invio: fatto   Esc: annulla",
                                  "Escríbelo   Retroceso: borrar   Intro: hecho   Esc: cancelar"},
     /* %s: the gamepad's accept, clear and back buttons. */
-    [TXT_HINTS_TEXT_GAMEPAD] =
-        {"Up/Down: character   Right: add   Left: erase   %s: done   %s: clear all   %s: cancel",
-         "Haut/Bas : caractère   Droite : ajouter   Gauche : effacer   %s : valider   %s : tout "
-         "effacer   %s : annuler",
-         "Oben/Unten: Zeichen   Rechts: anfügen   Links: löschen   %s: fertig   %s: alles "
-         "löschen   %s: abbrechen",
-         "Su/Giù: carattere   Destra: aggiungi   Sinistra: cancella   %s: fatto   %s: cancella "
-         "tutto   %s: annulla",
-         "Arriba/Abajo: carácter   Derecha: añadir   Izquierda: borrar   %s: hecho   %s: borrar "
-         "todo   %s: cancelar"},
+    [TXT_HINTS_TEXT_GAMEPAD] = {"Up/Down: character   Right: add   Left: erase   %s: done   %s: clear all   %s: cancel",
+                                "Haut/Bas : caractère   Droite : ajouter   Gauche : effacer   %s : valider   %s : tout "
+                                "effacer   %s : annuler",
+                                "Oben/Unten: Zeichen   Rechts: anfügen   Links: löschen   %s: fertig   %s: alles "
+                                "löschen   %s: abbrechen",
+                                "Su/Giù: carattere   Destra: aggiungi   Sinistra: cancella   %s: fatto   %s: cancella "
+                                "tutto   %s: annulla",
+                                "Arriba/Abajo: carácter   Derecha: añadir   Izquierda: borrar   %s: hecho   %s: borrar "
+                                "todo   %s: cancelar"},
     /* The game's own words (its Config page); the circled X it draws is written X. */
     [TXT_GAME_CONFIG] = {"Config", "Configuration", "Konfig.", "Configura", "Preferencias"},
     [TXT_GAME_CONTROLS] = {"Controls", "Commandes", "Steuerung", "Comandi", "Controles"},
@@ -964,12 +953,11 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_MOD_PAUSED] = {"Paused: %s", "En pause : %s", "Pausiert: %s", "In pausa: %s", "En pausa: %s"},
     [TXT_MOD_REFUSED] = {"Not loaded: %s", "Non chargé : %s", "Nicht geladen: %s", "Non caricato: %s",
                          "No cargado: %s"},
-    [TXT_MOD_ORDER_NOTE] =
-        {"Mods later in the list run after the earlier ones: their changes stand.",
-         "Les mods plus bas dans la liste passent après les autres : leurs changements l'emportent.",
-         "Spätere Mods der Liste laufen nach den früheren: ihre Änderungen gelten.",
-         "I mod più in basso nell'elenco vengono dopo gli altri: valgono le loro modifiche.",
-         "Los mods más abajo en la lista van después de los demás: sus cambios prevalecen."},
+    [TXT_MOD_ORDER_NOTE] = {"Mods later in the list run after the earlier ones: their changes stand.",
+                            "Les mods plus bas dans la liste passent après les autres : leurs changements l'emportent.",
+                            "Spätere Mods der Liste laufen nach den früheren: ihre Änderungen gelten.",
+                            "I mod più in basso nell'elenco vengono dopo gli altri: valgono le loro modifiche.",
+                            "Los mods más abajo en la lista van después de los demás: sus cambios prevalecen."},
     [TXT_ROOM_NEEDS_MODS] = {"This room plays with these mods: %s", "Ce salon joue avec ces mods : %s",
                              "Dieser Raum spielt mit diesen Mods: %s", "Questa stanza gioca con questi mod: %s",
                              "Esta sala juega con estos mods: %s"},
@@ -991,56 +979,53 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_AUTOSAVE_FILE99] = {"In file 99", "Dans le fichier 99", "In Datei 99", "Nel file 99", "En el archivo 99"},
     [TXT_AUTOSAVE_PLAYED] = {"In the file being played", "Dans le fichier en cours", "In der gespielten Datei",
                              "Nel file in gioco", "En el archivo en juego"},
-    [TXT_AUTOSAVE_NOTE] =
-        {"After each completed mission, once the game is back where it lets you save: into file 99 "
-         "(AUTO in the lists), or into the file you are playing (a game never saved: the first "
-         "empty file).",
-         "Après chaque mission réussie, quand le jeu est de retour là où il laisse sauvegarder : "
-         "dans le fichier 99 (AUTO dans les listes), ou dans le fichier en cours (une partie jamais "
-         "sauvegardée : le premier fichier vide).",
-         "Nach jeder geschafften Mission, sobald das Spiel wieder dort ist, wo es speichern lässt: "
-         "in Datei 99 (AUTO in den Listen) oder in die gespielte Datei (ein nie gespeichertes "
-         "Spiel: die erste leere Datei).",
-         "Dopo ogni missione completata, quando il gioco torna dove lascia salvare: nel file 99 "
-         "(AUTO negli elenchi) o nel file in gioco (una partita mai salvata: il primo file vuoto).",
-         "Tras cada misión completada, cuando el juego vuelve a donde deja guardar: en el archivo 99 "
-         "(AUTO en las listas) o en el archivo en juego (una partida nunca guardada: el primer "
-         "archivo vacío)."},
+    [TXT_AUTOSAVE_NOTE] = {"After each completed mission, once the game is back where it lets you save: into file 99 "
+                           "(AUTO in the lists), or into the file you are playing (a game never saved: the first "
+                           "empty file).",
+                           "Après chaque mission réussie, quand le jeu est de retour là où il laisse sauvegarder : "
+                           "dans le fichier 99 (AUTO dans les listes), ou dans le fichier en cours (une partie jamais "
+                           "sauvegardée : le premier fichier vide).",
+                           "Nach jeder geschafften Mission, sobald das Spiel wieder dort ist, wo es speichern lässt: "
+                           "in Datei 99 (AUTO in den Listen) oder in die gespielte Datei (ein nie gespeichertes "
+                           "Spiel: die erste leere Datei).",
+                           "Dopo ogni missione completata, quando il gioco torna dove lascia salvare: nel file 99 "
+                           "(AUTO negli elenchi) o nel file in gioco (una partita mai salvata: il primo file vuoto).",
+                           "Tras cada misión completada, cuando el juego vuelve a donde deja guardar: en el archivo 99 "
+                           "(AUTO en las listas) o en el archivo en juego (una partida nunca guardada: el primer "
+                           "archivo vacío)."},
     [TXT_SAVE_FILES] = {"Files in the game's lists", "Fichiers dans les listes du jeu",
                         "Dateien in den Listen des Spiels", "File negli elenchi del gioco",
                         "Archivos en las listas del juego"},
     [TXT_SAVE_FILES_ALL] = {"All 99", "Les 99", "Alle 99", "Tutti i 99", "Los 99"},
     [TXT_SAVE_FILES_DS] = {"3, as on the DS", "3, comme sur DS", "3, wie auf dem DS", "3, come su DS", "3, como en DS"},
-    [TXT_SAVE_FILES_NOTE] =
-        {"The game's own save and load lists (without the HD save screens): the port's 99 files in "
-         "pages of three, or the DS's three files.",
-         "Les listes de sauvegarde du jeu (sans les écrans HD) : les 99 fichiers du port par pages "
-         "de trois, ou les trois fichiers de la DS.",
-         "Die Speicherlisten des Spiels (ohne die HD-Bildschirme): die 99 Dateien des Ports in "
-         "Seiten zu drei, oder die drei Dateien des DS.",
-         "Gli elenchi di salvataggio del gioco (senza le schermate HD): i 99 file del port in "
-         "pagine da tre, o i tre file del DS.",
-         "Las listas de guardado del propio juego (sin las pantallas HD): los 99 archivos del port "
-         "en páginas de tres, o los tres archivos de la DS."},
+    [TXT_SAVE_FILES_NOTE] = {"The game's own save and load lists (without the HD save screens): the port's 99 files in "
+                             "pages of three, or the DS's three files.",
+                             "Les listes de sauvegarde du jeu (sans les écrans HD) : les 99 fichiers du port par pages "
+                             "de trois, ou les trois fichiers de la DS.",
+                             "Die Speicherlisten des Spiels (ohne die HD-Bildschirme): die 99 Dateien des Ports in "
+                             "Seiten zu drei, oder die drei Dateien des DS.",
+                             "Gli elenchi di salvataggio del gioco (senza le schermate HD): i 99 file del port in "
+                             "pagine da tre, o i tre file del DS.",
+                             "Las listas de guardado del propio juego (sin las pantallas HD): los 99 archivos del port "
+                             "en páginas de tres, o los tres archivos de la DS."},
     [TXT_STOP_MAGIC] = {"Stop magic", "Magie Stop", "Stopp-Magie", "Magia Stop", "Magia Paro"},
-    [TXT_STOP_MAGIC_NOTE] =
-        {"The magic Days left unfinished, restored: its panels, its recipes at the moogle's and "
-         "its casts. Off, the game is the DS's; a save's Stop panels are kept, unseen. In a room, "
-         "every player must have it the same.",
-         "La magie que Days a laissée inachevée, restaurée : ses panneaux, ses recettes chez le "
-         "Mog et ses sorts. Désactivée, le jeu est celui de la DS ; les panneaux Stop d'une "
-         "sauvegarde sont gardés, invisibles. Dans un salon, tous les joueurs doivent l'avoir "
-         "pareil.",
-         "Die Magie, die Days unvollendet ließ, wiederhergestellt: ihre Felder, ihre Rezepte beim "
-         "Mogry und ihre Zauber. Aus ist das Spiel das des DS; Stopp-Felder eines Spielstands "
-         "bleiben erhalten, unsichtbar. In einem Raum müssen es alle Spieler gleich haben.",
-         "La magia che Days ha lasciato incompiuta, ripristinata: i suoi pannelli, le sue ricette "
-         "dal moguri e i suoi incantesimi. Disattivata, il gioco è quello del DS; i pannelli Stop "
-         "di un salvataggio restano, nascosti. In una stanza tutti i giocatori devono averla "
-         "uguale.",
-         "La magia que Days dejó sin terminar, restaurada: sus paneles, sus recetas en el moguri y "
-         "sus lanzamientos. Desactivada, el juego es el de la DS; los paneles de Paro de una "
-         "partida se conservan, ocultos. En una sala todos los jugadores deben tenerla igual."},
+    [TXT_STOP_MAGIC_NOTE] = {"The magic Days left unfinished, restored: its panels, its recipes at the moogle's and "
+                             "its casts. Off, the game is the DS's; a save's Stop panels are kept, unseen. In a room, "
+                             "every player must have it the same.",
+                             "La magie que Days a laissée inachevée, restaurée : ses panneaux, ses recettes chez le "
+                             "Mog et ses sorts. Désactivée, le jeu est celui de la DS ; les panneaux Stop d'une "
+                             "sauvegarde sont gardés, invisibles. Dans un salon, tous les joueurs doivent l'avoir "
+                             "pareil.",
+                             "Die Magie, die Days unvollendet ließ, wiederhergestellt: ihre Felder, ihre Rezepte beim "
+                             "Mogry und ihre Zauber. Aus ist das Spiel das des DS; Stopp-Felder eines Spielstands "
+                             "bleiben erhalten, unsichtbar. In einem Raum müssen es alle Spieler gleich haben.",
+                             "La magia che Days ha lasciato incompiuta, ripristinata: i suoi pannelli, le sue ricette "
+                             "dal moguri e i suoi incantesimi. Disattivata, il gioco è quello del DS; i pannelli Stop "
+                             "di un salvataggio restano, nascosti. In una stanza tutti i giocatori devono averla "
+                             "uguale.",
+                             "La magia que Days dejó sin terminar, restaurada: sus paneles, sus recetas en el moguri y "
+                             "sus lanzamientos. Desactivada, el juego es el de la DS; los paneles de Paro de una "
+                             "partida se conservan, ocultos. En una sala todos los jugadores deben tenerla igual."},
     [TXT_STOP_MAGIC_ON] = {"Stop magic on", "Magie Stop activée", "Stopp-Magie an", "Magia Stop attiva",
                            "Magia Paro activada"},
     [TXT_STOP_MAGIC_OFF] = {"Stop magic off", "Magie Stop désactivée", "Stopp-Magie aus", "Magia Stop disattivata",

@@ -12,6 +12,9 @@ struct SequenceView final {
     float x = 0, y = 0, scale = 1;
 };
 
+// Straight-alpha RGBA composition for the native face over the CPU reference gauge.
+std::uint32_t source_over(std::uint32_t under, std::uint32_t top);
+
 void encode_sequence_quads(KhdaysSequenceImage &image, std::span<const assets::kh2::SequenceQuad> quads);
 
 // Reference rasterizer: ordered affine quads, source-alpha/add/subtract blending,

@@ -52,6 +52,12 @@ bool terrain_unavailable(const char *reason)
     }
     return false;
 }
+void clear_programs()
+{
+    for (auto &program : programs)
+        std::fill_n(program.words, KSI_WORDS, 0u);
+    std::fill_n(radar_program.words, KSI_WORDS, 0u);
+}
 bool tried = false, loaded = false, recording = false, complete = false, overflow = false, owns = false;
 unsigned owner = 0;
 int atlas = -1, output = -1, output_scale = 0, layer = -1;
@@ -70,7 +76,7 @@ unsigned read(unsigned p)
 void fail(const char *why)
 {
     loaded = owns = recording = complete = false;
-    programs = {};
+    clear_programs();
     khdays_log("minimap: %s; retaining native icons", why);
 }
 khdays::assets::DecodedTexture image(const std::filesystem::path &file)
@@ -510,23 +516,20 @@ extern "C" void khdays_minimap_reset(void)
     draws.clear();
     recording = complete = owns = false;
     owner = 0;
-    programs = {};
-    radar_program = {};
+    clear_programs();
     terrain_hash = 0;
 }
 extern "C" void khdays_minimap_frame(unsigned frame)
 {
     khdays_situation_take(&context, frame);
-    programs = {};
-    radar_program = {};
+    clear_programs();
     owns = false;
     if (ready() && complete)
         khdays_ui_changed();
 }
 extern "C" void khdays_minimap_emit(void)
 {
-    programs = {};
-    radar_program = {};
+    clear_programs();
     owns = false;
     if (!ready() || !complete || owner != read(0x0207f638) || context.scene != 2 || !owner ||
         context.camp_screen != KHDAYS_CAMP_NONE || context.movie || context.tutorial ||
@@ -581,9 +584,9 @@ extern "C" void khdays_minimap_emit(void)
         owns = true;
         try {
             radar(resolution);
-        } catch (const std::exception &e) {
+        } catch (const std::exception &error) {
             radar_program = {};
-            khdays_log("minimap: %s; retaining existing map presentation", e.what());
+            khdays_log("minimap: %s; retaining existing map presentation", error.what());
         }
     } catch (const std::exception &e) {
         fail(e.what());

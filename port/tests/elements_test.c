@@ -251,7 +251,7 @@ int main(void)
     compose(1, r, 1, NULL, out);
     CHECK(out[152 * W + 16] != out[0]);
 
-    CHECK((KES_FINE & KES_PICTURE) == 0u);
+    _Static_assert((KES_FINE & KES_PICTURE) == 0u, "image sampling and placement flags must be independent");
     /* Independent images are drawn separately from the one-screen source crop. */
     scene();
     image(1, 8, 8, 1);

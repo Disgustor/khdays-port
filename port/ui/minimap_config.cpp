@@ -12,7 +12,7 @@ namespace khdays::ui::minimap {
 namespace {
 using Value = std::variant<std::string, double, bool>;
 using Object = std::map<std::string, Value>;
-// The small portrait schema needs objects and scalar leaves, with no external JSON dependency.
+// The minimap schema needs objects and scalar leaves, with no external JSON dependency.
 class Reader {
     std::string text;
     std::size_t at = 0;

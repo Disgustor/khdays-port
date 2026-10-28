@@ -19,6 +19,7 @@ extern "C" {
 #include <cmath>
 
 namespace {
+bool hd_graphics = true;
 std::vector<unsigned char> memory(0x02100000);
 int hp = 186, maximum = 186, paused, changed, scene = 2, slot, hud_mode = KHDAYS_UI_ON;
 khdays::assets::kh2::SequenceAnimation *parent_animation = nullptr;
@@ -42,6 +43,10 @@ void word(unsigned at, unsigned v)
 }
 } // namespace
 extern "C" {
+int khdays_textures_hd(void)
+{
+    return hd_graphics;
+}
 int khdays_settings_game_language(void)
 {
     return 2;
@@ -454,6 +459,14 @@ int main()
         khdays_hud_settings_publish(preferences);
         khdays_ui_kh2_hp_frame(220);
         expect(khdays_ui_kh2_hp_ready() && khdays_ui_kh2_hp_compose(&face, nullptr), "live HP on required a reload");
+        hd_graphics = false;
+        khdays_ui_kh2_hp_frame(221);
+        expect(!khdays_ui_kh2_hp_ready() && !khdays_ui_kh2_hp_compose(&face, nullptr),
+               "HD graphics off retained the player gauge");
+        hd_graphics = true;
+        khdays_ui_kh2_hp_frame(222);
+        expect(khdays_ui_kh2_hp_ready() && khdays_ui_kh2_hp_compose(&face, nullptr),
+               "HD graphics on required reloading the player gauge");
         parent_animation->flags &= ~2u;
         expect(!khdays_ui_kh2_hp_parent(0, &parent) && !khdays_ui_kh2_hp_ready(),
                "invalid animated parent escaped the native fallback");

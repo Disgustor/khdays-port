@@ -26,9 +26,8 @@ The JSON starts with `docs/examples/kh2-gauge.json`. The HD pack places the
 player and party gauges at Y offset -4. Obtained text uses Y offset 2 and scale
 1.25. Its presentation defaults enable HUD edge alignment, retained HUD/control
 during INFORMATION and the pause-menu target, subject to the saved menu settings.
-On rebuilding an existing
-pack, custom animation assignments, positions, scale and enable/disable settings
-are retained. Resource filenames, entry and source origin follow the freshly
+On rebuilding an existing pack, custom animation assignments, positions, scale
+and enable/disable settings are retained. Resource filenames, entry and source origin follow the freshly
 generated files. The converters and JSON template are included in the installer's
 tool fingerprint, so changing them invalidates an old completed HD import. The
 installer stages the necessary Python files and template with the other HD tools;
@@ -273,7 +272,7 @@ Use the existing x64 MSVC environment and build configuration:
 ```text
 cmake --build build\port\obj-x64 --target khdays-kh2-sequence-viewer khdays-kh2-sequence-test khdays-native
 build\port\obj-x64\khdays-kh2-sequence-test.exe
-build\port\obj-x64\khdays-kh2-sequence-viewer.exe --root "D:\Tools\openkh new\data\kh2" --sequence 121
+build\port\obj-x64\khdays-kh2-sequence-viewer.exe --root "C:\KH2-extracted" --sequence 121
 ```
 
 `--root` (or `KHDAYS_KH2_ASSET_DIR`) supplies the KH2 data directory. The defaults
@@ -293,7 +292,7 @@ for automated viewer smoke tests.
 The separate HP composition can be inspected with:
 
 ```text
-build\port\obj-x64\khdays-kh2-sequence-viewer.exe --root "D:\Tools\openkh new\data\kh2" --hp 248 --max-hp 372 --previous-hp 372 --damage-frame 30 --scale 1.5
+build\port\obj-x64\khdays-kh2-sequence-viewer.exe --root "C:\KH2-extracted" --hp 248 --max-hp 372 --previous-hp 372 --damage-frame 30 --scale 1.5
 ```
 
 `--reaction small|medium|large` selects the original parent damage reaction.
@@ -911,7 +910,7 @@ description width. Replacement font cell heights, including shadows, are retaine
 8-dot font, yellow with a white slash and black shadow, with no one-digit cap;
 the label uses the 10-dot font. Both honor `field.hud.status` HD font mappings.
 `text_scale` adjusts label text and `counter_scale` adjusts only counter text.
-`counters_scale` (default 1, range 0.1–4) scales the entire chest/badge row,
+`counters_scale` (default 1, range 0.1 to 4) scales the entire chest/badge row,
 including icons, text, gaps, and relative text offsets, around `counters_right`
 and `counters_y`. It multiplies the existing `counter_scale`; it does not scale
 the description, Missions Left text, or mission beads. Text pixels are
@@ -1298,6 +1297,56 @@ cutscene and scripted control restrictions are preserved. Allow HUD/control also
 requires presentation.keep_hud_during_information and a valid INFORMATION asset.
 The pause-target preference likewise gates presentation.pause_mission_target.
 
+The saved keys in `[enhancements]` are:
+
+| Key | Default | Scope |
+|---|---|---|
+| `hd_font` | on | Original/HD text artwork and layout, including cached captions |
+| `kh2_minimap` | on | Single-screen radar presentation; icon replacements remain independent |
+| `party_hp_sequence` | on | Player/party gauges, HUD portraits, player labels and LIMIT |
+| `enemy_hp_sequence` | on | Enemy bar and tanks; native enemy names remain |
+| `mission_panel_sequence` | on | Mod-authored mission panel |
+| `information_sequence` | on | INFORMATION background, reveal and closing animation |
+| `target_sequence` | on | Soft/hard lock, interact and optional chain/error reticles |
+| `locked_on_sequence` | on | Top-screen LOCKED ON notice |
+| `notification_sequences` | on | Obtained, Backpack Full and Recon Breakthrough |
+| `heart_points_sequence` | on | Heart total, effects and chain counter |
+| `pause_target` | on | Mission target in ordinary pause menus |
+| `information_hud` | on | Configured HUD/control retention during upper INFORMATION |
+| `ui_padding` | off | Off removes the single-screen HD presentation inset |
+| `mission_panel_visibility` | 0 | 0: Always; 1: Pause only |
+| `mission_panel_anchor` | 1 | Gameplay anchor, 1..9 |
+| `mission_panel_pause_anchor` | 8 | Pause anchor, 1..9 |
+
+The main HD graphics switch also gates gauges, portraits and labels. Turning it
+off releases their native tiles; turning it back on reuses the loaded resources.
+Mission-panel font routes are bound even when the HD font preference starts off,
+so enabling fonts later can select the configured scoped artwork.
+
 Regression coverage includes settings-file round trips, missing-setting defaults,
 menu rows and localized choices, live renderer gates, JSON precedence, retained
 map icons, font mapping/cache reuse and INFORMATION transition latching.
+
+## Pull request validation
+
+Build the existing release tree, then run its complete CTest suite. The HUD tests
+use synthetic layouts, palettes, text and game state; the GPU suite compares
+rendered output with the CPU reference. `port/tools/analyze.py` checks the port's
+own native sources. Run Ruff on changed Python files and clang-format on changed
+C/C++ files; do not format generated shader headers or decompilation sources.
+
+The generated shaders are checked in for DXIL, SPIR-V and MSL. A Windows run
+validates the available graphics backend, not every platform. Before merging,
+compare the following in game with HD graphics on/off and each replacement on/off:
+
+- Single and dual screens, narrow and ultrawide viewports, and multiple HUD sizes.
+- All party slots, enemy bar rollover/death, LIMIT and label animations.
+- Native upper/lower INFORMATION, pause, tutorials, cutscenes and map changes.
+- Notifications collected while the HUD is hidden, including full inventory/recon.
+- Mission counters, long descriptions, paused anchors and target/no-target pauses.
+- Minimap terrain replacements, smooth icons, character overrides and edge fades.
+- Font toggles on an already-visible caption and command menu, and a mission panel
+  first loaded with font replacement off.
+
+Only local generated assets are used for optional visual tests. Extracted game
+files, authored mod packs, screenshots and disassembly stay outside the commit.

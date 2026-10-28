@@ -91,6 +91,13 @@ pack is rebuilt; generated resource names and centered origins are updated.
 The converter scripts and default JSON are shipped with the installer and
 included in its HD cache fingerprint. [Native sequence details](../docs/KH2_SEQUENCES.md).
 
+The same localized archive supplies party/enemy gauges, field reticles,
+INFORMATION, and the obtained-item box. Additional mod-authored layouts stay
+disabled until their JSON entries and resources are provided. The minimap tool
+exports Days' icon atlas and copies KH2's remastered radar mask; existing icon
+settings and images are preserved. Replacements can be gated live in the game's
+Enhancements menu without rewriting these JSON files.
+
 ## Add to Steam
 
 Optional, off by default, on a page of its own shown only when Steam is found: the port added to

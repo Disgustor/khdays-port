@@ -53,6 +53,17 @@ std::uint32_t pack(const Color &c)
 
 } // namespace
 
+std::uint32_t source_over(std::uint32_t under, std::uint32_t top)
+{
+    const float a = float(top >> 24) / 255, b = float(under >> 24) / 255 * (1 - a), total = a + b;
+    if (total == 0)
+        return 0;
+    std::uint32_t out = std::uint32_t(total * 255 + 0.5f) << 24;
+    for (unsigned s = 0; s < 24; s += 8)
+        out |= std::uint32_t((float((top >> s) & 255) * a + float((under >> s) & 255) * b) / total + 0.5f) << s;
+    return out;
+}
+
 void encode_sequence_quads(KhdaysSequenceImage &image, std::span<const assets::kh2::SequenceQuad> quads)
 {
     if (quads.size() > KSI_MAX_QUADS)

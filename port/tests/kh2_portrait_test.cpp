@@ -21,6 +21,7 @@ extern "C" {
 #include <vector>
 
 namespace {
+bool hd_graphics = true;
 namespace portrait = khdays::ui::kh2;
 namespace seq = khdays::assets::kh2;
 namespace render = khdays::render::kh2;
@@ -205,6 +206,34 @@ void configuration()
                                                 directory / "portrait.DDS");
                 },
                 "empty BAR entry with a sentinel offset accepted");
+        }
+    }
+    for (const auto *section : {"", "player_icon", "party", "enemy", "information", "obtained", "backpack_full",
+                                "breakthrough", "locked_on", "heart_points", "mission_panel", "reticles"}) {
+        for (const auto *name : {".", "..", "bad\\nname", "../outside.2dd"}) {
+            std::string value = std::string("{\"archive\":\"") + name + "\"}";
+            if (*section)
+                value = std::string("{\"") + section + "\":" + value + "}";
+            text(directory / "bad-resource.json", value);
+            rejects(
+                [&] {
+                    if (std::string(section) == "enemy")
+                        portrait::load_enemy_gauge_config(directory / "bad-resource.json");
+                    else if (std::string(section) == "reticles")
+                        portrait::load_reticle_configs(directory / "bad-resource.json");
+                    else if (std::string(section) == "information")
+                        portrait::load_information_config(directory / "bad-resource.json");
+                    else if (std::string(section) == "mission_panel")
+                        portrait::load_mission_panel_config(directory / "bad-resource.json");
+                    else if (std::string(section) == "heart_points")
+                        portrait::load_heart_points_config(directory / "bad-resource.json");
+                    else if (std::string(section) == "obtained" || std::string(section) == "backpack_full" ||
+                             std::string(section) == "breakthrough" || std::string(section) == "locked_on")
+                        portrait::load_notification_config(directory / "bad-resource.json", section);
+                    else
+                        portrait::load_hp_gauge_configs(directory / "bad-resource.json");
+                },
+                "invalid gauge resource name accepted");
         }
     }
     text(directory / "gauge.json",
@@ -453,6 +482,19 @@ void party_runtime()
     khdays_hud_settings_publish(preferences);
     collect_party(24);
     expect(khdays_ui_kh2_party_ready(1) && !emitted.empty(), "party HP required a reload to enable");
+    hd_graphics = false;
+    khdays_ui_kh2_party_frame(25);
+    khdays_ui_kh2_party_reference(0);
+    khdays_ui_kh2_party_prepare();
+    emitted.clear();
+    expect(!khdays_ui_kh2_party_ready(1) && emitted.empty(), "HD graphics off retained the party gauge");
+    collect(25);
+    expect(emitted.empty() && !masked[0] && !masked[1], "HD graphics off retained portrait drawing or suppression");
+    hd_graphics = true;
+    collect_party(26);
+    expect(khdays_ui_kh2_party_ready(1) && !emitted.empty(), "HD graphics on required reloading the party gauge");
+    collect(26);
+    expect(!emitted.empty() && masked[0] && masked[1], "HD graphics on required reloading portraits");
     present = 0;
     khdays_ui_kh2_party_frame(23);
     khdays_ui_kh2_party_reference(0);
@@ -568,13 +610,29 @@ void labels_runtime()
     if (!native_limit)
         expect(std::abs(std::bit_cast<float>(programs[4].words[KSI_HEADER]) - 6.5f) < .001f,
                "LIMIT replayed its entrance instead of looping to authored frame 10");
-    test_labels = false;
+    hd_graphics = false;
     collect_labels(142);
+    khdays_ui_kh2_labels_commands(programs);
+    for (int i = 0; i < 5; ++i) {
+        KhdaysUiElement box{};
+        expect(!programs[i].words[KSI_CLEAR] && !khdays_ui_kh2_label_box(i, &box),
+               "HD graphics off retained label drawing or suppression");
+    }
+    hd_graphics = true;
+    collect_labels(143);
+    khdays_ui_kh2_labels_commands(programs);
+    expect(programs[0].words[KSI_CLEAR], "HD graphics on required reloading labels");
+    test_labels = false;
+    collect_labels(144);
     khdays_ui_kh2_labels_commands(programs);
     expect(!programs[4].words[KSI_CLEAR], "LIMIT remained after availability ended");
 }
 } // namespace
 extern "C" {
+int khdays_textures_hd(void)
+{
+    return hd_graphics;
+}
 int khdays_link_limit_available(void)
 {
     return test_labels;

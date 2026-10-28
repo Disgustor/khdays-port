@@ -296,7 +296,10 @@ struct Font {
         if (!data)
             throw std::runtime_error("Days status font is unavailable");
         char selected[512];
-        route = khdays_hd_font_select(name, "field.hud.status", selected, sizeof(selected)) ? selected : name;
+        const int observing = khdays_hd_font_observe(1);
+        const int scoped = khdays_hd_font_select(name, "field.hud.status", selected, sizeof(selected));
+        khdays_hd_font_observe(observing);
+        route = scoped ? selected : name;
         std::vector<unsigned> codes(data->glyphs.size(), ~0u);
         for (auto [code, index] : data->char_to_glyph)
             if (index >= 0 && size_t(index) < codes.size())

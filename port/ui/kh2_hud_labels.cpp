@@ -18,6 +18,7 @@ extern "C" {
 int khdays_settings_game_language(void);
 }
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <cstdio>
@@ -54,8 +55,8 @@ bool tried = false, loaded = false, reference = true;
 bool limit_available = false;
 unsigned previous_frame = 0;
 float elapsed = 0;
-constexpr const char *ids[]{"hud.player_icon", "hud.party1.icon", "hud.party2.icon", "hud.party3.icon",
-                            "hud.limit_text"};
+constexpr std::array<const char *, 5> ids{"hud.player_icon", "hud.party1.icon", "hud.party2.icon", "hud.party3.icon",
+                                          "hud.limit_text"};
 std::filesystem::path path(std::string_view s)
 {
     return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t *>(s.data()), s.size()));
@@ -157,6 +158,7 @@ bool draw(Label &s, int index)
 {
     if (!s.resource)
         return false;
+    const char *id = ids.at(std::size_t(index));
     const int clip =
         index < 4 && s.config.animations[s.number] >= 0 ? s.config.animations[s.number] : s.config.animation;
     if (clip < 0)
@@ -225,7 +227,7 @@ bool draw(Label &s, int index)
         render::encode_sequence_quads(s.program, frame.quads);
     }
     s.element = s.box;
-    s.element.id = ids[index];
+    s.element.id = id;
     s.element.slot = KES_DIRECT | KES_PICTURE | KES_HUD | 3;
     s.element.image = s.image;
     const auto at = position(index, s.box);
@@ -261,7 +263,8 @@ extern "C" void khdays_ui_kh2_labels_reference(int cpu)
 }
 extern "C" void khdays_ui_kh2_labels_prepare(void)
 {
-    if (!khdays_hud_setting(KHDAYS_OPT_PARTY_HP) || !loaded || khdays_ui_mode(KHDAYS_UI_HUD) != KHDAYS_UI_ON)
+    if (!khdays_hud_setting(KHDAYS_OPT_PARTY_HP) || !khdays_textures_hd() || !loaded ||
+        khdays_ui_mode(KHDAYS_UI_HUD) != KHDAYS_UI_ON)
         return;
     KhdaysBgLayer l;
     if (!khdays_bg_text_layer(0, 3, &l) || l.colors256)
@@ -404,6 +407,8 @@ extern "C" int khdays_ui_kh2_label_cell(int index, unsigned entry)
 }
 extern "C" int khdays_ui_kh2_label_native(int index, const KhdaysUiElement *element)
 {
+    if (index < 0 || index >= 5)
+        return 0;
     auto &s = labels[index];
     if (!s.present)
         return 0;

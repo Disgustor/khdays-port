@@ -47,6 +47,8 @@
 #include <string.h>
 #include <windows.h>
 
+_Static_assert(KSI_3D_PROGRAMS == KHDAYS_RETICLE_COUNT + KHDAYS_HEART_PROGRAMS, "3D sequence package capacity");
+
 #define PIXELS (KHDAYS_SCREEN_W * KHDAYS_SCREEN_H)
 
 static void ui_report(void); /* the check's counts at exit */

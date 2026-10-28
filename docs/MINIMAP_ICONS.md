@@ -15,7 +15,8 @@ python tools/hd/minimap_icons.py --data data/extracted/<hash> --output "mods/HD 
 
 No extracted sheet is committed. [Example settings](examples/minimap.json) use
 the exporter's default arrangement, with replacement disabled. The exported
-JSON enables the sheet and KH2-style map; smooth rotation and character overrides remain off.
+JSON enables the sheet and KH2-style map; smooth rotation and character
+overrides remain off.
 
 The HD builder also copies KH2's remastered `radar.tm2/-0.dds` from `kh2_first`
 to `layouts/minimap/radar.dds`, preserving its alpha gradients and resolution.
@@ -23,9 +24,11 @@ An existing custom `radar.dds` is preserved on pack regeneration. For a standalo
 export, add `--kh2 <extracted-kh2_first-root>` to the command above. This asset
 supplies the KH2-style map mask. Enable `kh2map` to use it in single-screen mode.
 
-The HD pack builder enables `kh2map` by default (an omitted field in another mod still defaults to false). When enabled, the room's loaded Days tile image is
-rendered from its resident VRAM tiles through KH2's 96x96 radar mask, independently of the bottom
-screen crop. Days' world-to-map conversion and scroll origin are unchanged.
+The HD pack builder enables `kh2map` by default; an omitted field in another mod
+still defaults to false. When enabled, the room's loaded Days tile image is
+rendered from its resident VRAM tiles through KH2's 96x96 radar mask, independently
+of the bottom-screen crop. Days' world-to-map conversion and scroll origin are
+unchanged.
 Existing indexed and RGBA HD tile replacements are sampled through the normal
 tile-replacement lookup. Terrain is cached and uploaded only when its pixels,
 palette, or replacements change; map scrolling, icons and masking run on the GPU.

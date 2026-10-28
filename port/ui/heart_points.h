@@ -2,7 +2,6 @@
 #ifndef KHDAYS_HEART_POINTS_H
 #define KHDAYS_HEART_POINTS_H
 #define KHDAYS_HEART_PROGRAMS 4
-#define KHDAYS_SEQUENCE_3D_PROGRAMS (5 + KHDAYS_HEART_PROGRAMS)
 #ifdef __cplusplus
 extern "C" {
 #endif

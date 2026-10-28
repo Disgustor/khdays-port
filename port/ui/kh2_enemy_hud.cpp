@@ -88,8 +88,8 @@ extern "C" void khdays_ui_kh2_enemy_frame(unsigned frame)
     load();
     const bool was = valid;
     valid = false;
-    if (khdays_hud_setting(KHDAYS_OPT_ENEMY_HP) && asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
-        khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2) {
+    if (khdays_hud_setting(KHDAYS_OPT_ENEMY_HP) && khdays_textures_hd() && asset &&
+        khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2) {
         const unsigned context = word(context_address);
         if (khdays_game_ram(context) && khdays_game_ram(context + 0x188) &&
             ((word(context + 0x48) & 1u) || context == previous_context)) {

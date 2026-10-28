@@ -1131,19 +1131,19 @@ static void into_drawing_order_with(List *l, Polygon **order_, int32_t *order_ca
         *order_capacity = l->npolys;
     }
     order = *order_;
-    for (int i = 0; i < l->npolys; ++i) {
+    for (int i = 0; i < l->npolys && n < l->npolys; ++i) {
         if (!l->polys[i].translucent && !(l->polys[i].flags & KHDAYS_G3D_MARKER))
             order[n++] = l->polys[i];
     }
     first_translucent = n;
-    for (int i = 0; i < l->npolys; ++i) {
+    for (int i = 0; i < l->npolys && n < l->npolys; ++i) {
         if (l->polys[i].translucent && !(l->polys[i].flags & KHDAYS_G3D_MARKER))
             order[n++] = l->polys[i];
     }
     if (!(l->swap_params & 1)) { /* auto-sort by Y */
         qsort(order + first_translucent, (size_t)(n - first_translucent), sizeof(order[0]), compare_translucent);
     }
-    for (int i = 0; i < l->npolys; ++i) {
+    for (int i = 0; i < l->npolys && n < l->npolys; ++i) {
         if (l->polys[i].flags & KHDAYS_G3D_MARKER)
             order[n++] = l->polys[i];
     }

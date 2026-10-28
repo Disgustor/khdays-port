@@ -7,6 +7,7 @@ std::vector<std::vector<unsigned>> test_images;
 KhdaysSituationInputs test_context{};
 KhdaysUiElement test_element{};
 bool test_paused = false, test_visible = true, test_tall_font = false;
+bool test_font_observing = false, test_font_available = false;
 int test_uploads = 0, test_cells = 0;
 unsigned test_epoch = 1, test_tick = 0;
 std::filesystem::path test_config;
@@ -131,7 +132,12 @@ void tests()
         check(rejected, "invalid mission JSON accepted");
     }
 
+    // The display preference starts off; configured routes must still bind.
     step();
+    check(description_font.route == "text/font_eu_10.nftr.hd" && counter_font.route == "text/font_eu_08.nftr.hd" &&
+              !test_font_observing,
+          "loading with HD fonts off lost the scoped mapping or leaked observation mode");
+    test_font_available = true;
     check(owns && native && program.words[KSI_CLEAR], "visible panel was not replaced");
     check(test_element.screen == 1 && test_element.y == 152 + top + config.offset_y && word(KSI_ANCHOR_Y) == 152,
           "dual-screen panel lost its native lower-screen location");
@@ -502,9 +508,20 @@ int khdays_rom_file_data(KhdaysRomReader *, const char *, int, unsigned char **,
 {
     return 0;
 }
-int khdays_hd_font_select(const char *, const char *, char *, int)
+int khdays_hd_font_observe(int enabled)
 {
-    return 0;
+    const bool previous_observing = test_font_observing;
+    test_font_observing = enabled != 0;
+    return previous_observing;
+}
+int khdays_hd_font_select(const char *name, const char *, char *out, int size)
+{
+    if (!test_font_observing && !test_font_available)
+        return 0;
+    const auto route = std::string(name) + ".hd";
+    check(route.size() < std::size_t(size), "synthetic scoped font name exceeds output");
+    std::memcpy(out, route.c_str(), route.size() + 1);
+    return 1;
 }
 void khdays_hd_font_bind_charmap(const char *, const unsigned *, int) {}
 double khdays_hd_font_metric_f(const char *, int, int field, double fallback)

@@ -221,7 +221,8 @@ extern "C" void khdays_ui_kh2_portrait_frame(unsigned frame)
         const bool was = slot.valid;
         int icon, hp, maximum, low;
         slot.valid = false;
-        if (khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
+        if (khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && khdays_textures_hd() &&
+            khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
             khdays_link_hud_portrait(index, &icon, &hp, &maximum, &low)) {
             auto &r = resource(icon, index == 0 ? 0 : 1);
             if (r.asset) {

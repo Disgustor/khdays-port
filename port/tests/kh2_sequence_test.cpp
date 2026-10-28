@@ -182,6 +182,12 @@ kh2::SequenceQuad quad()
 
 void rendering()
 {
+    expect(render::source_over(0, 0) == 0 && render::source_over(0xff123456, 0) == 0xff123456 &&
+               render::source_over(0xff123456, 0xff654321) == 0xff654321 &&
+               render::source_over(0, 0x80123456) == 0x80123456 &&
+               render::source_over(0xff000000, 0x80ffffff) == 0xff808080,
+           "reference face composition changed straight-alpha blending");
+
     khdays::assets::DecodedTexture atlas;
     atlas.width = 4;
     atlas.height = 4;

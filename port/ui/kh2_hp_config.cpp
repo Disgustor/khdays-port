@@ -178,6 +178,12 @@ double number(Object &o, const char *key, double fallback, double lo, double hi,
         throw std::runtime_error(std::string("gauge JSON: out of range ") + key);
     return n;
 }
+void resource_name(const std::string &value, const std::string &key)
+{
+    if (value.empty() || value == "." || value == ".." || value.find_first_of("/\\:") != std::string::npos ||
+        std::any_of(value.begin(), value.end(), [](unsigned char c) { return c < 32; }))
+        throw std::runtime_error("gauge JSON: use a local file name for " + key);
+}
 Object read_file(const std::filesystem::path &path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -197,8 +203,7 @@ HpGaugeConfig parse_config(Object o, HpGaugeConfig c = {})
     c.enabled = get(o, "enabled", c.enabled);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error(std::string("gauge JSON: use a file name for ") + key);
+        resource_name(*field, key);
     }
     c.offset_x = float(number(o, "offset_x", c.offset_x, -256, 256));
     c.offset_y = float(number(o, "offset_y", c.offset_y, -256, 256));
@@ -262,8 +267,7 @@ HpGaugeConfig parse_config(Object o, HpGaugeConfig c = {})
              {std::tuple{"archive", &label->archive, &c.archive}, std::tuple{"texture", &label->texture, &c.texture},
               std::tuple{"entry", &label->entry, &c.entry}}) {
             *field = get(o, (prefix + key).c_str(), *fallback);
-            if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-                throw std::runtime_error("gauge JSON: label resources must be local file names");
+            resource_name(*field, key);
         }
     }
     if (!o.empty())
@@ -358,8 +362,7 @@ EnemyGaugeConfig load_enemy_gauge_config(const std::filesystem::path &path)
     c.enabled = get(o, "enabled", c.enabled);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: enemy resources must be local file names");
+        resource_name(*field, key);
     }
     c.scale = float(number(o, "scale", c.scale, 0.05, 2));
     c.offset_x = float(number(o, "offset_x", 0, -512, 512));
@@ -412,8 +415,7 @@ std::array<ReticleConfig, 5> load_reticle_configs(const std::filesystem::path &p
         c.enabled = get(o, "enabled", c.enabled);
         for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
             *field = get(o, key, *field);
-            if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-                throw std::runtime_error("gauge JSON: reticle resources must be local file names");
+            resource_name(*field, key);
         }
         c.animation = int(number(o, "animation", c.animation, -1, 65535, true));
         c.end_animation = int(number(o, "end_animation", c.end_animation, -1, 65535, true));
@@ -461,8 +463,7 @@ InformationConfig load_information_config(const std::filesystem::path &path)
     c.enabled = get(o, "enabled", c.enabled);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: information resources must be local file names");
+        resource_name(*field, key);
     }
     for (auto [key, field] :
          {std::pair{"intro", &c.intro}, {"loop", &c.loop}, {"reveal", &c.reveal}, {"outro", &c.outro}})
@@ -507,8 +508,7 @@ ObtainedConfig load_notification_config(const std::filesystem::path &path, const
     c.enabled = get(o, "enabled", c.enabled);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: " + name + " resources must be local file names");
+        resource_name(*field, key);
     }
     c.animation = int(number(o, "animation", c.animation, -1, 65535, true));
     c.loop = get(o, "loop", c.loop);
@@ -540,8 +540,7 @@ HeartPointsConfig load_heart_points_config(const std::filesystem::path &path)
     c.enabled = get(o, "enabled", false);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: heart counter resources must be local file names");
+        resource_name(*field, key);
     }
     for (std::size_t i = 0; i < c.animations.size(); ++i) {
         const auto key = "animations." + std::string(heart_clip_names[i]);
@@ -588,8 +587,7 @@ MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
     c.pause_anchor = anchor("pause_anchor", c.anchor);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
-        if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
-            throw std::runtime_error("gauge JSON: mission panel resources must be local file names");
+        resource_name(*field, key);
     }
     c.reference = int(number(o, "reference", c.reference, 0, 65535, true));
     c.intro = int(number(o, "intro", c.intro, 0, 65535, true));

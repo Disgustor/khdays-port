@@ -245,6 +245,22 @@ void khdays_net_set_mods(unsigned int fingerprint, const unsigned char *list, un
     memcpy(fake_mods_list, list, size < sizeof(fake_mods_list) ? size : sizeof(fake_mods_list));
 }
 
+/* the mods' characters (runtime/characters/characters.h): `fake_characters` of them, each part filled with
+ * `fake_character_part` */
+static int fake_characters;
+static unsigned char fake_character_part = 1;
+
+int khdays_characters_room_entry(int index, unsigned char digest[32], const char **name, const char **identity)
+{
+    if (index >= fake_characters) {
+        return 0;
+    }
+    memset(digest, fake_character_part, 32);
+    *name = "Wind";
+    *identity = "test.wind/wind";
+    return 1;
+}
+
 const char *khdays_link_play_sound(const char *sequence_archive, const char *entry)
 {
     if (strcmp(sequence_archive, "COMMON_SYS") != 0) {
@@ -512,6 +528,8 @@ static void reset_game(void)
     fake_guest = 0;
     fake_hp = 40;
     fake_gauge = 1;
+    fake_characters = 0;
+    fake_character_part = 1;
     fake_sound[0] = fake_notice[0] = 0;
     fake_next_actor = 0;
     fake_removed = 0;
@@ -1120,12 +1138,23 @@ static void test_files_and_notices(void)
 
 static void test_room_fingerprint(void)
 {
-    unsigned int first, second;
+    unsigned int first, second, alone;
     begin_case("rooms");
     mod_folder("Look", "test.look", "visual", "print('a visual mod')\n");
     start();
     CHECK(fake_mods_fingerprint == 0 && fake_mods_count == 0); /* visual mods are each player's own */
     khdays_scripts_stop();
+    fake_characters = 1; /* a mod's character counts, its mod without scripts */
+    start();
+    alone = fake_mods_fingerprint;
+    CHECK(alone != 0 && fake_mods_count == 1 && fake_mods_list[0] == 4 && memcmp(fake_mods_list + 1, "Wind", 4) == 0 &&
+          fake_mods_list[5] == 14 && memcmp(fake_mods_list + 6, "test.wind/wind", 14) == 0);
+    khdays_scripts_stop();
+    fake_character_part = 2; /* its description or its data changed */
+    start();
+    CHECK(fake_mods_fingerprint != 0 && fake_mods_fingerprint != alone);
+    khdays_scripts_stop();
+    fake_characters = 0;
     mod_folder("Play", "test.play", "gameplay", "print('a gameplay mod')\n");
     start();
     first = fake_mods_fingerprint;

@@ -53,6 +53,11 @@ int khdays_characters_file(const KhdaysCharacter *c, const char *relative, char 
  * for any other. */
 const KhdaysCharacter *khdays_characters_of_model(const char *name);
 
+/* For the multiplayer rooms (runtime/scripts/scripts.c): numbered character `index` (from 0; 0 past the last), in
+ * the numbers' order -- its part of the gameplay mods' fingerprint (SHA-256 over its identity, its description and
+ * its data/ files: what plays; its model, clips and sounds are each player's own), its name and its identity. */
+int khdays_characters_room_entry(int index, unsigned char digest[32], const char **name, const char **identity);
+
 /* The damage factor (fx32) of a move of seat `seat`'s actor, which plays as `kind`, that its base's own code makes
  * (Ov022_ScaleRowValues's join: the player overlays' Limits and specials): a new character's [limit] damage
  * times `factor`, else `factor`. */

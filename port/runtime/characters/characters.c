@@ -6,6 +6,7 @@
 #include "../../host/app/instance.h"
 #include "../core/rom.h"
 #include "../core/session_log.h"
+#include "../core/sha256.h"
 #include "../core/window.h"
 #include "../scripts/folders.h"
 #include "../scripts/manifest.h"
@@ -404,6 +405,56 @@ int khdays_characters_of(int slot, int kind)
         }
     }
     return c->number;
+}
+
+/* A character's part of the rooms' fingerprint, growing (a file that cannot be read is left out: the copies'
+ * parts differ then). */
+typedef struct RoomPart {
+    KhdaysSha256 sha;
+    const char *folder; /* its character's folder */
+} RoomPart;
+
+static void room_file(const char *relative, void *context)
+{
+    RoomPart *part = context;
+    char path[1200];
+    size_t size = 0;
+    char *bytes;
+    snprintf(path, sizeof(path), "%s/data/%s", part->folder, relative);
+    bytes = khdays_folders_read(path, &size);
+    if (bytes == NULL) {
+        return;
+    }
+    khdays_sha256_add(&part->sha, relative, strlen(relative) + 1);
+    khdays_sha256_add(&part->sha, bytes, size);
+    free(bytes);
+}
+
+int khdays_characters_room_entry(int index, unsigned char digest[32], const char **name, const char **identity)
+{
+    const KhdaysCharacter *c = khdays_characters_at(index);
+    RoomPart part;
+    char folder[1024], data[1100], *ini;
+    size_t size = 0;
+    if (c == NULL || !khdays_characters_file(c, "", folder, sizeof(folder))) {
+        return 0;
+    }
+    folder[strlen(folder) - 1] = '\0'; /* its folder, without the '/' an empty reference left */
+    part.folder = folder;
+    khdays_sha256_begin(&part.sha);
+    khdays_sha256_add(&part.sha, c->identity, strlen(c->identity) + 1);
+    snprintf(data, sizeof(data), "%s/character.ini", folder);
+    ini = khdays_folders_read(data, &size);
+    if (ini != NULL) {
+        khdays_sha256_add(&part.sha, ini, size);
+        free(ini);
+    }
+    snprintf(data, sizeof(data), "%s/data", folder);
+    khdays_folders_files(data, room_file, &part);
+    khdays_sha256_end(&part.sha, digest);
+    *name = khdays_characters_name(c, 0);
+    *identity = c->identity;
+    return 1;
 }
 
 int khdays_characters_own_moves(int seat, int kind, int factor)

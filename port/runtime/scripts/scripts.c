@@ -16,6 +16,7 @@
 #include "queue.h"
 #include "sandbox.h"
 #include "view.h"
+#include "../characters/characters.h"
 #include "../core/sha256.h"
 #include "../menus/autosave.h"
 #include "../net/net_session.h"
@@ -390,8 +391,9 @@ static void publish(void)
 
 /* The gameplay mods running, for multiplayer rooms (runtime/net/net_session.h): their fingerprint, the
  * first four bytes of SHA-256 over each one's id, a 0, its version, a 0 and its own fingerprint, in
- * load order (0 with none; a digest whose first four bytes are 0 counts as 1), and their names and
- * versions. Visual mods are not counted: each player's own. */
+ * load order, then each of the mods' characters' identity, a 0 and its part (characters.h), in their numbers'
+ * order (0 with none; a digest whose first four bytes are 0 counts as 1), and their names and versions (a
+ * character's identity). Visual mods are not counted: each player's own. */
 static void tell_rooms(void)
 {
     KhdaysSha256 sha;
@@ -423,6 +425,33 @@ static void tell_rooms(void)
         list[size++] = (unsigned char)version;
         memcpy(list + size, m->manifest.version, version);
         size += version;
+        ++counted;
+    }
+    /* the mods' characters (a mod of characters alone has no scripts): the select numbers them by their
+     * identities, and their descriptions and data play */
+    for (int c = 0;; ++c) {
+        unsigned char part[32];
+        const char *name, *identity;
+        size_t name_size, identity_size;
+        unsigned char *more;
+        if (!khdays_characters_room_entry(c, part, &name, &identity)) {
+            break;
+        }
+        khdays_sha256_add(&sha, identity, strlen(identity) + 1);
+        khdays_sha256_add(&sha, part, sizeof(part));
+        name_size = strlen(name) < 255 ? strlen(name) : 255;
+        identity_size = strlen(identity) < 255 ? strlen(identity) : 255;
+        more = realloc(list, size + 2 + name_size + identity_size);
+        if (more == NULL) {
+            continue;
+        }
+        list = more;
+        list[size++] = (unsigned char)name_size;
+        memcpy(list + size, name, name_size);
+        size += name_size;
+        list[size++] = (unsigned char)identity_size;
+        memcpy(list + size, identity, identity_size);
+        size += identity_size;
         ++counted;
     }
     if (counted > 0) {

@@ -162,6 +162,21 @@ WALKS = [
             "a mod's character",
         ),
     ),
+    # ... chosen by a guest in a room of two: both copies play its seat as the character (the multiplayer
+    # walk's route)
+    Walk(
+        "multiplayer_character",
+        240,
+        player_save=False,
+        players=2,
+        script="multiplayer",
+        mods="port/tests/mods_v2/character",
+        env=(("2:KHDAYS_TEST_CHARACTER", "test.character/block"), ("KHDAYS_TRACE_CHARACTERS", "1")),
+        marks=(
+            "characters: seat 1 is test.character/block",
+            "characters: member 1 is test.character/block (0x16), on roxas's code",
+        ),
+    ),
 ]
 
 # The runtime reports the current scene once a second, and at each change,

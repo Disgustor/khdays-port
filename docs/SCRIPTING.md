@@ -400,7 +400,8 @@ battle's actors); `mod.share` carries the rest.
 
 The host's game decides for everyone in a room, so a room takes only players with the same gameplay
 mods as its host: the same ids, versions and scripts (a fingerprint of them travels with the request
-to join). A player with other gameplay mods is not let in and the room list says which mods the room
+to join), and the same mods' characters with the same descriptions and data (CHARACTERS.md, "In a
+room"). A player with other gameplay mods is not let in and the room list says which mods the room
 plays with. Visual mods are each player's own and never keep anyone out.
 
 In a room, a guest's scripts still run and hear the events, but what they would change in the game

@@ -171,6 +171,16 @@ damage = 1.5                         # its Limit's damage, times its base's
   overlay names them itself), so `data/` does not replace them.
 - Its length, its button and the way it is started are its base's.
 
+## In a room
+
+Any player of a room may choose a mod's character, and every copy plays it as its own: the select tells
+the room its place's number, which each copy knows as the same character (seen with two copies on one PC,
+the host's and a guest's choice). So a room takes only copies with the same characters: each one's
+identity, its `character.ini` and its `data/` files are in the gameplay mods' fingerprint (SCRIPTING.md,
+"Multiplayer"), and a copy whose characters differ is not let in, the room list naming the room's
+(`Ventus local.ventus/ventus`). Its model, clips, face and sounds are each player's own: they only change
+what that player sees and hears.
+
 ## Limits
 
 The select keeps a place's character in a signed byte: the mods' characters take the numbers 0x16-0x7f, 106 at
@@ -181,6 +191,8 @@ character loads without the mod, its base standing in.
 ## Not yet
 
 - The game's own select (two screens, without the select's layout of the HD pieces) does not list them.
+- Characters are read from every folder in `mods/`, also one turned off in the Mods page (as the mods'
+  missions are): a character is taken out by taking its mod's folder out.
 - Attacks of their own (new kinds of moves, not the base's) and a Limit of their own (its length, its kind of
   hits: their base's code), the studio's editor (spec 034's later phases); the field's portrait and the results'
   model are still the base's.

@@ -5312,3 +5312,16 @@ Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on 
   (the Lua mods' `hp` event hears no enemy either): their HP goes another way, a point of its own to find.
   `PlaySound` starts the menus' sound effects (6-7 a scene there) but none of the field's, which go through
   `Slot_Spawn` (`Ov022_PlayEntityVoice`, section 30).
+- **The enemies' and the field's points** (seen 2026-10-28, the same mission with `sdk/examples/CustomCharacter`):
+  `Ov107_AiState_ApplyHit` runs for each hit an enemy takes; after it, a Shadow's HP read 0 of 75 from a 618-damage
+  hit and the enemy was still standing (+0x60 bit 0x100): the defeat comes after the routine returns. `Slot_Spawn`
+  started 83 sounds in that field and none in the menus before it (where `PlaySound` started 3-7 a scene).
+- **The standing enemies** are ov107's actor manager's list (`gOv107ActorManager` + 4, `List_First`/`List_Next`: +4
+  its first node, +0x10 its end, a node's +4 the next, +0xc an element whose first word is the actor): the port walks
+  it without the list's cursor (+0x24 of the list), which the game's own walks keep, and takes those set going
+  (+0x60 bit 0x100). The id table (+0x48, `Ov107_Scene_BuildIdTable`) is not used: it is made again after each new
+  actor, and between the two its size (+0x24) is ahead of it.
+- **A player's attacks** (`Ov022_RunComboContacts`, each battle tick of an attack, section 30): the record's first
+  half-word is the attack's id as `[moveset]` names it. Roxas's combo with his own files went 13090, 13080, 13150
+  (Ventus's rewritten ones 0, 1, 2), each attack's hits worked out several times as its frames test them
+  (`Ov022_ComputeStrengthDamage` 1-6 times an attack).

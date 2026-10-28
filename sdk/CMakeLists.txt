@@ -8,3 +8,4 @@ include(cmake/KhModSdk.cmake)
 
 add_subdirectory(examples/HelloWorld)
 add_subdirectory(examples/AdvancedNativeMod)
+add_subdirectory(examples/CustomCharacter)

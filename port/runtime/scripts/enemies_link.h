@@ -35,6 +35,12 @@ int khdays_enemies_remove(unsigned actor);
 /* A standing enemy's kind, HP, level and place; 0 when it no longer stands. */
 int khdays_enemies_info(unsigned actor, KhdaysEnemyInfo *out);
 
+/* Every standing enemy of the area, a mod's or the mission's (ov107's actor manager: those set going and not yet
+ * defeated or sent away), for the native plugins' kh.actors: up to `room` actors into `out` (NULL to count), how
+ * many; whether `actor` is one of them, its state into `out` when not NULL. */
+int khdays_enemies_list(unsigned *out, int room);
+int khdays_enemies_state(unsigned actor, KhdaysEnemyInfo *out);
+
 /* The joins. */
 void khdays_enemies_marker_made(int source, int row, void *actor, int id); /* Ov002_CreateActorFromMarker */
 void khdays_enemies_class(int id);                                         /* Ov107_SpawnEntityClass */

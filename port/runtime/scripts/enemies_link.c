@@ -5,6 +5,7 @@
 #include "enemies_link.h"
 
 #include "../battle/stop_magic.h"
+#include "../plugins/actors.h"
 
 #include "api_v2.h"
 #include "../core/window.h"
@@ -95,6 +96,11 @@ const char *khdays_enemy_name(int id); /* enemy_names.c */
 #define ATTACKS 8
 #define REACH (16 * 4096) /* the mission's spawners' (Ov002_ScriptCreateSlotObject's 9th) */
 #define MANAGER_IDS 0x48u /* gOv107ActorManager: an actor by its id (+2), made by Ov107_Scene_BuildIdTable */
+#define MANAGER_LIST 0x4u /* gOv107ActorManager: its actors' list (List_First): +4 its first node, +0x10 its end */
+#define LIST_FIRST 0x4u
+#define LIST_END 0x10u
+#define NODE_NEXT 0x4u
+#define NODE_ITEM 0xcu /* the element, whose first word is the actor (Ov107_Scene_BuildIdTable) */
 #define STANDING 0x100u
 #define LEVEL_MAX 0x78 /* Ov002_GetEffectiveHeight */
 /* The enemies' overlays (Ov107_SpawnEntityClass, Ov107_LoadEnemyOverlay): six places of 0x1e00 bytes;
@@ -535,17 +541,67 @@ int khdays_enemies_remove(unsigned actor)
     return 1;
 }
 
-int khdays_enemies_info(unsigned actor, KhdaysEnemyInfo *out)
+static void read_info(unsigned actor, KhdaysEnemyInfo *out)
 {
-    if (pooled(actor) == NULL || objects() == 0) {
-        return 0;
-    }
     out->kind = (int)rd8(actor + AI_KIND);
     out->hp = (short)rd16(actor + AI_HP);
     out->max_hp = (short)rd16(actor + AI_HP_MAX);
     out->level = (int)rd8(actor + AI_LEVEL);
     for (int i = 0; i < 3; ++i) {
         out->at[i] = (float)(int)rd32(actor + AI_POSITION + 4u * (unsigned)i) / 4096.0f;
+    }
+}
+
+int khdays_enemies_info(unsigned actor, KhdaysEnemyInfo *out)
+{
+    if (pooled(actor) == NULL || objects() == 0) {
+        return 0;
+    }
+    read_info(actor, out);
+    return 1;
+}
+
+/* The actor manager's standing actors, walked as List_First and List_Next do but without their cursor (a walk of the
+ * game's own may be under way): up to `room` into `out`, how many; with `only`, whether it is one of them. */
+static int standing(unsigned *out, int room, unsigned only)
+{
+    const unsigned manager = objects() != 0 ? (unsigned)Ov107_GetActorManager() : 0;
+    const unsigned list = manager + MANAGER_LIST;
+    int n = 0;
+    if (manager == 0) {
+        return 0;
+    }
+    for (unsigned node = rd32(list + LIST_FIRST); node != 0 && node != list + LIST_END; node = rd32(node + NODE_NEXT)) {
+        const unsigned actor = rd32(rd32(node + NODE_ITEM));
+        if (actor == 0 || !(rd16(actor + AI_FLAGS) & STANDING)) {
+            continue;
+        }
+        if (only != 0) {
+            if (actor == only) {
+                return 1;
+            }
+            continue;
+        }
+        if (out != NULL && n < room) {
+            out[n] = actor;
+        }
+        ++n;
+    }
+    return n;
+}
+
+int khdays_enemies_list(unsigned *out, int room)
+{
+    return standing(out, room, 0);
+}
+
+int khdays_enemies_state(unsigned actor, KhdaysEnemyInfo *out)
+{
+    if (actor == 0 || !standing(NULL, 0, actor)) {
+        return 0;
+    }
+    if (out != NULL) {
+        read_info(actor, out);
     }
     return 1;
 }
@@ -608,6 +664,7 @@ int khdays_enemies_spawner_run(void *spawner, int op)
 void khdays_enemies_retired(void *actor)
 {
     khdays_stop_enemy_gone(actor);
+    khdays_actors_ended(ref_of(actor));
     if (traced()) {
         fprintf(stderr, "enemies: f%u actor %08x retired\n", khdays_link_frame(), ref_of(actor));
     }
@@ -616,6 +673,7 @@ void khdays_enemies_retired(void *actor)
 void khdays_enemies_defeated(void *actor)
 {
     const unsigned a = ref_of(actor);
+    khdays_actors_ended(a);
     if (traced()) {
         fprintf(stderr, "enemies: f%u defeated by %08x (%s): ", khdays_link_frame(), rd32(a + AI_ATTACKER),
                 pooled(a) != NULL ? "a mod's" : "the mission's");
@@ -637,6 +695,7 @@ static void forget(void)
 void khdays_enemies_area_left(void)
 {
     khdays_stop_area_left();
+    khdays_actors_area_left();
     forget();
 }
 
@@ -660,6 +719,7 @@ void khdays_enemies_frame(void)
             p->leaving = 0;
             wr32(p->actor + AI_SPAWNER, 0);
             khdays_api_enemies_gone(p->actor);
+            khdays_actors_ended(p->actor);
             if (traced()) {
                 trace_actor("settled away", p->actor);
             }

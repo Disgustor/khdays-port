@@ -1,0 +1,102 @@
+/* The plugins' test of kh.actors and kh.characters (tests/plugins_test.c), library 6 (test.fighter): finds its mod's
+ * character "block" and the game's roxas by name, refuses a character that is not there, and listens to "block":
+ * each call says what it saw (its seat, its character, its HP and place, the standing enemies, an attack healing
+ * it by 1, the handle refused once it has left) in the log, which the test reads. */
+#include <kh/kh_actors.h>
+#include <kh/kh_characters.h>
+
+#include <stdio.h>
+
+static const KhHost *host;
+static const KhActors *actors;
+static const KhCharacters *characters;
+static int frames;
+
+static void say(const char *text)
+{
+    host->log(host->plugin, KH_LOG_INFO, text);
+}
+
+static void entered(KhActor actor, int32_t seat, void *user)
+{
+    char text[200];
+    float at[3] = {0};
+    int32_t hp = 0, max = 0;
+    (void)user;
+    actors->hp(actor, &hp, &max);
+    actors->position(actor, at);
+    snprintf(text, sizeof(text), "entered seat %d as %d (seat %d, kind %d), HP %d/%d at %.1f %.1f %.1f", (int)seat,
+             (int)actors->character(actor), (int)actors->seat(actor), (int)actors->kind(actor), (int)hp, (int)max,
+             at[0], at[1], at[2]);
+    say(text);
+}
+
+static void frame(KhActor actor, void *user)
+{
+    (void)user;
+    (void)actor;
+    if (frames++ == 0) {
+        char text[200];
+        KhActor first = 0;
+        int32_t hp = 0, max = 0;
+        const int32_t n = actors->enemies(&first, 1);
+        actors->hp(first, &hp, &max);
+        snprintf(text, sizeof(text), "enemies %d, the first of kind %d, HP %d/%d", (int)n,
+                 (int)actors->character(first), (int)hp, (int)max);
+        say(text);
+    }
+}
+
+static void attack(KhActor actor, int32_t which, void *user)
+{
+    char text[100];
+    int32_t hp = 0;
+    (void)user;
+    actors->hp(actor, &hp, NULL);
+    snprintf(text, sizeof(text), "attack %d, healed: %s", (int)which,
+             actors->set_hp(actor, hp + 1) == KH_OK ? "yes" : "no");
+    say(text);
+}
+
+static void left(KhActor actor, void *user)
+{
+    char text[100];
+    (void)user;
+    snprintf(text, sizeof(text), "left after %d frames, its handle %s", frames,
+             actors->hp(actor, NULL, NULL) == KH_ERROR && actors->kind(actor) == KH_ACTOR_NONE ? "refused"
+                                                                                               : "answered");
+    say(text);
+}
+
+static const KhCharacterCalls calls = {sizeof(KhCharacterCalls), entered, frame, attack, left};
+
+static KhResult start(const KhHost *given)
+{
+    char text[200];
+    int32_t block;
+    KhCharacterInfo info = {sizeof(KhCharacterInfo), 0, 0, NULL, NULL, NULL};
+    host = given;
+    actors = host->find(host->plugin, KH_ACTORS, KH_ACTORS_VERSION);
+    characters = host->find(host->plugin, KH_CHARACTERS, KH_CHARACTERS_VERSION);
+    if (actors == NULL || characters == NULL) {
+        return KH_ERROR;
+    }
+    block = characters->find(host->plugin, "block");
+    characters->info(characters->count() - 1, &info);
+    snprintf(text, sizeof(text), "block %d, roxas %d, by identity %d, nobody %d; %d characters, the last %s (%s) on %d",
+             (int)block, (int)characters->find(host->plugin, "roxas"),
+             (int)characters->find(host->plugin, "test.fighter/block"), (int)characters->find(host->plugin, "nobody"),
+             (int)characters->count(), info.identity, info.name, (int)info.base);
+    say(text);
+    say(characters->listen(host->plugin, 999, &calls, NULL) == 0 ? "999 refused" : "999 listened");
+    return characters->listen(host->plugin, block, &calls, NULL) != 0 ? KH_OK : KH_ERROR;
+}
+
+static void stop(void) {}
+
+static const KhPluginDescriptor descriptor = KH_PLUGIN_DESCRIPTOR("fighter", start, stop);
+
+KH_PLUGIN_EXPORT const KhPluginDescriptor *kh_plugin_query(void)
+{
+    return &descriptor;
+}

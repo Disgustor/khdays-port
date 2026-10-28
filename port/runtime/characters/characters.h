@@ -63,10 +63,11 @@ int khdays_characters_room_entry(int index, unsigned char digest[32], const char
  * times `factor`, else `factor`. */
 int khdays_characters_own_moves(int seat, int kind, int factor);
 
-/* Seat `seat`'s actor, which plays as `kind`, hits with attack `attack` (its record's number in cm.b:
- * Ov022_RunComboContacts's join, each frame of it): told under KHDAYS_TRACE_CHARACTERS when it changes, for a new
- * character's actor, so that its author can name the attacks in [moveset]. */
-void khdays_characters_attack(int seat, int kind, int attack);
+/* Seat `seat`'s actor `actor`, which plays as `kind`, hits with attack `attack` (its record's number in cm.b:
+ * Ov022_RunComboContacts's join, each frame of it): told to the native plugins listening to its character, and
+ * under KHDAYS_TRACE_CHARACTERS when it changes, for a new character's actor, so that its author can name the
+ * attacks in [moveset]. */
+void khdays_characters_attack(const void *actor, int seat, int kind, int attack);
 
 /* The game starts the sounds of seat `seat`'s actor, which plays as `kind` (Ov022_PlayEntityVoice's join), until
  * it is called again with -1. */

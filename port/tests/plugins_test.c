@@ -1,11 +1,19 @@
 /* The mods' native plugins (runtime/plugins): real libraries -- the SDK's Hello World and the test plugins
- * (tests/plugins/test_plugins.c, core_plugins.c) -- put in made-up mods, found, checked, loaded, started, using the
- * universal core (a service, events, hooks, the engine by name), stopped on the game's thread when another thread
- * asks, released. One mode per run (the manager keeps its plugins for the process):
+ * (tests/plugins/test_plugins.c, core_plugins.c, character_plugins.c) -- put in made-up mods, found, checked,
+ * loaded, started, using the universal core (a service, events, hooks, the engine by name) and the actors and
+ * characters (a made-up seat, character and enemies), stopped on the game's thread when another thread asks,
+ * released. One mode per run (the manager keeps its plugins for the process):
  *   off   native code off: nothing loaded
  *   safe  native code on, safe mode: nothing loaded
  *   on    native code on: each case's state, the order of starts and stops, the stop asked from another thread */
+#include "../runtime/characters/characters.h"
+#include "../runtime/plugins/actors.h"
+#include "../runtime/plugins/interfaces.h"
 #include "../runtime/plugins/plugins.h"
+#include "../runtime/scripts/enemies_link.h"
+#include "../runtime/scripts/game_link.h"
+
+#include <kh/kh_actors.h>
 
 #include <SDL3/SDL.h>
 
@@ -42,9 +50,110 @@ int khdays_overlay_loaded(int id)
 {
     return id == 22;
 }
+static unsigned vblank;
 unsigned khdays_events_vblank_count(void)
 {
+    return vblank;
+}
+
+/* The game's side for kh.actors and kh.characters (runtime/plugins/actors.c, characters.c): seat 0 plays the
+ * made-up character test.fighter/block on roxas's code; two enemies stand. */
+#define PLAYER 0x02000020u
+#define ENEMY_1 0x02000030u
+#define ENEMY_2 0x02000034u
+static unsigned seat_actor[4] = {PLAYER};
+static unsigned standing[2] = {ENEMY_1, ENEMY_2};
+static int standing_count = 2;
+static int player_hp = 30;
+unsigned khdays_link_seat_actor(int seat)
+{
+    return seat >= 0 && seat < 4 ? seat_actor[seat] : 0;
+}
+int khdays_link_local_seat(void)
+{
     return 0;
+}
+void khdays_link_actor_position(unsigned actor, float at[3])
+{
+    (void)actor;
+    at[0] = 1.5f;
+    at[1] = 0.0f;
+    at[2] = -2.0f;
+}
+int khdays_link_actor_kind(unsigned actor)
+{
+    (void)actor;
+    return 0; /* roxas */
+}
+const char *khdays_link_place_seat(int seat, const float at[3])
+{
+    (void)seat;
+    (void)at;
+    return "not now";
+}
+const char *khdays_link_set_actor_hp(unsigned actor, int hp)
+{
+    (void)actor;
+    player_hp = hp;
+    return NULL;
+}
+void khdays_link_entity_hp(const void *entity, int *hp, int *max)
+{
+    (void)entity;
+    *hp = player_hp;
+    *max = 40;
+}
+int khdays_link_language(void)
+{
+    return 5; /* Spanish */
+}
+int khdays_enemies_list(unsigned *out, int room)
+{
+    for (int i = 0; i < standing_count && out != NULL && i < room; ++i) {
+        out[i] = standing[i];
+    }
+    return standing_count;
+}
+int khdays_enemies_state(unsigned actor, KhdaysEnemyInfo *out)
+{
+    for (int i = 0; i < standing_count; ++i) {
+        if (standing[i] == actor) {
+            if (out != NULL) {
+                memset(out, 0, sizeof(*out));
+                out->kind = 3;
+                out->hp = 50;
+                out->max_hp = 75;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+static char fighter_identity[] = "test.fighter/block", fighter_name[] = "Bloque";
+static KhdaysCharacter fighter = {
+    .identity = fighter_identity, .key = fighter_identity + 13, .name[4] = fighter_name, .number = 0x16};
+int khdays_characters_of(int slot, int kind)
+{
+    return slot == 0 && kind == 0 ? 0x16 : kind;
+}
+int khdays_characters_count(void)
+{
+    return 1;
+}
+const KhdaysCharacter *khdays_characters_at(int index)
+{
+    return index == 0 ? &fighter : NULL;
+}
+const KhdaysCharacter *khdays_characters_numbered(int number)
+{
+    return number == 0x16 ? &fighter : NULL;
+}
+const char *khdays_character_base_name(int number)
+{
+    static const char *const names[] = {"roxas",   "axel",    "xigbar", "saix",     "xaldin", "sora",  "demyx",
+                                        "larxene", "lexaeus", "luxord", "marluxia", "riku",   "vexen", "xemnas",
+                                        "xion",    "zexion",  "mickey", "donald",   "goofy"};
+    return number >= 0 && number < 19 ? names[number] : NULL;
 }
 
 static int failures;
@@ -161,6 +270,75 @@ static void make_mods(void)
     mod("K user",
         "id = test.user\nname = K\nversion = 1\nsdk = 1\nnative.%s = native/plugin.dll\nrequires = test.provider\n",
         KHDAYS_TEST_USER);
+    mod("L fighter", "id = test.fighter\nname = L\nversion = 1\nsdk = 1\nnative.%s = native/plugin.dll\n",
+        KHDAYS_TEST_FIGHTER);
+}
+
+static int count_of(const char *text)
+{
+    int n = 0;
+    for (const char *at = strstr(said, text); at != NULL; at = strstr(at + 1, text)) {
+        ++n;
+    }
+    return n;
+}
+
+/* kh.actors and kh.characters through test.fighter (its lines) and the table itself. */
+static void check_actors_and_characters(void)
+{
+    const KhActors *a = khdays_plugins_actors();
+    const float origin[3] = {0, 0, 0};
+    KhActor player, enemy, again;
+    CHECK(state("test.fighter") == KHDAYS_PLUGIN_STARTED);
+    CHECK(strstr(said, "test.fighter: plugin block 22, roxas 0, by identity 22, nobody -1; 20 characters, the last "
+                       "test.fighter/block (Bloque) on 0") != NULL);
+    CHECK(strstr(said, "test.fighter: not listening: no character 999") != NULL);
+    CHECK(strstr(said, "test.fighter: plugin 999 refused") != NULL);
+
+    /* the seat's actor enters, is called each frame, attacks */
+    vblank = 100;
+    khdays_plugins_frame();
+    CHECK(strstr(said, "test.fighter: plugin entered seat 0 as 22 (seat 0, kind 1), HP 30/40 at 1.5 0.0 -2.0") != NULL);
+    CHECK(strstr(said, "test.fighter: plugin enemies 2, the first of kind 3, HP 50/75") != NULL);
+    khdays_plugins_character_attack(PLAYER, 0, 5);
+    vblank = 101;
+    khdays_plugins_character_attack(PLAYER, 0, 5); /* the same attack, a frame on */
+    khdays_plugins_character_attack(PLAYER, 0, 6);
+    khdays_plugins_character_attack(ENEMY_1, 0, 7); /* not the seat's actor */
+    CHECK(count_of("plugin attack 5, healed: yes") == 1 && count_of("plugin attack 6") == 1 && player_hp == 32);
+    CHECK(count_of("plugin attack 7") == 0);
+    vblank = 110;
+    khdays_plugins_frame(); /* untested for a while: ended */
+    khdays_plugins_character_attack(PLAYER, 0, 6);
+    CHECK(count_of("plugin attack 6") == 2);
+
+    /* handles: the player's, an enemy's ended and found again, refused once gone */
+    player = a->player(0);
+    CHECK(player != 0 && a->kind(player) == KH_ACTOR_PLAYER && a->character(player) == 0x16 && a->seat(player) == 0);
+    CHECK(a->of(PLAYER) == player && a->ref(player) == PLAYER && a->player(1) == 0 && a->of(0x02000040u) == 0);
+    CHECK(a->set_position(player, origin) == KH_UNSUPPORTED);
+    enemy = a->of(ENEMY_1);
+    CHECK(enemy != 0 && enemy != player && a->kind(enemy) == KH_ACTOR_ENEMY && a->character(enemy) == 3);
+    CHECK(a->seat(enemy) == -1 && a->set_hp(enemy, 1) == KH_UNSUPPORTED);
+    khdays_actors_ended(ENEMY_1); /* defeated, then set going again */
+    CHECK(a->kind(enemy) == KH_ACTOR_NONE && a->ref(enemy) == 0 && a->hp(enemy, NULL, NULL) == KH_ERROR);
+    again = a->of(ENEMY_1);
+    CHECK(again != 0 && again != enemy && a->kind(again) == KH_ACTOR_ENEMY && a->kind(enemy) == KH_ACTOR_NONE);
+    enemy = a->of(ENEMY_2);
+    CHECK(enemy != 0);
+    standing_count = 1; /* ENEMY_2 sent away: ended at the next frame, before it could stand again */
+    khdays_plugins_frame();
+    standing_count = 2;
+    CHECK(a->kind(enemy) == KH_ACTOR_NONE && a->of(ENEMY_2) != enemy);
+    khdays_actors_area_left();
+    CHECK(a->kind(player) == KH_ACTOR_NONE && a->kind(again) == KH_ACTOR_NONE);
+    khdays_plugins_frame(); /* the same body, a new handle: it enters again */
+    CHECK(count_of("plugin entered seat 0") == 2 && count_of("plugin left after") == 1);
+
+    /* the seat emptied: the character's actor leaves */
+    seat_actor[0] = 0;
+    khdays_plugins_frame();
+    CHECK(count_of("plugin left after") == 2 && count_of("frames, its handle refused") == 2);
 }
 
 static int SDLCALL quit_thread(void *unused)
@@ -179,7 +357,7 @@ int main(int argc, char **argv)
     khdays_plugins_set_native_code(strcmp(mode, "off") != 0);
     khdays_plugins_set_safe_mode(strcmp(mode, "safe") == 0);
     khdays_plugins_start("plugins_test_mods", heard);
-    CHECK(khdays_plugins_count() == 10); /* I has no plugin */
+    CHECK(khdays_plugins_count() == 11); /* I has no plugin */
     if (strcmp(mode, "on") != 0) {
         CHECK(state("example.hello-world") == KHDAYS_PLUGIN_WAITING);
         CHECK(state("test.counting") == KHDAYS_PLUGIN_WAITING);
@@ -227,6 +405,8 @@ int main(int argc, char **argv)
             khdays_hook_after(0, args, &result);
             CHECK(result == 8);
         }
+
+        check_actors_and_characters();
 
         /* the window's thread asks; this, the game's, stops them at its next frame */
         SDL_Thread *thread = SDL_CreateThread(quit_thread, "quit", NULL);

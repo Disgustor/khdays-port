@@ -1,8 +1,9 @@
-/* The port's interfaces for native plugins (kh.services, kh.events, kh.hooks, kh.engine: sdk/include/kh/), inside
- * the plugin manager (plugins.c). */
+/* The port's interfaces for native plugins (kh.services, kh.events, kh.hooks, kh.engine, kh.actors, kh.characters:
+ * sdk/include/kh/), inside the plugin manager (plugins.c). */
 #ifndef KHDAYS_PLUGINS_INTERFACES_H
 #define KHDAYS_PLUGINS_INTERFACES_H
 
+#include <kh/kh_actors.h>
 #include <kh/kh_mod.h>
 
 #ifdef __cplusplus
@@ -25,6 +26,18 @@ int khdays_plugins_on_game_thread(void);
 
 /* kh.engine (engine.c). */
 const void *khdays_plugins_engine(void);
+
+/* kh.actors (actors.c): its table; seat `seat`'s player's handle; once a frame, the enemies no longer standing ended.
+ */
+const void *khdays_plugins_actors(void);
+KhActor khdays_actors_player(int seat);
+void khdays_actors_frame(void);
+
+/* kh.characters (characters.c): its table; once a frame, the seats' actors looked at and their listeners called;
+ * a plugin's listeners dropped. */
+const void *khdays_plugins_characters(void);
+void khdays_plugins_characters_frame(void);
+void khdays_plugins_characters_forget(KhPlugin *plugin);
 
 #ifdef __cplusplus
 }

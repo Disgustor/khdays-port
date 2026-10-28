@@ -5,7 +5,8 @@ chosen alone or in a room, and played in a mission with its own model, name, pic
 behaviour of one of the game's characters, its **base**. The base stays in the select as it was; a character never
 replaces one of the game's. How the port does it: [RUNTIME_MAP.md](RUNTIME_MAP.md) section 30.
 
-Nothing here needs code or scripts: a folder of files, read when the game starts.
+Nothing here needs code or scripts: a folder of files, read when the game starts. Behaviour a description cannot
+give comes from a native plugin of the same mod ([MODDING_NATIVE.md](MODDING_NATIVE.md), "Actors and characters").
 
 ## The folder
 

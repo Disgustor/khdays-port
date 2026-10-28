@@ -426,6 +426,10 @@ void khdays_plugins_frame(void)
         khdays_plugins_stop();
         SDL_SignalSemaphore(stopped);
     }
+    if (started_count > 0) {
+        khdays_actors_frame();
+        khdays_plugins_characters_frame();
+    }
 }
 
 void khdays_plugins_quit(int ms)

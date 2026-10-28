@@ -1,12 +1,14 @@
 // The KH Mod SDK's advanced example: a plugin that reaches the engine itself.
-//  - kh.hooks: before every HP change of an actor (Ov022_ActorSetHp) it reads the actor's HP from the game's memory
-//    and logs the change; damage to anyone is halved (the routine's argument changed). After every sound effect
-//    (PlaySound) it counts them.
+//  - kh.hooks: before every HP change of a player (Ov022_ActorSetHp) it reads the actor's HP from the game's memory
+//    and logs the change; the damage is halved (the routine's argument changed). After every hit an enemy takes
+//    (Ov107_AiState_ApplyHit) it logs the enemy's HP, through kh.actors. After every sound effect (PlaySound: the
+//    menus') and every positioned sound (Slot_Spawn: the field's) it counts them.
 //  - kh.events: each scene change is logged, with the sounds counted in the scene before.
 //  - kh.engine: at start it calls a game routine by its decompilation name (GetLanguage) and reads a game datum by
 //    name (gSceneCtl: the scene controller, its current scene at +8).
 // What it relies on (Ov022_ActorSetHp's entity keeping its HP at +0x12, gSceneCtl's layout) is the game's own, as the
 // decompilation names it: a later port may move it (kh_engine.h).
+#include <kh/kh_actors.h>
 #include <kh/kh_engine.h>
 #include <kh/kh_events.h>
 #include <kh/kh_hooks.h>
@@ -19,7 +21,8 @@ namespace {
 
 const KhHost *host = nullptr;
 const KhEngine *engine = nullptr;
-unsigned sounds = 0;
+const KhActors *actors = nullptr;
+unsigned sounds = 0, field_sounds = 0, enemy_hits = 0;
 
 void say(const char *text)
 {
@@ -52,13 +55,30 @@ void sound_played(KhHookCall *, void *)
     ++sounds;
 }
 
+void field_sound_played(KhHookCall *, void *)
+{
+    ++field_sounds;
+}
+
+// after Ov107_AiState_ApplyHit(enemy, source, hit): the enemy as kh.actors has it (none once the hit defeated it)
+void enemy_hit(KhHookCall *call, void *)
+{
+    const KhActor enemy = actors->of(static_cast<KhRef>(call->args[0]));
+    std::int32_t hp = 0, most = 0;
+    if (enemy == 0 || actors->hp(enemy, &hp, &most) != KH_OK || enemy_hits++ >= 20)
+        return;
+    char text[160];
+    std::snprintf(text, sizeof(text), "enemy of kind %d hit: HP %d/%d", actors->character(enemy), hp, most);
+    say(text);
+}
+
 void scene_changed(const KhEvent *event, void *)
 {
     char text[160];
-    std::snprintf(text, sizeof(text), "scene %lld -> %lld, %u sound effects in the scene before",
-                  static_cast<long long>(event->a), static_cast<long long>(event->b), sounds);
+    std::snprintf(text, sizeof(text), "scene %lld -> %lld, %u sound effects and %u field sounds in the scene before",
+                  static_cast<long long>(event->a), static_cast<long long>(event->b), sounds, field_sounds);
     say(text);
-    sounds = 0;
+    sounds = field_sounds = 0;
 }
 
 KhResult start(const KhHost *given)
@@ -67,7 +87,8 @@ KhResult start(const KhHost *given)
     engine = static_cast<const KhEngine *>(host->find(host->plugin, KH_ENGINE, KH_ENGINE_VERSION));
     const auto *events = static_cast<const KhEvents *>(host->find(host->plugin, KH_EVENTS, KH_EVENTS_VERSION));
     const auto *hooks = static_cast<const KhHooks *>(host->find(host->plugin, KH_HOOKS, KH_HOOKS_VERSION));
-    if (engine == nullptr || events == nullptr || hooks == nullptr)
+    actors = static_cast<const KhActors *>(host->find(host->plugin, KH_ACTORS, KH_ACTORS_VERSION));
+    if (engine == nullptr || events == nullptr || hooks == nullptr || actors == nullptr)
         return KH_UNSUPPORTED;
 
     // the game's routine by name: int GetLanguage(void)
@@ -87,6 +108,8 @@ KhResult start(const KhHost *given)
     }
     hooks->add(host->plugin, "Ov022_ActorSetHp", KH_HOOK_BEFORE, 0, 0, hp_change, nullptr);
     hooks->add(host->plugin, "PlaySound", KH_HOOK_AFTER, 0, 0, sound_played, nullptr);
+    hooks->add(host->plugin, "Slot_Spawn", KH_HOOK_AFTER, 0, 0, field_sound_played, nullptr);
+    hooks->add(host->plugin, "Ov107_AiState_ApplyHit", KH_HOOK_AFTER, 0, 0, enemy_hit, nullptr);
     events->subscribe(host->plugin, "scene", scene_changed, nullptr);
     return KH_OK;
 }

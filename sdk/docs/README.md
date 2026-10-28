@@ -42,6 +42,16 @@ extern "C" KH_PLUGIN_EXPORT const KhPluginDescriptor *kh_plugin_query(void)
 
 `examples/HelloWorld` is the same, complete.
 
+## The examples
+
+| Example | What it shows |
+|---|---|
+| `examples/HelloWorld` | the descriptor, `start` and `stop`, the log, an interface the port has not got |
+| `examples/AdvancedNativeMod` | `kh.hooks` (the player's HP, the enemies' hits, sounds), `kh.events` (scenes), `kh.engine` (a routine and a datum by name), `kh.actors` |
+| `examples/CustomCharacter` | a mod's own character (its `characters/block/`) given behaviour by `kh.characters`: told of its attacks, 1 HP back for each, its hits doubled through a hook and `kh.actors` |
+
+Each is a mod folder: copy it to the game's `mods/` with its built library in `native/<platform>/`.
+
 ## The rules of the boundary (`include/kh/kh_mod.h`)
 
 - Only C crosses it: fixed-size integers, UTF-8 strings, opaque handles, structs of function pointers. Catch every

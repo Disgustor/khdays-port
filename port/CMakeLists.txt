@@ -428,7 +428,9 @@ add_executable(khdays-native
     runtime/characters/packed.cpp      # ... packed as the game's
     runtime/plugins/plugins.c          # the mods' native plugins (the KH Mod SDK, sdk/): found, loaded,
     runtime/plugins/interfaces.c       # ... given services, events and hooks,
-    runtime/plugins/engine.c           # ... and the engine by name
+    runtime/plugins/engine.c           # ... the engine by name,
+    runtime/plugins/actors.c           # ... the field's actors as handles,
+    runtime/plugins/characters.c       # ... and the characters, with listeners for their actors
     runtime/missions/build.cpp         # ... a mission built from a mod's description, by khdays-studio's builder:
     ../studio/core/missions/mission_build.cpp
     ../studio/core/missions/missions.cpp
@@ -766,19 +768,21 @@ add_test(NAME khdays-script COMMAND khdays-script-test)
 add_library(khdays-test-hello MODULE ../sdk/examples/HelloWorld/hello_world.cpp)
 target_include_directories(khdays-test-hello PRIVATE ../sdk/include)
 target_compile_options(khdays-test-hello PRIVATE /W4 /std:c++20 /EHsc)
-foreach(kind IN ITEMS 1 2 3 4 5)
+foreach(kind IN ITEMS 1 2 3 4 5 6)
     if(kind LESS 4)
         add_library(khdays-test-plugin${kind} MODULE tests/plugins/test_plugins.c)
-    else()
+    elseif(kind LESS 6)
         add_library(khdays-test-plugin${kind} MODULE tests/plugins/core_plugins.c)
+    else()
+        add_library(khdays-test-plugin${kind} MODULE tests/plugins/character_plugins.c)
     endif()
     target_include_directories(khdays-test-plugin${kind} PRIVATE ../sdk/include)
     target_compile_definitions(khdays-test-plugin${kind} PRIVATE KHDAYS_TEST_PLUGIN=${kind})
     target_compile_options(khdays-test-plugin${kind} PRIVATE /W4 /std:c17)
 endforeach()
 add_executable(khdays-plugins-test tests/plugins_test.c runtime/plugins/plugins.c runtime/plugins/interfaces.c
-               runtime/plugins/engine.c runtime/scripts/manifest.c runtime/scripts/folders.cpp
-               runtime/core/sha256.c)
+               runtime/plugins/engine.c runtime/plugins/actors.c runtime/plugins/characters.c
+               runtime/scripts/manifest.c runtime/scripts/folders.cpp runtime/core/sha256.c)
 target_include_directories(khdays-plugins-test PRIVATE ../sdk/include)
 target_link_libraries(khdays-plugins-test PRIVATE SDL3::SDL3)
 target_compile_definitions(khdays-plugins-test PRIVATE
@@ -788,13 +792,14 @@ target_compile_definitions(khdays-plugins-test PRIVATE
     KHDAYS_TEST_COUNTING="$<TARGET_FILE:khdays-test-plugin3>"
     KHDAYS_TEST_PROVIDER="$<TARGET_FILE:khdays-test-plugin4>"
     KHDAYS_TEST_USER="$<TARGET_FILE:khdays-test-plugin5>"
+    KHDAYS_TEST_FIGHTER="$<TARGET_FILE:khdays-test-plugin6>"
     KHDAYS_TEST_HOOK_POINTS="${CMAKE_CURRENT_SOURCE_DIR}/tests/plugins/hook_points.h"
     KHDAYS_VERSION="test")
 target_compile_options(khdays-plugins-test PRIVATE
     $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
     $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
 add_dependencies(khdays-plugins-test khdays-test-hello khdays-test-plugin1 khdays-test-plugin2
-                 khdays-test-plugin3 khdays-test-plugin4 khdays-test-plugin5)
+                 khdays-test-plugin3 khdays-test-plugin4 khdays-test-plugin5 khdays-test-plugin6)
 foreach(mode IN ITEMS off safe on)
     # each in its folder: its made-up mods and the file the counting plugin leaves
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins-${mode}")

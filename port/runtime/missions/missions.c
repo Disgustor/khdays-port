@@ -87,16 +87,15 @@ static char *mod_id(const char *folder, const char *name)
     char *ini = joined(folder, "mod.ini"), *text = ini != NULL ? khdays_folders_read(ini, NULL) : NULL, *id = NULL;
     free(ini);
     if (text != NULL) {
-        KhdaysManifest m;
-        char reason[200];
-        memset(&m, 0, sizeof(m));
-        if (khdays_manifest_parse(text, strlen(text), &m, reason, sizeof(reason)) && m.id != NULL) {
-            id = copy(m.id);
-        }
-        khdays_manifest_free(&m);
+        /* its `id` whatever else it says: a mod with no Lua scripts (no `api`) is the same mod to every part */
+        id = khdays_manifest_value(text, strlen(text), "id");
         free(text);
     }
-    return id != NULL ? id : copy(name);
+    if (id != NULL && id[0] != '\0') {
+        return id;
+    }
+    free(id);
+    return copy(name);
 }
 
 static void read_mod(const char *name, void *context)

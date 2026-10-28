@@ -8,6 +8,7 @@
 #include "../core/session_log.h"
 #include "../core/sha256.h"
 #include "../core/window.h"
+#include "../plugins/actors.h"
 #include "../scripts/folders.h"
 #include "../scripts/manifest.h"
 #include "../scripts/mods_log.h"
@@ -86,16 +87,15 @@ static char *mod_id(const char *folder, const char *name)
     char *ini = joined(folder, "mod.ini"), *text = ini != NULL ? khdays_folders_read(ini, NULL) : NULL, *id = NULL;
     free(ini);
     if (text != NULL) {
-        KhdaysManifest m;
-        char reason[200];
-        memset(&m, 0, sizeof(m));
-        if (khdays_manifest_parse(text, strlen(text), &m, reason, sizeof(reason)) && m.id != NULL) {
-            id = copy(m.id);
-        }
-        khdays_manifest_free(&m);
+        /* its `id` whatever else it says: a mod with no Lua scripts (no `api`) is the same mod to every part */
+        id = khdays_manifest_value(text, strlen(text), "id");
         free(text);
     }
-    return id != NULL ? id : copy(name);
+    if (id != NULL && id[0] != '\0') {
+        return id;
+    }
+    free(id);
+    return copy(name);
 }
 
 typedef struct ModReading {
@@ -472,10 +472,11 @@ int khdays_characters_own_moves(int seat, int kind, int factor)
     return (int)lroundf((float)factor * c->own_moves_damage);
 }
 
-void khdays_characters_attack(int seat, int kind, int attack)
+void khdays_characters_attack(const void *actor, int seat, int kind, int attack)
 {
     static int told[SEATS] = {-1, -1, -1, -1};
     const KhdaysCharacter *c;
+    khdays_plugins_character_attack(actor != NULL ? KHDAYS_REF(actor) : 0, seat, attack);
     if (!tracing || seat < 0 || seat >= SEATS || told[seat] == attack ||
         (c = khdays_characters_numbered(khdays_characters_of(seat, kind))) == NULL || kind != c->base) {
         return;

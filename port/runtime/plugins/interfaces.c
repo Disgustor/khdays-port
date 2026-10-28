@@ -4,6 +4,8 @@
 #include "interfaces.h"
 #include "plugins.h"
 
+#include <kh/kh_characters.h>
+#include <kh/kh_engine.h>
 #include <kh/kh_events.h>
 #include <kh/kh_hooks.h>
 #include <kh/kh_services.h>
@@ -433,8 +435,14 @@ const void *khdays_plugins_interface(KhPlugin *plugin, const char *name, uint32_
     if (strcmp(name, KH_HOOKS) == 0) {
         return version == KH_HOOKS_VERSION ? &hooks_table : NULL;
     }
-    if (strcmp(name, "kh.engine") == 0) {
-        return version == 1 ? khdays_plugins_engine() : NULL;
+    if (strcmp(name, KH_ENGINE) == 0) {
+        return version == KH_ENGINE_VERSION ? khdays_plugins_engine() : NULL;
+    }
+    if (strcmp(name, KH_ACTORS) == 0) {
+        return version == KH_ACTORS_VERSION ? khdays_plugins_actors() : NULL;
+    }
+    if (strcmp(name, KH_CHARACTERS) == 0) {
+        return version == KH_CHARACTERS_VERSION ? khdays_plugins_characters() : NULL;
     }
     for (int i = 0; i < service_count; ++i) {
         if (strcmp(services[i].name, name) == 0 && services[i].version == version) {
@@ -476,6 +484,7 @@ void khdays_plugins_forget(KhPlugin *plugin)
     if (dispatching == 0) {
         settle_hooks();
     }
+    khdays_plugins_characters_forget(plugin);
 }
 
 static SDL_ThreadID game_thread;

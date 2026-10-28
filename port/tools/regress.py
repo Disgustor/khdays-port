@@ -125,7 +125,8 @@ WALKS = [
     ),
     # ... and one the port builds from its description (port/tests/mods_v2/missions_waves): two waves of Shadows
     # beaten by the attack button, the second's spawner running once the first is defeated, its chest and emblem
-    # rows in the game's tables, cleared when the second wave is
+    # rows in the game's tables, cleared when the second wave is; its script's player.set_hp on every frame, refused
+    # while the field loads
     Walk(
         "missions_waves",
         240,
@@ -139,6 +140,8 @@ WALKS = [
             "the mod's mission\t3595",
             "missions: test.waves/waves: a spawner made after its region started, running with it",
             "mission end\tcleared",
+            "set_hp in the field\tnot now",
+            "set_hp in the field\tdone",
         ),
     ),
     # a mod's character (port/tests/mods_v2/character, a made-up figure on three of Roxas's bones): offered after

@@ -140,7 +140,7 @@ What a handler changes is seen by the game's next frame. An event the game raise
 | `game.munny`, `game.set_munny(n)` | munny | 0 to 999999 |
 | `game.item(id)`, `game.set_item(id, n)` | an item's count | ids 0 to 2255 (`0x8cf`), counts 0 to 99; a count above 0 marks the item owned |
 | `game.flag(n)`, `game.set_flag(n, on)` | a story or mission flag | 0 to 16383 (`0x3fff`) |
-| `player.hp`, `player.max_hp`, `player.set_hp(n)` | the player's HP in the field | `set_hp` clamps to 0..`max_hp`, as the game's own hits and cures do (0 is a defeat); `nil` / `nil, "no player"` elsewhere |
+| `player.hp`, `player.max_hp`, `player.set_hp(n)` | the player's HP in the field | `set_hp` clamps to 0..`max_hp`, as the game's own hits and cures do (0 is a defeat); `nil` / `nil, "no player"` elsewhere, and `nil, "not now"` while the field is still loading (the HP is there before the gauge that shows it) |
 | `player.position()` | `x, y, z` in the field | `nil, "no player"` elsewhere |
 | `mission.id` | the current mission | `nil` outside the field |
 | `scene.id` | the current scene | |

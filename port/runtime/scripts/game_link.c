@@ -59,6 +59,8 @@ int khdays_overlay_loaded(int id); /* runtime/core/overlays.c */
 #define ENT_HP_MAX 0x16u
 #define OV_GAME_OVER 27
 #define FIELD_ROOT 0x0207fa00u /* data_ov002_0207fa00: the field's root */
+#define PANEL 0x0207f614u      /* data_ov002_0207f614: the field's panel, 0 until it is set up */
+#define GAUGES 0x0207f618u     /* data_ov002_0207f618: its gauges (Ov002_SetGaugeValue's), 0 until they are made */
 #define ROOT_STOPPING 0x8b64u  /* bits 0-1: the field stopping or stopped (Ov002_PauseMissionScene) */
 #define GIVE_UP_FIELD 0x20efu  /* the game field the pause's Give Up sets as it confirms */
 #define ENEMY_KIND 0x19cu
@@ -229,14 +231,19 @@ int khdays_link_player_hp(int *hp, int *max)
     return 1;
 }
 
-int khdays_link_set_player_hp(int hp)
+const char *khdays_link_set_player_hp(int hp)
 {
     const unsigned actor = player_actor();
     if (actor == 0) {
-        return 0;
+        return "no player";
+    }
+    /* Ov022_ActorSetHp shows the HP on the player's gauge (Ov002_GetPanelWord0220), which the field's panel and
+     * its gauges have only once they are set up: while the field loads the actor is there before them */
+    if (!khdays_overlay_loaded(OV_FIELD) || !khdays_game_ram(rd32(PANEL)) || !khdays_game_ram(rd32(GAUGES))) {
+        return "not now";
     }
     Ov022_ActorSetHp(actor, hp);
-    return 1;
+    return NULL;
 }
 
 void khdays_link_entity_hp(const void *entity, int *hp, int *max)

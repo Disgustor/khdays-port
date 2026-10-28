@@ -134,6 +134,7 @@ int khdays_link_position(float at[3])
 }
 
 static int fake_hp = 40, fake_hp_max = 50;
+static int fake_gauge = 1; /* the field's panel set up, its HP gauge there (0 while the field loads) */
 
 static float fake_set_at[3];
 
@@ -150,10 +151,16 @@ int khdays_link_player_hp(int *hp, int *max)
     return fake_scene == 2;
 }
 
-int khdays_link_set_player_hp(int hp)
+const char *khdays_link_set_player_hp(int hp)
 {
+    if (fake_scene != 2) {
+        return "no player";
+    }
+    if (!fake_gauge) {
+        return "not now";
+    }
     fake_hp = hp > fake_hp_max ? fake_hp_max : hp;
-    return fake_scene == 2;
+    return NULL;
 }
 
 void khdays_link_entity_hp(const void *entity, int *hp, int *max)
@@ -504,6 +511,7 @@ static void reset_game(void)
     fake_munny = 0;
     fake_guest = 0;
     fake_hp = 40;
+    fake_gauge = 1;
     fake_sound[0] = fake_notice[0] = 0;
     fake_next_actor = 0;
     fake_removed = 0;
@@ -905,11 +913,17 @@ static void test_player(void)
     mod_folder("Infinite", "test.infinite", "gameplay",
                "mod.on('frame', function()\n"
                "  local hp, max = player.hp, player.max_hp\n"
-               "  if hp ~= nil and hp < max then player.set_hp(max + 100) end\nend)\n");
+               "  if hp ~= nil and hp < max and select(2, player.set_hp(max + 100)) == 'not now' then\n"
+               "    game.set_flag(24, true)\n"
+               "  end\nend)\n");
     start();
     frames(1);
     CHECK(fake_hp == 40); /* the title: no player */
     fake_scene = 2;
+    fake_gauge = 0;
+    frames(1);
+    CHECK(fake_hp == 40 && khdays_link_flag(24)); /* the field loading: not now */
+    fake_gauge = 1;
     frames(1);
     CHECK(fake_hp == 50); /* clamped to the maximum */
     end_case();

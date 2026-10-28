@@ -11,3 +11,17 @@ mod.on("mission_end", function(e)
   if playing then print("mission end", e.ending, e.rank) end
   playing = false
 end)
+
+-- The player's HP set to what it is on every frame from the field's first: refused while the field loads (the
+-- player is there before the gauge that shows the HP), then done.
+local told = {}
+mod.on("frame", function(e)
+  local hp = player.hp
+  if hp == nil then return end
+  local done, why = player.set_hp(hp)
+  local said = done and "done" or why
+  if not told[said] then
+    told[said] = true
+    print("set_hp in the field", said)
+  end
+end)

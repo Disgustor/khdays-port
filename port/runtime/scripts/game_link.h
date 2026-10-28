@@ -56,8 +56,9 @@ int khdays_link_player_hp(int *hp, int *max);
  * (func_ov022_02088218: its actor moved with its child, its position +0x48c, its motion reset after the
  * move); NULL when done, else why not. */
 const char *khdays_link_set_position(const float at[3]);
-/* Through Ov022_ActorSetHp, as the game's own hits and cures do. */
-int khdays_link_set_player_hp(int hp);
+/* Through Ov022_ActorSetHp, as the game's own hits and cures do; NULL when done, else why not ("no player", or
+ * "not now" while the field loads: its panel, whose gauge the routine sets, is not there yet). */
+const char *khdays_link_set_player_hp(int hp);
 
 /* An entity Ov022_ActorSetHp was given: its HP and maximum (nHp +0x12, nHpMax +0x16). */
 void khdays_link_entity_hp(const void *entity, int *hp, int *max);

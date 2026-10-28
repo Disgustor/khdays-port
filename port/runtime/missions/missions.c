@@ -1,6 +1,7 @@
 /* The mods' new missions in the running game (missions.h). */
 #include "missions.h"
 
+#include "build.h"
 #include "field_store.h"
 #include "registry.h"
 #include "save_part.h"
@@ -129,18 +130,38 @@ void khdays_missions_start(void)
         if (m->number == 0) {
             continue;
         }
+        /* its chests' opened flags, past every mission's fields */
+        unsigned first_chest;
+        if (m->chest_count > 0 && !khdays_field_store_place_chests(&store, i, m->chest_count, &first_chest)) {
+            note(registry.mods[m->mod].id, m->line, "its chests left out: no room for their flags", NULL);
+        }
         snprintf(disk, sizeof(disk), "%s/%s/missions/%s/mission.p2", MODS, registry.mods[m->mod].folder, m->key);
         snprintf(path, sizeof(path), "mi/mi/%04d", m->file);
-        /* without a file of its own, its template's as it is */
-        char template_path[32];
+        /* its waves built into its file; else its own file; else its template's as it is */
+        char template_path[32], why[300] = "";
         snprintf(template_path, sizeof(template_path), "mi/mi/%04d", m->template_file);
-        const int served = khdays_folders_is_file(disk) ? khdays_rom_add_file(path, disk)
-                           : m->template_file != 0      ? khdays_rom_add_alias(path, template_path)
-                                                        : 0;
+        int served = 0;
+        if (m->spawner_count > 0) {
+            unsigned char *built = NULL;
+            size_t size = 0;
+            char reason[200];
+            served = khdays_missions_build(m, &built, &size, reason, sizeof(reason)) &&
+                     khdays_rom_add_bytes(path, built, (unsigned)size);
+            free(built);
+            if (!served) {
+                snprintf(why, sizeof(why), "mission %s left out: its waves do not build: %s", m->key, reason);
+            }
+        } else if (khdays_folders_is_file(disk)) {
+            served = khdays_rom_add_file(path, disk);
+        } else if (m->template_file != 0) {
+            served = khdays_rom_add_alias(path, template_path);
+        }
         if (!served) {
-            char why[200];
-            snprintf(why, sizeof(why), "mission %s left out: missions/%s/mission.p2 cannot be read (nor a template's)",
-                     m->key, m->key);
+            if (why[0] == '\0') {
+                snprintf(why, sizeof(why),
+                         "mission %s left out: missions/%s/mission.p2 cannot be read (nor a template's)", m->key,
+                         m->key);
+            }
             note(registry.mods[m->mod].id, m->line, why, NULL);
             m->number = 0;
             --numbered;
@@ -332,6 +353,8 @@ void *khdays_missions_file_loaded(unsigned top, void *buffer, unsigned size, voi
         made = khdays_tables_list(buffer, size, &registry, language, &made_size);
     } else if (_stricmp(path, "mi/mi/mdb.z") == 0) {
         made = khdays_tables_mdb(buffer, size, &registry, &made_size);
+    } else if (_stricmp(path, "mi/mi/trbox") == 0 || _stricmp(path, "mi/mi/evi") == 0) {
+        made = khdays_tables_placed(buffer, size, &registry, &store, _stricmp(path, "mi/mi/trbox") == 0, &made_size);
     }
     if (made == NULL) {
         return buffer;
@@ -353,6 +376,59 @@ void *khdays_missions_file_loaded(unsigned top, void *buffer, unsigned size, voi
     }
     khdays_log("missions: %s with the new missions' rows (%u bytes, was %u)", path, (unsigned)made_size, size);
     return KHDAYS_W(block);
+}
+
+/* ---- The mission being played ------------------------------------------------------------------- */
+
+/* Mission Mode's choice (data_0204c240: its mode flags, then the mission's file number, the one
+ * Ov002_ConstructGameplayScene formats mi/mi/%04d with). */
+#define MISSION_CHOICE 0x0204c240u
+#define MISSION_CHOICE_FILE 2u
+
+/* The new mission being played, or NULL (a game's). */
+static const KhdaysMission *playing(void)
+{
+    const int file = *(const volatile u16 *)KHDAYS_W(MISSION_CHOICE + MISSION_CHOICE_FILE);
+    for (int i = 0; i < registry.count; ++i) {
+        if (registry.list[i].number != 0 && registry.list[i].file == file) {
+            return &registry.list[i];
+        }
+    }
+    return NULL;
+}
+
+/* A node's state word (Ov107_InitNodeBase): bit 0 shown, bit 1 running (Ov107_Region_TickChildren ticks only
+ * those), set on every member when a region is (Ov107_Region_SetEnabled, when a player joins it); its region
+ * (the source it was made from) at +4. */
+#define NODE_REGION 4u
+#define NODE_STATE 0x40u
+#define NODE_SHOWN_AND_RUNNING 3u
+
+void khdays_missions_spawner_made(void *node)
+{
+    const KhdaysMission *m = playing();
+    const KhdaysRef region = *(const KhdaysRef *)((const unsigned char *)node + NODE_REGION);
+    if (m == NULL || m->spawner_count == 0 || region == 0) {
+        return;
+    }
+    u32 *state = (u32 *)((unsigned char *)node + NODE_STATE);
+    const u32 before = *state;
+    *state |= *(const volatile u32 *)KHDAYS_W(region + NODE_STATE) & NODE_SHOWN_AND_RUNNING;
+    if (*state != before) {
+        khdays_log("missions: %s: a spawner made after its region started, running with it", m->identity);
+    }
+}
+
+int khdays_missions_spots_shown(void)
+{
+    static const KhdaysMission *told;
+    const KhdaysMission *m = playing();
+    if (m != NULL && m != told) {
+        const int number = *(const volatile u16 *)KHDAYS_W(MISSION_CHOICE - 4u);
+        khdays_log("missions: %s: its chests and emblems as the story's (mission number %d)", m->identity, number);
+    }
+    told = m;
+    return m != NULL;
 }
 
 /* ---- The save part ------------------------------------------------------------------------------- */

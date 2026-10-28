@@ -1572,6 +1572,53 @@ constexpr Row rows[] =
         {S::new_missions_quit,
          {"Quit without saving", "Quitter sans enregistrer", "Beenden ohne zu speichern", "Esci senza salvare",
           "Salir sin guardar"}},
+        {S::new_missions_spots,
+         {"Waves, chests and emblems", "Vagues, coffres et emblèmes", "Wellen, Truhen und Embleme",
+          "Ondate, forzieri ed emblemi", "Oleadas, cofres y emblemas"}},
+        {S::new_missions_spots_note,
+         {"With waves, the port builds the mission at its start from these lines: the first wave comes out at once, "
+          "each next one when the last is defeated, the mission is cleared when the last wave is (or its time runs out). "
+          "Each line is written to the mod at once.",
+          "Avec des vagues, le port construit la mission à son démarrage à partir de ces lignes : la première vague "
+          "sort tout de suite, chaque suivante quand la précédente est vaincue, la mission est réussie avec la dernière "
+          "(ou à la fin du temps). Chaque ligne est écrite dans le mod aussitôt.",
+          "Mit Wellen baut der Port die Mission beim Start aus diesen Zeilen: die erste Welle erscheint sofort, jede "
+          "weitere, wenn die vorige besiegt ist; die Mission ist mit der letzten geschafft (oder wenn die Zeit abläuft). "
+          "Jede Zeile wird sofort in den Mod geschrieben.",
+          "Con le ondate, il port costruisce la missione al suo avvio da queste righe: la prima ondata esce subito, "
+          "ognuna successiva quando la precedente è sconfitta, la missione è superata con l'ultima (o allo scadere del "
+          "tempo). Ogni riga è scritta subito nella mod.",
+          "Con oleadas, el port construye la misión al arrancar con estas líneas: la primera oleada sale enseguida, "
+          "cada siguiente cuando la anterior cae, y la misión se supera con la última (o al acabarse el tiempo). Cada "
+          "línea se escribe en el mod al momento."}},
+        {S::new_missions_start,
+         {"start (x y z facing)", "départ (x y z orientation)", "Start (x y z Richtung)", "partenza (x y z direzione)",
+          "inicio (x y z orientación)"}},
+        {S::new_missions_add, {"Add", "Ajouter", "Hinzufügen", "Aggiungi", "Añadir"}},
+        {S::new_missions_added,
+         {"Added to {0}: {1} = {2}", "Ajouté à {0} : {1} = {2}", "Zu {0} hinzugefügt: {1} = {2}",
+          "Aggiunto a {0}: {1} = {2}", "Añadido a {0}: {1} = {2}"}},
+        {S::new_missions_clear, {"Take away", "Retirer", "Entfernen", "Togli", "Quitar"}},
+        {S::new_missions_cleared,
+         {"{0}: {1} lines of {2} taken away.", "{0} : {1} lignes de {2} retirées.", "{0}: {1} Zeilen von {2} entfernt.",
+          "{0}: {1} righe di {2} tolte.", "{0}: {1} líneas de {2} quitadas."}},
+        {S::new_missions_check,
+         {"Check that it builds", "Vérifier qu'elle se construit", "Prüfen, ob sie sich baut", "Verifica che si costruisca",
+          "Comprobar que se construye"}},
+        {S::new_missions_builds,
+         {"{0} builds as the port will build it at its start.", "{0} se construit comme le port la construira.",
+          "{0} baut sich so, wie der Port sie beim Start baut.", "{0} si costruisce come la costruirà il port.",
+          "{0} se construye como la construirá el port al arrancar."}},
+        {S::new_missions_no_waves,
+         {"{0} has no waves: its file is its own or its template's, as it is.",
+          "{0} n'a pas de vagues : son fichier est le sien ou celui de son modèle, tel quel.",
+          "{0} hat keine Wellen: ihre Datei ist ihre eigene oder die ihrer Vorlage, unverändert.",
+          "{0} non ha ondate: il suo file è il suo o quello del suo modello, così com'è.",
+          "{0} no tiene oleadas: su archivo es el suyo o el de su plantilla, tal cual."}},
+        {S::new_missions_classes,
+         {"Enemy classes the game's missions have (class: name):", "Classes d'ennemis des missions du jeu (classe : nom) :",
+          "Gegnerklassen der Missionen des Spiels (Klasse: Name):", "Classi di nemici delle missioni del gioco (classe: nome):",
+          "Clases de enemigo de las misiones del juego (clase: nombre):"}},
         {S::mission_sum_where, {"Where", "Où", "Wo", "Dove", "Dónde"}},
         {S::mission_sum_world,
          {"World {0}, rooms {1}", "Monde {0}, salles {1}", "Welt {0}, Räume {1}", "Mondo {0}, stanze {1}",

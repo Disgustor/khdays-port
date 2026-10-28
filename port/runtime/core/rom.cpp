@@ -317,23 +317,37 @@ extern "C" int khdays_rom_init(void)
     return 1;
 }
 
+namespace {
+
+// A file the game does not have placed past everything else: read from `where`, or served from `bytes`.
+int add(const char *path, const fs::path &where, std::uint64_t size, std::vector<u8> bytes)
+{
+    if (size == 0 || size > 0xffffffffull - image_end - 0x200u) {
+        return 0;
+    }
+    const u32 placed = (image_end + 0x1ff) & ~0x1ffu;
+    const u32 id = static_cast<u32>(files.size());
+    image_end = placed + static_cast<u32>(size);
+    files.push_back({where, static_cast<u32>(size), std::move(bytes)});
+    game_paths.emplace_back(path);
+    regions.push_back({placed, image_end, GAME_FILE, static_cast<int>(id)}); // the last: still in order
+    added[lower(path)] = {placed, image_end, id};
+    return 1;
+}
+
+} // namespace
+
 extern "C" int khdays_rom_add_file(const char *path, const char *disk)
 {
     const fs::path where = utf8_path(disk);
     std::error_code ec;
-    const auto bytes = fs::file_size(where, ec);
-    if (ec || bytes == 0 || bytes > 0xffffffffu - image_end - 0x200u) {
-        return 0;
-    }
-    const u32 size = static_cast<u32>(bytes);
-    const u32 placed = (image_end + 0x1ff) & ~0x1ffu;
-    const u32 id = static_cast<u32>(files.size());
-    image_end = placed + size;
-    files.push_back({where, size, {}});
-    game_paths.emplace_back(path);
-    regions.push_back({placed, placed + size, GAME_FILE, static_cast<int>(id)}); // the last: still in order
-    added[lower(path)] = {placed, placed + size, id};
-    return 1;
+    const auto size = fs::file_size(where, ec);
+    return !ec && add(path, where, size, {});
+}
+
+extern "C" int khdays_rom_add_bytes(const char *path, const unsigned char *data, unsigned int size)
+{
+    return add(path, {}, size, std::vector<u8>(data, data + size));
 }
 
 extern "C" int khdays_rom_add_alias(const char *path, const char *game_path)

@@ -25,6 +25,33 @@ extern "C" {
 #define KHDAYS_FILE_FIRST 20000
 #define KHDAYS_FILE_LAST 32767
 
+/* What a mission built by khdays-studio is made of (its file then the studio's: studio/core/missions/
+ * mission_build.h); read here so that a description that does not read is said where the port reads it. */
+typedef struct KhdaysMissionEnemies {
+    int enemy_class, count;
+} KhdaysMissionEnemies;
+
+typedef struct KhdaysMissionSpawner {
+    int wave; /* 1 at the start, each next once all before it are defeated */
+    double at[3];
+    KhdaysMissionEnemies *enemies;
+    int enemy_count;
+} KhdaysMissionSpawner;
+
+typedef struct KhdaysMissionChest {
+    int item; /* its contents: an item of the game */
+    double at[3];
+    int heading; /* degrees */
+} KhdaysMissionChest;
+
+/* The most chests a mission has: its rows' count is an s8 (trbox). */
+#define KHDAYS_MOST_CHESTS 127
+
+typedef struct KhdaysMissionEmblem {
+    int kind; /* 0-2: which of the mission's three badges it is, one of each (their bits, 0x92b + 4n) */
+    double at[3];
+} KhdaysMissionEmblem;
+
 typedef struct KhdaysMission {
     char *identity;  /* "<mod id>/<key>" */
     const char *key; /* inside identity */
@@ -41,6 +68,15 @@ typedef struct KhdaysMission {
     int unlock_number;  /* a game mission's number to clear first, 0 none */
     char *unlock_after; /* or a new mission's identity, NULL none */
     int template_file;  /* the game mission it was made from, 0 none */
+    int has_start;      /* start = x y z facing */
+    double start[3];
+    int facing;
+    KhdaysMissionSpawner *spawners; /* wave <n> = ... */
+    int spawner_count;
+    KhdaysMissionChest *chests;
+    int chest_count;
+    KhdaysMissionEmblem *emblems;
+    int emblem_count;
     /* this run's (khdays_missions_number); 0 not numbered */
     int number, file, shown; /* shown: the number the list and the results show (0-99) */
 } KhdaysMission;

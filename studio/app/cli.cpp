@@ -659,6 +659,8 @@ int new_mission(const fs::path& root, const std::vector<std::string>& args) {
     return 0;
 }
 
+int rebuilt(const fs::path& nitrofs, const fs::path& mod_dir, const std::string& key);
+
 // --mission-set <Mod> <key> <setting> [<language>] <value...>
 int mission_set(const fs::path& root, const std::vector<std::string>& args) {
     fs::path nitrofs, mod_dir;
@@ -683,7 +685,63 @@ int mission_set(const fs::path& root, const std::vector<std::string>& args) {
     }
     std::printf("mission %s: %s%s%s = %s (missions/missions.txt read back)\n", args[2].c_str(), args[3].c_str(),
                 language ? " " : "", language ? args[4].c_str() : "", value.c_str());
+    return rebuilt(nitrofs, mod_dir, args[2]);
+}
+
+// After a change of mission `key`: when it has waves, whether it builds as the port will build it; 1 when not.
+int rebuilt(const fs::path& nitrofs, const fs::path& mod_dir, const std::string& key) {
+    bool has_waves = false;
+    std::string why;
+    std::vector<std::string> off_floor;
+    const bool builds = check_mod_mission_build(nitrofs, mod_dir, key, &has_waves, &off_floor, &why);
+    for (const std::string& w : off_floor)
+        std::printf("warning: mission %s: %s\n", key.c_str(), w.c_str());
+    if (!builds) {
+        std::fprintf(stderr, "khdays-studio: mission %s does not build yet: %s (missions/missions.txt is changed)\n",
+                     key.c_str(), why.c_str());
+        return 1;
+    }
+    if (has_waves)
+        std::printf("mission %s builds as the port will build it at its start\n", key.c_str());
     return 0;
+}
+
+// --mission-wave <Mod> <key> add <n> <class>x<count> ... at <x> <y> <z> | clear [<n>]
+// --mission-chest <Mod> <key> add <item> at <x> <y> <z> <heading> | clear
+// --mission-emblem <Mod> <key> add <kind> at <x> <y> <z> | clear
+int mission_lines(const fs::path& root, const std::vector<std::string>& args) {
+    fs::path nitrofs, mod_dir;
+    if (!mission_command_paths(root, args[1], false, &nitrofs, &mod_dir))
+        return 1;
+    const std::string what = args[0] == "--mission-wave" ? "wave" : args[0] == "--mission-chest" ? "chest" : "emblem";
+    const std::string& key = args[2];
+    std::string why;
+    if (args[3] == "clear") {
+        const std::string setting = what == "wave" && args.size() > 4 ? "wave " + args[4] : what;
+        int removed = 0;
+        if (!clear_mod_mission_lines(mod_dir, key, setting, &removed, &why)) {
+            std::fprintf(stderr, "khdays-studio: %s\n", why.c_str());
+            return 1;
+        }
+        std::printf("mission %s: %d line(s) of %s taken away (missions/missions.txt read back)\n", key.c_str(), removed,
+                    setting.c_str());
+        return rebuilt(nitrofs, mod_dir, key);
+    }
+    const std::size_t first = what == "wave" ? 5 : 4;
+    if (args[3] != "add" || args.size() <= first) {
+        std::fprintf(stderr, "khdays-studio: %s add ... or clear\n", args[0].c_str());
+        return 1;
+    }
+    std::string value;
+    for (std::size_t i = first; i < args.size(); ++i)
+        value += (i > first ? " " : "") + args[i];
+    const std::string setting = what == "wave" ? "wave " + args[4] : what;
+    if (!add_mod_mission_line(mod_dir, key, setting, value, &why)) {
+        std::fprintf(stderr, "khdays-studio: %s\n", why.c_str());
+        return 1;
+    }
+    std::printf("mission %s: %s = %s (missions/missions.txt read back)\n", key.c_str(), setting.c_str(), value.c_str());
+    return rebuilt(nitrofs, mod_dir, key);
 }
 
 // --check-mod-missions <Mod>: every new mission of the mod read as the port reads it.
@@ -1378,6 +1436,9 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         return mission_set(root, args);
     if (args.size() == 2 && args[0] == "--check-mod-missions")
         return check_mod_missions_command(root, args[1]);
+    if (args.size() >= 4 &&
+        (args[0] == "--mission-wave" || args[0] == "--mission-chest" || args[0] == "--mission-emblem"))
+        return mission_lines(root, args);
     if ((args.size() >= 4 && args.size() <= 6) && args[0] == "--replace-room")
         return replace_room(root, args);
     if (args.size() == 4 && args[0] == "--revert-room")
@@ -1438,6 +1499,10 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         "                                                  a new mission in Mission Mode's list, from a game mission\n"
         "       khdays-studio [--port <dir>] --mission-set <Mod> <key> <setting> [<language>] <value...>\n"
         "                                                  a new mission's name, objective, category, unlock...\n"
+        "       khdays-studio [--port <dir>] --mission-wave <Mod> <key> add <n> <class>x<count>... at <x> <y> <z> | clear [<n>]\n"
+        "                                                  a wave's spawner: the first at the start, each next when all are defeated\n"
+        "       khdays-studio [--port <dir>] --mission-chest <Mod> <key> add <item> at <x> <y> <z> <heading> | clear\n"
+        "       khdays-studio [--port <dir>] --mission-emblem <Mod> <key> add <kind> at <x> <y> <z> | clear\n"
         "       khdays-studio [--port <dir>] --check-mod-missions <Mod>\n"
         "                                                  a mod's new missions read as the port reads them\n"
         "       khdays-studio [--port <dir>] --assemble <sheet> screen:N|cells:N|sheet... [row:N] [palette:N] [scale:K]\n"

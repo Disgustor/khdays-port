@@ -422,6 +422,14 @@ add_executable(khdays-native
     runtime/missions/tables.c          # ... their rows in the game's tables,
     runtime/missions/worlds.c          # ... the worlds they are played in
     runtime/missions/missions.c        # ... and all of it in the game
+    runtime/missions/build.cpp         # ... a mission built from a mod's description, by khdays-studio's builder:
+    ../studio/core/missions/mission_build.cpp
+    ../studio/core/missions/missions.cpp
+    ../studio/core/missions/mission_db.cpp
+    ../studio/core/missions/command_names.cpp
+    ../studio/core/files/containers.cpp
+    ../studio/core/files/lz.cpp
+    ../studio/core/files/paths.cpp
     runtime/core/sha256.c             # SHA-256: the mods' fingerprints
     runtime/core/io_regs.c
     runtime/core/threads.c
@@ -527,6 +535,14 @@ target_include_directories(khdays-native PRIVATE ../assets/include)
 set_source_files_properties(runtime/movies/video.c PROPERTIES INCLUDE_DIRECTORIES "${MOBICLIP_PORTABLE}")
 # the port's wording holds the game's own texts in UTF-16 literals, written in UTF-8
 set_source_files_properties(runtime/core/text_patches.cpp PROPERTIES COMPILE_OPTIONS "/utf-8")
+# khdays-studio's mission builder, compiled in as the studio builds it: its headers by their own paths
+set(KHDAYS_MISSION_BUILDER runtime/missions/build.cpp ../studio/core/missions/mission_build.cpp
+    ../studio/core/missions/missions.cpp ../studio/core/missions/mission_db.cpp
+    ../studio/core/missions/command_names.cpp ../studio/core/files/containers.cpp ../studio/core/files/lz.cpp
+    ../studio/core/files/paths.cpp)
+set_source_files_properties(${KHDAYS_MISSION_BUILDER} PROPERTIES
+    INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../studio;${CMAKE_CURRENT_SOURCE_DIR}/runtime"
+    COMPILE_OPTIONS "/utf-8;/permissive-")
 # the window's areas (runtime/core/memory.c), the function references' table
 # (runtime/core/window.c), the DS addresses the port reads (khdays_ds_symbols.h)
 target_include_directories(khdays-native PRIVATE "${KHDAYS_GEN}")

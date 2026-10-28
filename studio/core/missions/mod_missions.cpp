@@ -2,6 +2,9 @@
 
 #include "core/files/file_write.h"
 #include "core/files/paths.h"
+#include "core/missions/mission_build.h"
+#include "core/missions/missions.h"
+#include "core/rooms/room_collision.h"
 #include "core/rooms/worlds.h"
 
 extern "C" {
@@ -15,6 +18,7 @@ extern "C" {
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <map>
 
 namespace studio {
 
@@ -143,6 +147,58 @@ std::string escaped(const std::string& value) {
     return out;
 }
 
+// The lines of mission `key`'s block: its header's at *start, the next block's (or the end) at *end.
+bool block_of(const std::vector<std::string>& lines, const std::string& key, std::size_t* start, std::size_t* end) {
+    const std::string header = "[mission " + key + "]";
+    *start = lines.size();
+    for (std::size_t i = 0; i < lines.size(); ++i)
+        if (trimmed(lines[i]) == header)
+            *start = i;
+    if (*start == lines.size())
+        return false;
+    *end = *start + 1;
+    while (*end < lines.size() && trimmed(lines[*end]).rfind('[', 0) != 0)
+        ++*end;
+    return true;
+}
+
+// A line's setting as written before its '=' (`name  en` as `name en`), empty for a comment or a blank line.
+std::string setting_of(const std::string& line) {
+    const std::size_t equals = line.find('=');
+    const std::string t = trimmed(line);
+    if (equals == std::string::npos || t.empty() || t[0] == '#')
+        return {};
+    std::string setting = trimmed(line.substr(0, equals));
+    const std::size_t space = setting.find_first_of(" \t");
+    if (space != std::string::npos)
+        setting = setting.substr(0, space) + " " + trimmed(setting.substr(space));
+    return setting;
+}
+
+// Where a new line of a block goes: after its last line that is not blank.
+std::size_t block_append_at(const std::vector<std::string>& lines, std::size_t start, std::size_t end) {
+    std::size_t at = end;
+    while (at > start + 1 && trimmed(lines[at - 1]).empty())
+        --at;
+    return at;
+}
+
+// missions.txt as `lines`, when mission `key` still reads as the port reads it; else nothing written.
+bool write_checked(const fs::path& mod_dir, const std::vector<std::string>& lines, const std::string& key,
+                   const std::string& setting, std::string* why) {
+    std::string out;
+    for (const std::string& l : lines)
+        out += l + "\n";
+    KhdaysMissions back{};
+    Reports reports;
+    read_registry(out, &back, &reports);
+    const bool there = has_key(back, key);
+    khdays_missions_free(&back);
+    if (!there)
+        return fail_with(why, setting + ": " + (reports.lines.empty() ? "not a valid value" : reports.lines.back()));
+    return write_missions_txt(mod_dir, out, key, why);
+}
+
 }  // namespace
 
 const std::vector<MissionSetting>& mission_settings() {
@@ -153,6 +209,7 @@ const std::vector<MissionSetting>& mission_settings() {
         {"category", false, "the list's category, 0-11 (default: its world's)"},
         {"world", false, "the world it is played in (tt, aw, he, al, eh, nm, zz, pp, bb, tw)"},
         {"room", false, "its first room"},
+        {"start", false, "where the players start: x y z facing (degrees)"},
         {"level", false, "the enemies' level base, 1-120 (default: its template's)"},
         {"time", false, "the time limit the list shows, in milliseconds"},
         {"unlock", false, "start, cleared <number> or cleared <mod id>/<key>"},
@@ -178,7 +235,9 @@ std::vector<ModMission> read_mod_missions(const fs::path& mod_dir, std::vector<s
         return out;
     KhdaysMissions r{};
     Reports reports;
-    read_registry(read_text(missions_txt(mod_dir)), &r, &reports);
+    const std::string text = read_text(missions_txt(mod_dir));
+    const std::vector<std::string> file_lines = lines_of(text);
+    read_registry(text, &r, &reports);
     for (int i = 0; i < r.count; ++i) {
         const KhdaysMission& m = r.list[i];
         ModMission mm;
@@ -198,6 +257,22 @@ std::vector<ModMission> read_mod_missions(const fs::path& mod_dir, std::vector<s
                     : m.unlock_number != 0    ? "cleared " + std::to_string(m.unlock_number)
                                               : "start";
         mm.own_file = fs::is_regular_file(mod_dir / "missions" / path_u8(mm.key) / "mission.p2", ec);
+        std::size_t start = 0, end = 0;
+        if (block_of(file_lines, mm.key, &start, &end)) {
+            for (std::size_t l = start + 1; l < end; ++l) {
+                const std::string setting = setting_of(file_lines[l]);
+                const auto eq = file_lines[l].find('=');
+                if (eq == std::string::npos)
+                    continue;
+                std::string value = file_lines[l].substr(eq + 1);
+                const auto hash = value.find('#');
+                value = trimmed(hash == std::string::npos ? value : value.substr(0, hash));
+                if (setting == "start")
+                    mm.start = value;
+                else if (setting.rfind("wave ", 0) == 0 || setting == "chest" || setting == "emblem")
+                    mm.lines.emplace_back(setting, value);
+            }
+        }
         out.push_back(std::move(mm));
     }
     khdays_missions_free(&r);
@@ -274,54 +349,113 @@ bool set_mod_mission(const fs::path& mod_dir, const std::string& key, const std:
                                              : name + " takes no language");
     if (!takes_language && value.find('#') != std::string::npos)
         return fail_with(why, "a '#' starts a comment there");
-    const std::string text = read_text(missions_txt(mod_dir));
-    std::vector<std::string> lines = lines_of(text);
-    const std::string header = "[mission " + key + "]";
-    std::size_t start = lines.size();
-    for (std::size_t i = 0; i < lines.size(); ++i)
-        if (trimmed(lines[i]) == header)
-            start = i;
-    if (start == lines.size())
+    std::vector<std::string> lines = lines_of(read_text(missions_txt(mod_dir)));
+    std::size_t start, end;
+    if (!block_of(lines, key, &start, &end))
         return fail_with(why, "the mod has no mission " + key);
-    std::size_t end = start + 1;
-    while (end < lines.size() && trimmed(lines[end]).rfind('[', 0) != 0)
-        ++end;
     const std::string wanted = takes_language ? name + " " + language : name;
     const std::string line = wanted + " = " + (takes_language ? escaped(value) : trimmed(value));
     bool replaced = false;
     for (std::size_t i = start + 1; i < end && !replaced; ++i) {
-        const std::size_t equals = lines[i].find('=');
-        const std::string t = trimmed(lines[i]);
-        if (equals == std::string::npos || t.empty() || t[0] == '#')
-            continue;
-        std::string setting = trimmed(lines[i].substr(0, equals));
-        // `name  en` as `name en`
-        const std::size_t space = setting.find_first_of(" \t");
-        if (space != std::string::npos)
-            setting = setting.substr(0, space) + " " + trimmed(setting.substr(space));
-        if (setting == wanted) {
+        if (setting_of(lines[i]) == wanted) {
             lines[i] = line;
             replaced = true;
         }
     }
-    if (!replaced) {
-        std::size_t at = end;
-        while (at > start + 1 && trimmed(lines[at - 1]).empty())
-            --at;
-        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(at), line);
+    if (!replaced)
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(block_append_at(lines, start, end)), line);
+    return write_checked(mod_dir, lines, key, name, why);
+}
+
+bool add_mod_mission_line(const fs::path& mod_dir, const std::string& key, const std::string& setting,
+                          const std::string& value, std::string* why) {
+    if (value.find('#') != std::string::npos)
+        return fail_with(why, "a '#' starts a comment there");
+    std::vector<std::string> lines = lines_of(read_text(missions_txt(mod_dir)));
+    std::size_t start, end;
+    if (!block_of(lines, key, &start, &end))
+        return fail_with(why, "the mod has no mission " + key);
+    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(block_append_at(lines, start, end)),
+                 setting + " = " + trimmed(value));
+    return write_checked(mod_dir, lines, key, setting, why);
+}
+
+bool clear_mod_mission_lines(const fs::path& mod_dir, const std::string& key, const std::string& setting, int* removed,
+                             std::string* why) {
+    std::vector<std::string> lines = lines_of(read_text(missions_txt(mod_dir)));
+    std::size_t start, end;
+    if (!block_of(lines, key, &start, &end))
+        return fail_with(why, "the mod has no mission " + key);
+    *removed = 0;
+    for (std::size_t i = end; i-- > start + 1;) {
+        const std::string s = setting_of(lines[i]);
+        // `wave` clears every wave, `wave 2` that one
+        if (s == setting || (setting.find(' ') == std::string::npos && s.rfind(setting + " ", 0) == 0)) {
+            lines.erase(lines.begin() + static_cast<std::ptrdiff_t>(i));
+            ++*removed;
+        }
     }
-    std::string out;
-    for (const std::string& l : lines)
-        out += l + "\n";
-    // the value must read: the block read back as the port reads it
-    KhdaysMissions back{};
+    return write_checked(mod_dir, lines, key, setting, why);
+}
+
+namespace {
+
+// The places of mission `m` over no floor of its room, said: its start, its spawners, chests and emblems.
+std::vector<std::string> off_the_floor(const fs::path& nitrofs, const KhdaysMission& m) {
+    std::vector<std::string> out;
+    World w;
+    std::string why;
+    if (!load_world(nitrofs, m.world, &w, &why) || m.room < 0 || m.room >= static_cast<int>(w.rooms.size()))
+        return out;
+    const auto& data =
+        w.archive.entries[static_cast<std::size_t>(w.rooms[static_cast<std::size_t>(m.room)].collision_member)].data;
+    RoomCollision c;
+    if (data.empty() || !parse_collision(data, &c, nullptr))
+        return out;
+    auto check = [&](const std::string& what, const double* at) {
+        double y = 0;
+        if (ground_under(c, at[0] * 4096.0, at[2] * 4096.0, (at[1] + 4.0) * 4096.0, &y))
+            return;
+        char where[96];
+        std::snprintf(where, sizeof(where), " at (%.3f, %.3f, %.3f)", at[0], at[1], at[2]);
+        out.push_back(what + where + " is over no floor of " + m.world + " room " + std::to_string(m.room));
+    };
+    if (m.has_start)
+        check("the start", m.start);
+    for (int i = 0; i < m.spawner_count; ++i)
+        check("a spawner of wave " + std::to_string(m.spawners[i].wave), m.spawners[i].at);
+    for (int i = 0; i < m.chest_count; ++i)
+        check("chest " + std::to_string(i + 1), m.chests[i].at);
+    for (int i = 0; i < m.emblem_count; ++i)
+        check("emblem " + std::to_string(i + 1), m.emblems[i].at);
+    return out;
+}
+
+}  // namespace
+
+bool check_mod_mission_build(const fs::path& nitrofs, const fs::path& mod_dir, const std::string& key, bool* has_waves,
+                             std::vector<std::string>* off_floor, std::string* why) {
+    *has_waves = false;
+    KhdaysMissions r{};
     Reports reports;
-    read_registry(out, &back, &reports);
-    const bool there = has_key(back, key);
-    khdays_missions_free(&back);
-    if (!there)
-        return fail_with(why, name + ": " + (reports.lines.empty() ? "not a valid value" : reports.lines.back()));
-    return write_missions_txt(mod_dir, out, key, why);
+    read_registry(read_text(missions_txt(mod_dir)), &r, &reports);
+    const KhdaysMission* m = nullptr;
+    for (int i = 0; i < r.count; ++i)
+        if (key == r.list[i].key)
+            m = &r.list[i];
+    bool ok = true;
+    if (m != nullptr && off_floor != nullptr)
+        *off_floor = off_the_floor(nitrofs, *m);
+    if (m == nullptr) {
+        ok = fail_with(why, "the mod has no mission " + key + " that reads");
+    } else if (m->spawner_count > 0) {
+        *has_waves = true;
+        MissionPlan plan;
+        std::vector<std::uint8_t> bytes;
+        ok = plan_of(*m, &plan, why) && build_mission(extracted_game_files(nitrofs), plan, &bytes, why);
+    }
+    khdays_missions_free(&r);
+    return ok;
 }
 
 bool check_mod_missions(const fs::path& nitrofs, const fs::path& mod_dir, std::vector<std::string>* lines) {

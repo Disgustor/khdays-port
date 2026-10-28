@@ -286,6 +286,29 @@ Taken up (for the record of what the old names were):
     rows, a bit for each kind; status `0x28e4 + 3n`, crown `0x2a4c + 3n`, Mission Mode rank `0x2ca4 + 3n`.
   - `data_02046334` is NitroSDK's `fsi_arc_rom` (named only by a `#define` in `func_0200afb8.c`, which is
     NitroSDK's `FSi_InitRom`); `Ov008_AnyEntryFlagged` decides between the list of rows and the tutorial's alone.
+- The field's spawners (`docs/RUNTIME_MAP.md` 18 and 29, read for the mods' waves 2026-10-28), with names proposed:
+  - `Ov002_ScriptCreateSlotObject` (2.32) makes a **spawner**: `nEntry` its group of the enemy table, `nKind` the
+    region (`aSources[]`, `Ov107_Region_New`) it and its enemies belong to, `nObjA` (+0x110) how far the enemies
+    are placed around it (`Ov107_Spawner_PlaceActors`), `nObjC` (+0x114) the distance within which a player keeps
+    them (`func_ov107_020c0ea0`: none near, they are called back), `nObjB` (+0x118) a scale; `nAnimMode` is no
+    animation mode but the **radius of its trigger sphere** around `vAnimAt` (`Ov002_StartSlotAnim` ->
+    `Ov107_CreateTriggerSphere`; 0: `Ov107_CreateRestartTask`), and `nGate` shows its group's node. Proposed:
+    `nGroup, nRegion, nMask, nMode, nShown, vAt, fxSpread, nTag, fxScale, fxKeepNear, vTriggerAt, fxTriggerRadius`.
+  - `Ov002MarkerRow.nKind` (`Ov002_UpdateSlotLookup`, a row's +1 low nibble) is the **most of the row's class out
+    at once** (`Ov107_SetLookupByte` into the region table's +0x9c, which `Ov107_Spawner_FindFreeActor` holds the
+    live count +0xa0 to; 0, every game row's, is no limit). `func_ov107_020c0ea0` is the spawner's tick
+    (`Ov107_Spawner_Tick`).
+  - A node's state word +0x40 (`Ov107_InitNodeBase`): bit 0 shown, bit 1 running -- `Ov107_Region_TickChildren`
+    ticks only the running ones, and a region sets them on its members only when it is enabled
+    (`Ov107_Region_SetEnabled`, called by `Ov107_Region_AddMember` when a player joins it). A spawner made after
+    its region's players joined never runs: the game's own later spawners (0160's `e0`) are made where a player
+    will come. `Ov107_SetBit1OfField0x40` is `Ov107_Node_SetRunning`, `Ov107_SetBit0OfField0x40`
+    `Ov107_Node_SetShown`.
+  - `Ov002_TimedSpawnRecord.nBucket` (a chest's `trbox` row +1, `Ov002_PushBucketNode`) is the **room** the chest is
+    in: 0102's chests in rooms 6 and 11, 0105's in 1, 4 and 7, as their areas load them (2.26).
+  - `Ov002_SpawnStateSpots` takes the emblems' set by the field's key (the mission's file) but their bits at
+    `0x92b + 4 x data_0204c23c`, the mission's number; an `evi` row's bit is 0, 1 or 3 (the list's kinds 1, 2
+    and 4), its s16 at +2 is 1 for the bit-3 ones.
 
 ### 1.5 What agrees with the ROM only in the DS's frame or names
 

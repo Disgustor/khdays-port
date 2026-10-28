@@ -46,6 +46,9 @@ int khdays_rom_area_at(u32 offset, char *name, int size, u32 *start, u32 *end);
  * khdays_rom_added_file), the file table does not name it. Before the game starts. 0 when it cannot be read. */
 int khdays_rom_add_file(const char *path, const char *disk);
 
+/* The same for a file made by the port (a mission built from a mod's description): `size` bytes, copied. */
+int khdays_rom_add_bytes(const char *path, const unsigned char *data, unsigned int size);
+
 /* The same for a game file served under another path too ("mi/mi/0010" as "mi/mi/20000"). 0 when the game
  * has no `game_path`. */
 int khdays_rom_add_alias(const char *path, const char *game_path);

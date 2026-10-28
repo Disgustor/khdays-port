@@ -7,6 +7,7 @@
 #ifndef KHDAYS_MISSIONS_TABLES_H
 #define KHDAYS_MISSIONS_TABLES_H
 
+#include "field_store.h"
 #include "registry.h"
 
 #ifdef __cplusplus
@@ -45,6 +46,21 @@ unsigned char *khdays_tables_list(const unsigned char *file, size_t size, const 
 
 /* The same for the missions' table. */
 unsigned char *khdays_tables_mdb(const unsigned char *file, size_t size, const KhdaysMissions *r, size_t *out_size);
+
+/* The chests (mi/mi/trbox) and the emblems (mi/mi/evi): a u32 count, as many u32 offsets from the file's
+ * start, then the sets they point at -- u16 the mission's file number (the field's key,
+ * Ov002_FindHandlerByKey), s8 how many rows, a byte, rows of 0x14 bytes. A chest's row (Ov002_ScriptSpawnTimedSet):
+ * s8 its slot (state field 0x20c0 + 2 x slot), s8 the room it is in, s16 its contents, s16 its opened flag less 9,
+ * s16 its heading in degrees, then its point (20.12). An emblem's (Ov002_SpawnStateSpots): s8 its bit of the
+ * mission's badges, s8 a kind, s16 1 for the bit 3 one, s16 a value, s16 -, its point. */
+#define KHDAYS_PLACED_SET_HEAD 4u
+#define KHDAYS_PLACED_ROW 0x14u
+#define KHDAYS_CHEST_FLAG_LESS 9u
+
+/* The same for trbox (`chests` 1) or evi: a set for each numbered mission that has some, after the game's. A
+ * chest's flag is its mission's first chest flag in `s` + its number. */
+unsigned char *khdays_tables_placed(const unsigned char *file, size_t size, const KhdaysMissions *r,
+                                    const KhdaysFieldStore *s, int chests, size_t *out_size);
 
 #ifdef __cplusplus
 }

@@ -28,6 +28,9 @@ struct ModMission {
     int category = -1, room = 0, level = 0, time_ms = 0, template_file = 0;
     std::string world, unlock;
     bool own_file = false;  // missions/<key>/mission.p2, else its template's file as it is
+    std::string start;      // where the players start, as written ("x y z facing"); empty: the file's own
+    // its waves, chests and emblems as written, in the file's order: ("wave 2", "0x2 at 0 0 1.5"), ...
+    std::vector<std::pair<std::string, std::string>> lines;
 };
 std::vector<ModMission> read_mod_missions(const std::filesystem::path& mod_dir, std::vector<std::string>* problems);
 
@@ -41,6 +44,21 @@ bool new_mod_mission(const std::filesystem::path& nitrofs, const std::filesystem
 // written); the file read back by the port's reader and left as it was when the mission would not read.
 bool set_mod_mission(const std::filesystem::path& mod_dir, const std::string& key, const std::string& name,
                      const std::string& language, const std::string& value, std::string* why);
+
+// A line of a setting a mission may have many of -- `wave <n>`, `chest`, `emblem` -- added to mission `key`'s
+// block, or every line of it taken away (`wave` takes every wave's, `wave 2` the second's: *removed how many);
+// each written when the mission still reads as the port reads it.
+bool add_mod_mission_line(const std::filesystem::path& mod_dir, const std::string& key, const std::string& setting,
+                          const std::string& value, std::string* why);
+bool clear_mod_mission_lines(const std::filesystem::path& mod_dir, const std::string& key, const std::string& setting,
+                             int* removed, std::string* why);
+
+// Whether mission `key`, when it has waves (*has_waves), builds as the port builds it at its start
+// (mission_build.h); false with why. Its places over no floor of its room (its start, spawners, chests,
+// emblems) are said in *off_floor, one line each.
+bool check_mod_mission_build(const std::filesystem::path& nitrofs, const std::filesystem::path& mod_dir,
+                             const std::string& key, bool* has_waves, std::vector<std::string>* off_floor,
+                             std::string* why);
 
 // Every mission of the mod checked as the port takes them: the descriptions, each one's file (its own or its
 // template's), its world and room. One line each, problems first said "problem:". True with none.

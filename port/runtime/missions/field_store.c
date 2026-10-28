@@ -21,11 +21,12 @@ unsigned khdays_mission_field(int number, int record, unsigned *bits)
     return records[record].start + records[record].width * (unsigned)number;
 }
 
-/* A placed bit: its mission's index, its record and its place in the record's bits. */
-#define PLACE(index, record, bit) ((unsigned)(index) << 8 | (unsigned)(record) << 4 | (unsigned)(bit))
-#define PLACE_INDEX(p) ((int)((p) >> 8))
-#define PLACE_RECORD(p) ((int)((p) >> 4 & 0xfu))
-#define PLACE_BIT(p) ((unsigned)((p) & 0xfu))
+/* A placed bit: its mission's index, its record and its place in the record's bits (a chest's number, which the
+ * rows' s8 count keeps below 128). */
+#define PLACE(index, record, bit) ((unsigned)(index) << 12 | (unsigned)(record) << 8 | (unsigned)(bit))
+#define PLACE_INDEX(p) ((int)((p) >> 12))
+#define PLACE_RECORD(p) ((int)((p) >> 8 & 0xfu))
+#define PLACE_BIT(p) ((unsigned)((p) & 0xffu))
 
 static unsigned slot_of(unsigned key, unsigned capacity)
 {
@@ -96,6 +97,12 @@ static int room(KhdaysFieldStore *s, unsigned more)
 
 void khdays_field_store_free(KhdaysFieldStore *s)
 {
+#pragma warning(push)
+#pragma warning(disable : 6001) /* each progress up to count is cleared when placed */
+    for (int i = 0; i < s->count; ++i) {
+        free(s->progress[i].opened);
+    }
+#pragma warning(pop)
     free(s->progress);
     free(s->keys);
     free(s->places);
@@ -156,28 +163,91 @@ int khdays_field_store_place(KhdaysFieldStore *s, int index, int number)
     return 1;
 }
 
+int khdays_field_store_place_chests(KhdaysFieldStore *s, int index, int count, unsigned *first)
+{
+    if (index < 0 || index >= s->count || count <= 0 || !room(s, (unsigned)count)) {
+        return 0;
+    }
+    for (unsigned start = KHDAYS_FLAG_BITS; start + (unsigned)count - 1u <= KHDAYS_CHEST_FLAG_LAST;) {
+        unsigned free_run = 0;
+        int taken = 0;
+        while (free_run < (unsigned)count) {
+            (void)find(s, start + free_run, &taken);
+            if (taken) {
+                break;
+            }
+            ++free_run;
+        }
+        if (free_run < (unsigned)count) {
+            start += free_run + 1u; /* past the taken one */
+            continue;
+        }
+        unsigned char *opened = calloc((size_t)count, 1);
+        if (opened == NULL) {
+            return 0;
+        }
+        for (unsigned b = 0; b < (unsigned)count; ++b) {
+            insert(s, start + b + 1u, PLACE(index, KHDAYS_RECORD_CHESTS, b));
+        }
+        KhdaysMissionProgress *p = &s->progress[index];
+        free(p->opened);
+        p->opened = opened;
+        p->chest_count = count;
+        p->first_chest_flag = start;
+        *first = start;
+        return 1;
+    }
+    return 0;
+}
+
 void khdays_field_store_clear(KhdaysFieldStore *s)
 {
     for (int i = 0; i < s->count; ++i) {
-        memset(&s->progress[i], 0, sizeof(s->progress[i]));
-        s->progress[i].best = -1;
+        KhdaysMissionProgress *p = &s->progress[i];
+        memset(p->value, 0, sizeof(p->value));
+        p->best = -1;
+        if (p->opened != NULL) {
+            memset(p->opened, 0, (size_t)p->chest_count);
+        }
     }
 }
 
-/* Whose bit `bit` is: its mission's index, its record and its mask in the record's value; 0 when none's. */
-static int placed(const KhdaysFieldStore *s, unsigned bit, int *index, int *record, unsigned *mask)
+/* Whose bit `bit` is: its mission's index, its record and its place in the record's bits; 0 when none's. */
+static int placed(const KhdaysFieldStore *s, unsigned bit, int *index, int *record, unsigned *at)
 {
     int found;
     const unsigned p = find(s, bit, &found);
-    unsigned width;
     *index = PLACE_INDEX(p);
     *record = PLACE_RECORD(p);
-    if (!found || *index >= s->count || *record >= KHDAYS_RECORDS) {
+    *at = PLACE_BIT(p);
+    if (!found || *index >= s->count) {
         return 0;
     }
-    (void)khdays_mission_field(0, *record, &width);
-    *mask = 1u << (width - 1u - PLACE_BIT(p));
-    return 1;
+    return *record < KHDAYS_RECORDS ||
+           (*record == KHDAYS_RECORD_CHESTS && *at < (unsigned)s->progress[*index].chest_count);
+}
+
+/* A placed bit's value (a record's first bit is its value's highest), and its change. */
+static unsigned bit_value(const KhdaysMissionProgress *p, int record, unsigned at)
+{
+    unsigned width;
+    if (record == KHDAYS_RECORD_CHESTS) {
+        return p->opened[at];
+    }
+    (void)khdays_mission_field(0, record, &width);
+    return p->value[record] >> (width - 1u - at) & 1u;
+}
+
+static void set_bit_value(KhdaysMissionProgress *p, int record, unsigned at, unsigned on)
+{
+    unsigned width;
+    if (record == KHDAYS_RECORD_CHESTS) {
+        p->opened[at] = (unsigned char)(on != 0);
+        return;
+    }
+    (void)khdays_mission_field(0, record, &width);
+    const unsigned mask = 1u << (width - 1u - at);
+    p->value[record] = on ? p->value[record] | mask : p->value[record] & ~mask;
 }
 
 int khdays_field_store_get(const KhdaysFieldStore *s, unsigned field, unsigned bits, unsigned *value)
@@ -188,11 +258,11 @@ int khdays_field_store_get(const KhdaysFieldStore *s, unsigned field, unsigned b
     }
     for (unsigned b = 0; b < bits; ++b) {
         int index, record;
-        unsigned mask;
-        if (!placed(s, field + b, &index, &record, &mask)) {
+        unsigned at;
+        if (!placed(s, field + b, &index, &record, &at)) {
             return 0;
         }
-        v |= (s->progress[index].value[record] & mask ? 1u : 0u) << (bits - 1u - b);
+        v |= bit_value(&s->progress[index], record, at) << (bits - 1u - b);
     }
     *value = v;
     return 1;
@@ -206,10 +276,9 @@ int khdays_field_store_set(KhdaysFieldStore *s, unsigned field, unsigned bits, u
     }
     for (unsigned b = 0; b < bits; ++b) {
         int index, record;
-        unsigned mask;
-        if (placed(s, field + b, &index, &record, &mask)) {
-            unsigned *v = &s->progress[index].value[record];
-            *v = (value >> (bits - 1u - b) & 1u) ? *v | mask : *v & ~mask;
+        unsigned at;
+        if (placed(s, field + b, &index, &record, &at)) {
+            set_bit_value(&s->progress[index], record, at, value >> (bits - 1u - b) & 1u);
         }
     }
     return 1;

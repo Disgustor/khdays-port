@@ -115,6 +115,74 @@ static void bad_blocks_left_out(void)
     khdays_missions_free(&r);
 }
 
+/* A mission's chests: their flags past every field, opened through the game's flag calls, kept in the save part. */
+static void chests_kept(void)
+{
+    static const char text[] = "[mission a]\nname en = A\nobjective en = O\nworld = tt\n"
+                               "chest = 2 at 0 0 0 0\nchest = 3 at 1 0 0 0\nchest = 4 at 2 0 0 0\n";
+    KhdaysMissions r = {0};
+    KhdaysFieldStore s = {0};
+    KhdaysSavePart kept = {0};
+    unsigned first = 0, v = 0;
+    CHECK(read_text(&r, "Mod", text, &(Reports){0}) == 1);
+    CHECK(khdays_missions_number(&r, &s, NULL, NULL) == 1);
+    CHECK(khdays_field_store_place_chests(&s, 0, 3, &first));
+    CHECK(first >= KHDAYS_FLAG_BITS && first + 2 <= KHDAYS_CHEST_FLAG_LAST);
+    for (int rec = 0; rec < KHDAYS_RECORDS; ++rec) { /* none of the mission's own fields */
+        unsigned bits;
+        const unsigned start = khdays_mission_field(r.list[0].number, rec, &bits);
+        CHECK(first + 3 <= start || start + bits <= first);
+    }
+    CHECK(khdays_field_store_set(&s, first + 1, 1, 1)); /* the second opened */
+    CHECK(khdays_field_store_get(&s, first + 1, 1, &v) && v == 1);
+    CHECK(khdays_field_store_get(&s, first, 1, &v) && v == 0);
+    size_t size = 0;
+    char *out = khdays_save_part_text(&r, &s, &kept, &size);
+    CHECK(out != NULL && strstr(out, "Mod/a 0 0 0 0 -1 010\n") != NULL);
+    khdays_field_store_clear(&s);
+    CHECK(khdays_field_store_get(&s, first + 1, 1, &v) && v == 0);
+    if (out != NULL) {
+        khdays_save_part_read(out, size, &r, &s, &kept);
+    }
+    CHECK(s.progress[0].chest_count == 3 && s.progress[0].opened[1] == 1 && s.progress[0].opened[0] == 0);
+    free(out);
+    khdays_save_part_free(&kept);
+    khdays_field_store_free(&s);
+    khdays_missions_free(&r);
+}
+
+static void waves_chests_and_emblems_read(void)
+{
+    static const char text[] = "[mission waves]\n"
+                               "name en = Two Waves\nobjective en = Win.\nworld = eh\nroom = 2\n"
+                               "start = 0 0.049 0 -90\n"
+                               "wave 1 = 0x1 at 0 0.049 -1.5\n"
+                               "wave 2 = 0x2 32x1 at 0 0.049 1.5\n"
+                               "wave 2 = 3x1 at 4 0 4\n"
+                               "chest = 257 at 1 0 -2 180\n"
+                               "emblem = 2 at -1 0 2\n"
+                               "[mission bad-wave]\nname en = A\nobjective en = B\nworld = tt\nwave 1 = 0x0 at 0 0 0\n"
+                               "[mission bad-start]\nname en = A\nobjective en = B\nworld = tt\nstart = 0 0 0\n"
+                               "[mission bad-emblem]\nname en = A\nobjective en = B\nworld = tt\nemblem = 3 at 0 0 0\n";
+    KhdaysMissions r = {0};
+    Reports reports = {0};
+    CHECK(read_text(&r, "Waves", text, &reports) == 1);
+    const KhdaysMission *m = &r.list[0];
+    CHECK(m->has_start && m->start[1] == 0.049 && m->facing == -90);
+    CHECK(m->spawner_count == 3);
+    if (m->spawner_count == 3) {
+        CHECK(m->spawners[0].wave == 1 && m->spawners[0].enemy_count == 1 && m->spawners[0].at[2] == -1.5);
+        CHECK(m->spawners[1].wave == 2 && m->spawners[1].enemy_count == 2 &&
+              m->spawners[1].enemies[1].enemy_class == 32);
+        CHECK(m->spawners[2].wave == 2 && m->spawners[2].enemies[0].enemy_class == 3 && m->spawners[2].at[0] == 4.0);
+    }
+    CHECK(m->chest_count == 1 && m->chests[0].item == 257 && m->chests[0].heading == 180 && m->chests[0].at[2] == -2.0);
+    CHECK(m->emblem_count == 1 && m->emblems[0].kind == 2 && m->emblems[0].at[0] == -1.0);
+    /* a count of none, a start without its facing, an emblem's kind past the three: each block left out */
+    CHECK(reports.count == 3);
+    khdays_missions_free(&r);
+}
+
 /* Every field of every numbered mission past the array, and no two missions' bits the same. */
 static void numbers_apart(const KhdaysMissions *r)
 {
@@ -484,6 +552,8 @@ int main(int argc, char **argv)
 {
     a_description_read();
     bad_blocks_left_out();
+    waves_chests_and_emblems_read();
+    chests_kept();
     numbering();
     the_field_store();
     the_save_part();

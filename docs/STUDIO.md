@@ -172,6 +172,33 @@ with changes not saved asks first). From the command line:
 room, its file, and the rows the port adds to the list in each language; it exits
 1 with a line for each problem.
 
+**Waves, chests and emblems.** A mission with waves needs no file of its own:
+the port builds it at its start (`core/missions/mission_build.h`, compiled into
+the port as it is) from its block's lines, out of the game's own steps (1354's
+area, start and ending, 0004's "all defeated" check), with its world, room, start,
+time limit, notice and objective:
+
+    start = <x> <y> <z> <facing>               # where the players start, degrees
+    wave <n> = <class>x<count> ... at <x> <y> <z>   # a spawner of wave n (1-255)
+    chest = <contents> at <x> <y> <z> <heading>     # a chest (the game's contents number)
+    emblem = <kind 0-2> at <x> <y> <z>          # one of each kind at most
+
+Wave 1 comes out at the start, each next wave when every enemy of the last is
+defeated, and the mission is cleared when the last wave is (or failed by its
+time). An area takes four enemy classes at most (the game's); a class must be
+one a game mission has (the window lists them by name). The chests and emblems
+are added to the game's `trbox` and `evi` as they load and put out in Mission
+Mode for new missions; a chest's opened flag is kept in the port's save part (an
+emblem's pickup is made at its place, but it is not drawn nor picked up yet). In
+the window, **Waves, chests and emblems** adds a line to the mod at once or takes
+away every line of a kind (a wave's: that wave's), and **Check that it builds**
+builds it as the port will and says each place over no floor of its room. From
+the command line (each change checked by building the mission):
+
+    khdays-studio --mission-wave <Mod> <key> add <n> <class>x<count> ... at <x> <y> <z> | clear [<n>]
+    khdays-studio --mission-chest <Mod> <key> add <contents> at <x> <y> <z> <heading> | clear
+    khdays-studio --mission-emblem <Mod> <key> add <kind> at <x> <y> <z> | clear
+
 ## 2D sheets
 
 A 2D tile sheet is seen assembled and edited as a picture

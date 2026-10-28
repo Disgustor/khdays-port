@@ -3,6 +3,7 @@
 
 #include "../core/utf8.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -269,4 +270,95 @@ unsigned char *khdays_tables_mdb(const unsigned char *file, size_t size, const K
     wr32(out, count + added);
     *out_size = total;
     return out;
+}
+
+/* ---- The chests and the emblems ---------------------------------------------------------------- */
+
+/* An emblem's kind (0-2) as its bit of the mission's four (the list's kinds 1, 2 and 4: 1 << (kind - 1)). */
+static const unsigned emblem_bits[] = {0, 1, 3};
+#define UNITY_BIT 3u
+
+static unsigned fixed(double v)
+{
+    return (unsigned)(int)lround(v * 4096.0);
+}
+
+unsigned char *khdays_tables_placed(const unsigned char *file, size_t size, const KhdaysMissions *r,
+                                    const KhdaysFieldStore *s, int chests, size_t *out_size)
+{
+    if (size < 4) {
+        return NULL;
+    }
+    const unsigned count = rd32(file);
+    if (count > (size - 4) / 4) {
+        return NULL;
+    }
+    unsigned added = 0;
+    for (int i = 0; i < r->count; ++i) {
+        const KhdaysMission *m = &r->list[i];
+        const int rows = chests ? (i < s->count ? s->progress[i].chest_count : 0) : m->emblem_count;
+        added += m->number != 0 && rows > 0;
+    }
+    if (added == 0) {
+        return NULL;
+    }
+    /* the offsets' table grows: every set the game's has moves on by as much */
+    const size_t moved = 4u * added, body = size - 4 - 4u * count;
+    Bytes b = {0};
+    unsigned char *head = grow(&b, 4 + 4u * ((size_t)count + added) + body);
+    if (head == NULL) {
+        return NULL;
+    }
+    wr32(head, count + added);
+    for (unsigned k = 0; k < count; ++k) {
+        wr32(head + 4 + 4 * k, rd32(file + 4 + 4 * k) + (unsigned)moved);
+    }
+    memcpy(head + 4 + 4u * ((size_t)count + added), file + 4 + 4u * count, body);
+    unsigned next = count;
+    for (int i = 0; i < r->count; ++i) {
+        const KhdaysMission *m = &r->list[i];
+        const int rows = chests ? (i < s->count ? s->progress[i].chest_count : 0) : m->emblem_count;
+        if (m->number == 0 || rows <= 0) {
+            continue;
+        }
+        while (b.size % 4 != 0 && grow(&b, 1) != NULL) {
+            b.data[b.size - 1] = 0;
+        }
+        const size_t at = b.size;
+        unsigned char *set = grow(&b, KHDAYS_PLACED_SET_HEAD + (size_t)rows * KHDAYS_PLACED_ROW);
+        if (set == NULL) {
+            return NULL;
+        }
+        memset(set, 0, KHDAYS_PLACED_SET_HEAD + (size_t)rows * KHDAYS_PLACED_ROW);
+        wr32(b.data + 4 + 4u * next++, (unsigned)at);
+        wr16(set, (unsigned)m->file);
+        set[2] = (unsigned char)rows;
+        for (int k = 0; k < rows; ++k) {
+            unsigned char *row = set + KHDAYS_PLACED_SET_HEAD + (size_t)k * KHDAYS_PLACED_ROW;
+            const double *point;
+            if (chests) {
+                const KhdaysMissionChest *c = &m->chests[k];
+                row[0] = (unsigned char)k;
+                row[1] = (unsigned char)m->room;
+                wr16(row + 2, (unsigned)c->item);
+                wr16(row + 4, s->progress[i].first_chest_flag + (unsigned)k - KHDAYS_CHEST_FLAG_LESS);
+                wr16(row + 6, (unsigned)c->heading);
+                point = c->at;
+            } else {
+                const KhdaysMissionEmblem *e = &m->emblems[k];
+                row[0] = (unsigned char)emblem_bits[e->kind];
+                wr16(row + 2, emblem_bits[e->kind] == UNITY_BIT);
+                point = e->at;
+            }
+            for (int p = 0; p < 3; ++p) {
+                wr32(row + 8 + 4 * p, fixed(point[p]));
+            }
+        }
+    }
+    if (b.failed) {
+        free(b.data);
+        return NULL;
+    }
+    *out_size = b.size;
+    return b.data;
 }

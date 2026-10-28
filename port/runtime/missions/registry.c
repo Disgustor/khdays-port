@@ -53,7 +53,160 @@ static void free_mission(KhdaysMission *m)
     }
     free(m->identity);
     free(m->unlock_after);
+#pragma warning(push)
+#pragma warning(disable : 6001) /* the spawners up to spawner_count are read_wave's, their enemies set */
+    for (int i = 0; i < m->spawner_count; ++i) {
+        free(m->spawners[i].enemies);
+    }
+#pragma warning(pop)
+    free(m->spawners);
+    free(m->chests);
+    free(m->emblems);
     memset(m, 0, sizeof(*m));
+}
+
+static int whole(const char *text, int low, int high, int *out);
+
+/* Room for one more of `*array`'s `size`-byte elements past `count`; 0 with no memory. */
+static int grow(void **array, int count, size_t size)
+{
+    if ((count & (count - 1)) != 0 && count != 0) {
+        return 1; /* (the capacity doubles at each power of two) */
+    }
+    void *more = realloc(*array, (size_t)(count == 0 ? 4 : 2 * count) * size);
+    if (more == NULL) {
+        return 0;
+    }
+    *array = more;
+    return 1;
+}
+
+/* The words of `value` (spaces between them) into `words`, as many as `room`; how many there were. */
+static int split(char *value, char **words, int room)
+{
+    int n = 0;
+    for (char *p = value; *p != '\0';) {
+        while (*p == ' ' || *p == '\t') {
+            ++p;
+        }
+        if (*p == '\0') {
+            break;
+        }
+        if (words != NULL && n < room) {
+            words[n] = p;
+        }
+        ++n;
+        while (*p != '\0' && *p != ' ' && *p != '\t') {
+            ++p;
+        }
+        if (*p != '\0') {
+            if (words != NULL) {
+                *p = '\0'; /* (counting only: the text left as it is) */
+            }
+            ++p;
+        }
+    }
+    return n;
+}
+
+static int real(const char *text, double *out)
+{
+    char *end;
+    *out = strtod(text, &end);
+    return end != text && *end == '\0';
+}
+
+/* `<x> <y> <z>` from words[0..2]. */
+static int point(char **words, double at[3])
+{
+    return real(words[0], &at[0]) && real(words[1], &at[1]) && real(words[2], &at[2]);
+}
+
+/* `wave <n> = <class>x<count> [...] at <x> <y> <z>`: one spawner of wave n. */
+static int read_wave(KhdaysMission *m, const char *number, char *value)
+{
+    int wave, ok = 0;
+    const int n = split(value, NULL, 0);
+    char **words = n > 0 ? malloc((size_t)n * sizeof(*words)) : NULL;
+    if (words == NULL) {
+        return 0;
+    }
+    split(value, words, n);
+    const int at = n >= 5 && strcmp(words[n - 4], "at") == 0 ? n - 4 : -1;
+    if (whole(number, 1, 255, &wave) && at >= 1 &&
+        grow((void **)&m->spawners, m->spawner_count, sizeof(*m->spawners))) {
+        KhdaysMissionSpawner *s = &m->spawners[m->spawner_count];
+        memset(s, 0, sizeof(*s));
+        s->wave = wave;
+        if (point(&words[at + 1], s->at) && (s->enemies = calloc((size_t)at, sizeof(*s->enemies))) != NULL) {
+            ++m->spawner_count;
+            ok = 1;
+            for (int i = 0; i < at && ok; ++i) {
+                char *times = strchr(words[i], 'x');
+                KhdaysMissionEnemies *e = &s->enemies[s->enemy_count++];
+                e->count = 1;
+                if (times != NULL) {
+                    *times++ = '\0';
+                    ok = whole(times, 1, 255, &e->count);
+                }
+                ok = ok && whole(words[i], 0, 255, &e->enemy_class);
+            }
+        }
+    }
+    free(words);
+    return ok;
+}
+
+/* Why the last chest or emblem line was refused, when its form was right. */
+static const char *refused_why;
+
+/* `chest = <item> at <x> <y> <z> <heading>`, `emblem = <kind> at <x> <y> <z>`, `start = <x> <y> <z> <facing>` */
+
+static int read_chest(KhdaysMission *m, char *value)
+{
+    char *words[8];
+    if (m->chest_count == KHDAYS_MOST_CHESTS) {
+        refused_why = "chest: the game's chests of a mission are 127 at most";
+        return 0;
+    }
+    if (split(value, words, 8) != 6 || strcmp(words[1], "at") != 0 ||
+        !grow((void **)&m->chests, m->chest_count, sizeof(*m->chests))) {
+        return 0;
+    }
+    KhdaysMissionChest *c = &m->chests[m->chest_count];
+    if (!whole(words[0], 0, 0xffff, &c->item) || !point(&words[2], c->at) || !whole(words[5], -360, 360, &c->heading)) {
+        return 0;
+    }
+    ++m->chest_count;
+    return 1;
+}
+
+static int read_emblem(KhdaysMission *m, char *value)
+{
+    char *words[8];
+    if (split(value, words, 8) != 5 || strcmp(words[1], "at") != 0 ||
+        !grow((void **)&m->emblems, m->emblem_count, sizeof(*m->emblems))) {
+        return 0;
+    }
+    KhdaysMissionEmblem *e = &m->emblems[m->emblem_count];
+    if (!whole(words[0], 0, 2, &e->kind) || !point(&words[2], e->at)) {
+        return 0;
+    }
+    for (int i = 0; i < m->emblem_count; ++i) {
+        if (m->emblems[i].kind == e->kind) {
+            refused_why = "emblem: one of each kind (the save keeps a bit for each)";
+            return 0;
+        }
+    }
+    ++m->emblem_count;
+    return 1;
+}
+
+static int read_start(KhdaysMission *m, char *value)
+{
+    char *words[8];
+    m->has_start = split(value, words, 8) == 4 && point(words, m->start) && whole(words[3], -360, 360, &m->facing);
+    return m->has_start;
 }
 
 static int valid_key(const char *key)
@@ -249,8 +402,8 @@ static void read_line(Reading *g, char *name, char *value_start, char *value_end
         }
         return;
     }
-    if (language != NULL) {
-        refuse(g, line, "only name, objective and description take a language");
+    if (language != NULL && strcmp(name, "wave") != 0) {
+        refuse(g, line, "only name, objective and description take a language (and wave its number)");
         return;
     }
     /* the others' values end at a '#' */
@@ -262,7 +415,16 @@ static void read_line(Reading *g, char *name, char *value_start, char *value_end
     *value_end = '\0';
     char *value = value_start;
     int ok;
-    if (strcmp(name, "category") == 0) {
+    refused_why = NULL;
+    if (strcmp(name, "wave") == 0) {
+        ok = language != NULL && read_wave(m, language, value);
+    } else if (strcmp(name, "start") == 0) {
+        ok = read_start(m, value);
+    } else if (strcmp(name, "chest") == 0) {
+        ok = read_chest(m, value);
+    } else if (strcmp(name, "emblem") == 0) {
+        ok = read_emblem(m, value);
+    } else if (strcmp(name, "category") == 0) {
         ok = whole(value, 0, KHDAYS_GAME_WORLDS - 1, &m->category);
     } else if (strcmp(name, "world") == 0) {
         ok = khdays_world_index(value) >= 0;
@@ -286,8 +448,22 @@ static void read_line(Reading *g, char *name, char *value_start, char *value_end
         return;
     }
     if (!ok) {
-        char why[96];
-        snprintf(why, sizeof(why), "%s: not a valid value", name);
+        static const char *const forms[][2] = {{"wave", "wave <n> = <class>x<count> ... at <x> <y> <z>"},
+                                               {"start", "start = <x> <y> <z> <facing>"},
+                                               {"chest", "chest = <item> at <x> <y> <z> <heading>"},
+                                               {"emblem", "emblem = <kind 0-2> at <x> <y> <z>"}};
+        const char *form = NULL;
+        for (size_t i = 0; i < sizeof(forms) / sizeof(forms[0]); ++i) {
+            form = strcmp(name, forms[i][0]) == 0 ? forms[i][1] : form;
+        }
+        char why[160];
+        if (refused_why != NULL) {
+            snprintf(why, sizeof(why), "%s", refused_why);
+        } else if (form != NULL) {
+            snprintf(why, sizeof(why), "%s: not a valid value (%s)", name, form);
+        } else {
+            snprintf(why, sizeof(why), "%s: not a valid value", name);
+        }
         refuse(g, line, why);
     }
 }

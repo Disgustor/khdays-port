@@ -61,20 +61,35 @@ void khdays_save_part_read(const char *text, size_t size, const KhdaysMissions *
             keep(kept, line, n);
             continue;
         }
-        char values[128];
-        const size_t v = n - id_length < sizeof(values) ? n - id_length : sizeof(values) - 1;
-        memcpy(values, line + id_length, v);
-        values[v] = '\0';
+        char *values = malloc(n - id_length + 1);
+        if (values == NULL) {
+            continue;
+        }
+        memcpy(values, line + id_length, n - id_length);
+        values[n - id_length] = '\0';
         unsigned status, stage, transfer, badges;
-        int best;
-        if (sscanf(values, "%u %u %u %u %d", &status, &stage, &transfer, &badges, &best) == 5) {
+        int best, used = 0;
+        if (sscanf(values, "%u %u %u %u %d%n", &status, &stage, &transfer, &badges, &best, &used) == 5) {
             KhdaysMissionProgress *p = &s->progress[i];
             p->value[KHDAYS_RECORD_STATUS] = status & 7u;
             p->value[KHDAYS_RECORD_STAGE] = stage & 7u;
             p->value[KHDAYS_RECORD_TRANSFER] = transfer & 7u;
             p->value[KHDAYS_RECORD_BADGES] = badges & 15u;
             p->best = best;
+            /* its chests, as many as it has now: a '0' or a '1' each */
+            const size_t length = n - id_length;
+            size_t mark = (size_t)used;
+            while (mark < length && values[mark] == ' ') {
+                ++mark;
+            }
+            for (size_t k = 0; mark + k < length && k < (size_t)p->chest_count; ++k) {
+                if (values[mark + k] != '0' && values[mark + k] != '1') {
+                    break;
+                }
+                p->opened[k] = (unsigned char)(values[mark + k] == '1');
+            }
         }
+        free(values);
     }
 }
 
@@ -82,6 +97,11 @@ static int has_progress(const KhdaysMissionProgress *p)
 {
     for (int k = 0; k < KHDAYS_RECORDS; ++k) {
         if (p->value[k] != 0) {
+            return 1;
+        }
+    }
+    for (int k = 0; k < p->chest_count; ++k) {
+        if (p->opened[k]) {
             return 1;
         }
     }
@@ -94,7 +114,7 @@ char *khdays_save_part_text(const KhdaysMissions *r, const KhdaysFieldStore *s, 
     static const char head[] = "# khdays: the progress of the mods' missions for this save file\n";
     size_t room = sizeof(head);
     for (int i = 0; i < r->count && i < s->count; ++i) {
-        room += strlen(r->list[i].identity) + 64;
+        room += strlen(r->list[i].identity) + 64 + (size_t)s->progress[i].chest_count;
     }
     for (int i = 0; i < kept->kept_count; ++i) {
         room += strlen(kept->kept[i]) + 1;
@@ -110,9 +130,16 @@ char *khdays_save_part_text(const KhdaysMissions *r, const KhdaysFieldStore *s, 
         if (r->list[i].number == 0 || !has_progress(p)) {
             continue;
         }
-        o += snprintf(o, room - (size_t)(o - text), "%s %u %u %u %u %d\n", r->list[i].identity,
+        o += snprintf(o, room - (size_t)(o - text), "%s %u %u %u %u %d", r->list[i].identity,
                       p->value[KHDAYS_RECORD_STATUS], p->value[KHDAYS_RECORD_STAGE], p->value[KHDAYS_RECORD_TRANSFER],
                       p->value[KHDAYS_RECORD_BADGES], p->best);
+        if (p->chest_count > 0) {
+            *o++ = ' ';
+            for (int k = 0; k < p->chest_count; ++k) {
+                *o++ = p->opened[k] ? '1' : '0';
+            }
+        }
+        *o++ = '\n';
     }
     for (int i = 0; i < kept->kept_count; ++i) {
         o += snprintf(o, room - (size_t)(o - text), "%s\n", kept->kept[i]);

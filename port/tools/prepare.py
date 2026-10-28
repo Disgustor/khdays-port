@@ -2086,6 +2086,54 @@ HOOKS["ov008@02056048"] = [
         "      if (khdays_shown >= 0) return khdays_shown; }\n",
     )
 ]
+# ... a later wave's spawners, made after their region was enabled: running as the first wave's (the port's
+# missions only)
+HOOKS["ov002@02073a10"] = [
+    (  # Ov002_CreateSlotObjectAndStart
+        "        pCtx->pSlots[nIndex].nActiveEvent=-1;\n",
+        "        pCtx->pSlots[nIndex].nActiveEvent=-1;\n"
+        "        { extern void khdays_missions_spawner_made(void *node);\n"
+        "          khdays_missions_spawner_made(pCtx->pSlots[nIndex].pObject); }\n",
+    )
+]
+# ... their chests and emblems, which Mission Mode's own missions leave out: put out in a new one's
+HOOKS["ov002@0206e1a4"] = [
+    (  # Ov002_ScriptSpawnTimedSet
+        "    if (data_0204c240 & 2)\n        return;\n",
+        "    { extern int khdays_missions_spots_shown(void);\n"
+        "      if ((data_0204c240 & 2) && !khdays_missions_spots_shown())\n        return; }\n",
+    )
+]
+HOOKS["ov002@0206e524"] = [
+    (  # Ov002_SpawnStateSpots
+        "    if ((data_0204c240 & 2) == 0 && Session_GetLocalPlayerIndex() == 0) {\n",
+        "    extern int khdays_missions_spots_shown(void);\n"
+        "    if (((data_0204c240 & 2) == 0 || khdays_missions_spots_shown()) && Session_GetLocalPlayerIndex() == 0) {\n",
+    )
+]
+# ... their chests opened noted (the marks the end raises the flags of) and their chests' module asked, as the story's
+HOOKS["ov002@0206dc70"] = [
+    (  # Ov002_NoteSeatAnswer
+        "        if ((data_0204c240 & 2) != 0) {\n            return;\n        }\n",
+        "        extern int khdays_missions_spots_shown(void);\n"
+        "        if ((data_0204c240 & 2) != 0 && !khdays_missions_spots_shown()) {\n            return;\n        }\n",
+    )
+]
+HOOKS["ov002@0206dc10"] = [
+    (  # Ov002_ModuleHasKey
+        "    if ((data_0204c240 & 2) != 0) {\n        return 0;\n    }\n",
+        "    extern int khdays_missions_spots_shown(void);\n"
+        "    if ((data_0204c240 & 2) != 0 && !khdays_missions_spots_shown()) {\n        return 0;\n    }\n",
+    )
+]
+# ... and their opened chests' flags raised at the end, as the story's
+HOOKS["ov002@0206a304"] = [
+    (  # Ov002_RaiseSeatFlagsForKey
+        "    if ((data_0204c240 & 2) == 0) {\n",
+        "    extern int khdays_missions_spots_shown(void);\n"
+        "    if ((data_0204c240 & 2) == 0 || khdays_missions_spots_shown()) {\n",
+    )
+]
 # ... their files ("mi/mi/<file>"), which the ROM's file table does not name: opened where the ROM holds them
 HOOKS["main@0200acb0"] = [
     (  # FS_OpenFile

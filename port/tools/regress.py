@@ -122,6 +122,24 @@ WALKS = [
             "missions: file 99's progress written",
         ),
     ),
+    # ... and one the port builds from its description (port/tests/mods_v2/missions_waves): two waves of Shadows
+    # beaten by the attack button, the second's spawner running once the first is defeated, its chest and emblem
+    # rows in the game's tables, cleared when the second wave is
+    Walk(
+        "missions_waves",
+        240,
+        player_save=True,
+        mods="port/tests/mods_v2/missions_waves",
+        window=True,
+        marks=(
+            "missions: test.waves/waves is mission 3595",
+            "missions: mi/mi/trbox with the new missions' rows",
+            "missions: mi/mi/evi with the new missions' rows",
+            "the mod's mission\t3595",
+            "missions: test.waves/waves: a spawner made after its region started, running with it",
+            "mission end\tcleared",
+        ),
+    ),
 ]
 
 # The runtime reports the current scene once a second, and at each change,

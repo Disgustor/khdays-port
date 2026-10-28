@@ -4388,6 +4388,36 @@ khdays-studio (`--check-missions`, `--mission-commands`).
   prize boxes (17.0 a class with a shuffled list of prizes -- 0 item, 1 munny, 2 keyed object, 3
   nothing --, 17.1 a box) appear only in 1053, 1351 and 2001, its emblems (17.3) in five missions.
 - **Beside them**: `eid.z` (118 of 24: the drops by enemy class).
+- **How a Mission Mode mission flows** (read in 0004, 0010, 0160 and 1354, traced with `KHDAYS_TRACE_MISSION`,
+  which logs the state fields below as they change, 2026-10-24): the start's `_i` sets the mission up -- its chests
+  (2.76), emblems (2.83), enemy table (2.31), objective texts (2.52), the dark corridor (4.18, 4.19 at a point) --
+  and posts area 11 (2.3, `Ov002_ScriptPostLinkMessage`); an area's `_i` loads its world and room, makes its
+  spawners, the players' starts, the HUD, the notice, and files its events. Area 99's `_e` is where the others go
+  between areas and at the end; state 8862 (or 8853) tells it which area comes next, 8320 which phase an area is in.
+  **Waves**: a spawner (2.32) puts its group out when its step runs (`Ov002_CreateSlotObjectAndStart`, every part
+  at once, unless the group is already settled), so a later wave is a script with spawners run on an event: 0160's
+  `e0` makes two groups and queues itself again on event 0 with 2.7. **2.7** (`Ov002_SubmitRequestBlockKind1`:
+  gate, event, check, -, slot, threshold) with check 1 fires when every spawner row's group has settled -- all its
+  enemies defeated (`Ov002_NodeRunCheckPhase` -> `Ov002_QueryEntryValue(-1, filter)`); 0004 (defeat the
+  Mega-Shadow) files it twice, at once (event 3, its `e1`: state 8326 = 1, the objective done, 8839 = 0, the
+  corridor) and after 4000 ms (event 4, `e2`: to area 99, then back to area 11 in its second phase, the corridor
+  open). **The end**: in 1354 (survive one minute) the clock's end is a counter watch (2.6 kind 4) whose `c0` raises
+  state 8844, an event on it (2.9, 4000 ms) runs `c1`, which posts area 99, and its `_e` ends the mission (0.12): the
+  trace saw state 8326 go 0 -> 1 at the clock's end and the results 4.7 s later. The field root's `+0x8ba8`, the
+  key of `mdb.z`, `trbox` and `evi`, is the mission's file number (`Ov002_ConstructGameplayScene` copies it from
+  `data_0204c240` + 2 and formats `mi/mi/%04d` with it).
+- **Chests and emblems in Mission Mode**: neither is put out with mode flag bit 1 (`Ov002_ScriptSpawnTimedSet`
+  returns at once, `Ov002_SpawnStateSpots` skips them): Mission Mode's own missions show none. An emblem found sets
+  bit `kind` of the mission's 4 bits at `0x92b + 4n` (the same bits Mission Mode's list asks for its rows).
+- **Spawners** (2.32, `Ov002_CreateSlotObjectAndStart`; read 2026-10-28 and traced with `KHDAYS_TRACE_MISSION`,
+  which logs each spawner's enemies out and the region's limits): a spawner is a node of a region (the source 2.14
+  made), started by its trigger sphere (the last operand, a radius: 1354's 100) when a player is inside it, then
+  every 0x1000 ticks it binds a free actor of its region (made by 2.49) to each empty place of its group's parts. A
+  region ticks only the nodes it set running, which it does when a player joins it: in a game area that is after
+  the spawners are made (the 2.12 starts come after 2.32), so they run. A spawner made later in the area -- a wave
+  after the first -- stays still (seen: wave 2's spawner made, 0 of its 2 enemies out for 100 s, its node's state
+  4 against the first's 7). A row's +1 low nibble is the most of its class out at once (0, no limit, in every game
+  row).
 
 ## 19. The game's heaps
 
@@ -5136,3 +5166,30 @@ The port adds a mod's missions to the game's own list and plays them as the game
   0 4 0 -1`: Mission Mode's rank 4, no status, no best result, as the game records a Mission Mode mission). With the
   autosave into the file played: file 1 loaded again with the mod showed the row with its crown; without the mod the
   list ended at 92 as the game's, and the save's every mission field (1-119, the four kinds) was as before the run.
+- **A mission built from its description** (2026-10-28): a mission with waves in `missions.txt` (`start`, `wave
+  <n>`, `chest`, `emblem`, beside its time, texts, world and room) is built by the port at its start
+  (`runtime/missions/build.cpp`, khdays-studio's `core/missions/mission_build.cpp` compiled in) from the game's own
+  steps: 1354's area (world, room, actors, HUD, clock, the ending's `c0`/`c1`), its start's `_i` (the chests, the
+  emblems, the enemy table, the objective) and 0004's "all defeated" check (2.7). Wave 1's spawners are made in the
+  area's `_i`; each next wave is a script (`w2`, `w3` ...) queued on the last one's "all defeated" event, the last's
+  queues `c0` (state 8844 raised, then `c1` 4000 ms later to area 99 and the results). Each enemy of every wave has
+  its own actor (2.49). A spawner made by a later wave would never run (section 18, "Spawners"): the join at
+  `Ov002_CreateSlotObjectAndStart` sets it running with its region in the port's missions only (session log:
+  `missions: <mission>: a spawner made after its region started, running with it`).
+- **Chests and emblems of a new mission**: their sets are added to `mi/mi/trbox` and `mi/mi/evi` as they load (the
+  key the mission's file number; a chest's room byte is the mission's room, its opened flag one of the port's past
+  the flag array, kept in the save part). Seven places of ov002 leave chests and emblems out in Mission Mode (mode flag
+  bit 1): `Ov002_ScriptSpawnTimedSet` (the chests put out), `Ov002_SpawnStateSpots` (the emblems' pickups),
+  `Ov002_NoteSeatAnswer` (a chest opened marked in the root's +0x8d80), `Ov002_RaiseSeatFlagsForKey` (the marked
+  chests' flags raised at the end), `Ov002_ModuleHasKey` (the chests' module asked by the panel and the items),
+  `Ov002_GetPanelValueBand` and `Ov002_FillMissionResult` (Mission Mode's own panel and results, left as they are);
+  the first five are joined to act as the story's for a new mission. `Ov002_AppendPendingId`'s ids are the message
+  database's (the names the field shows, `Ov002_BuildKeyEntryTable`), not files.
+- **Seen** (the walk `missions_waves`, the test mod `port/tests/mods_v2/missions_waves`: two waves of Shadows in eh
+  room 2, a chest, an emblem, 120 s; the maintainer's save): listed as 95 "Dos oleadas"; wave 1's Shadow out at the
+  start (`KHDAYS_TRACE_MISSION`: 1 of 1 enemies out), defeated by the attack button; wave 2's spawner made, set
+  running, its two Shadows out (2 of 2) and defeated; state 8326 0 -> 1, "Misión completada", the results (crown
+  reward), the camp. The chest put out (1 of 1 placed), opened with Examinar ("Ganas: Poción", the panel's 1/1), its
+  mark (0001) raised at the end and kept: `test.waves/waves 0 0 4 0 -1 1`. **The emblem**: its pickup is made at its
+  point (the field's pickups, id 1 at (0, 0.049, -1.5), by `Ov002_SpawnStateSpots` with the mission's number 3595),
+  but in these runs it was neither drawn nor picked up: *open*.

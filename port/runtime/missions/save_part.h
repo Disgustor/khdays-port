@@ -1,7 +1,7 @@
 /* The new missions' progress beside a save file: saves/missions/fileNN.txt (a further player's under
  * saves/player<N>/), so the game's own save stays as the DS's -- a save loaded without the mods, or by an
  * older port, loads as before. UTF-8 text, a line for each mission with progress:
- *   <mod id>/<key> <status> <stage> <transfer> <badges> <best>
+ *   <mod id>/<key> <status> <stage> <transfer> <badges> <best> [<a 0 or 1 for each chest: opened>]
  * Lines of missions no mod adds now are kept as read and written back. Plain C: no game, no system calls. */
 #ifndef KHDAYS_MISSIONS_SAVE_PART_H
 #define KHDAYS_MISSIONS_SAVE_PART_H

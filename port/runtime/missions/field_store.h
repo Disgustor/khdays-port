@@ -13,13 +13,20 @@ extern "C" {
 #define KHDAYS_FLAG_BITS 0x4000u /* the game's flag array, gGameState + 0x10 */
 
 enum { KHDAYS_RECORD_STATUS, KHDAYS_RECORD_STAGE, KHDAYS_RECORD_TRANSFER, KHDAYS_RECORD_BADGES, KHDAYS_RECORDS };
+/* A mission's chests' opened flags: one each, wherever there is room for them (their rows keep the flag less 9
+ * in an s16, Ov002_ScriptSpawnTimedSet). */
+#define KHDAYS_RECORD_CHESTS KHDAYS_RECORDS
+#define KHDAYS_CHEST_FLAG_LAST (0x7fffu + 9u)
 
 /* Where record `record` of mission number `number` starts in the flag array, and how many bits it has. */
 unsigned khdays_mission_field(int number, int record, unsigned *bits);
 
 typedef struct KhdaysMissionProgress {
     unsigned value[KHDAYS_RECORDS];
-    int best; /* the best result the results screen keeps (gGameState's missionResultRecords), -1 none */
+    int best;              /* the best result the results screen keeps (gGameState's missionResultRecords), -1 none */
+    unsigned char *opened; /* a chest's: 1 opened */
+    int chest_count;
+    unsigned first_chest_flag; /* the flag of its first chest, the others after it */
 } KhdaysMissionProgress;
 
 typedef struct KhdaysFieldStore {
@@ -36,6 +43,10 @@ int khdays_field_store_fits(const KhdaysFieldStore *s, int number);
 
 /* Gives the registry's mission `index` the fields of number `number`. 0 when they do not fit (or no memory). */
 int khdays_field_store_place(KhdaysFieldStore *s, int index, int number);
+
+/* Gives the registry's mission `index` (placed) the flags of its `count` chests, one after another past the flag
+ * array: the first in *first. 0 when there is no room for them up to KHDAYS_CHEST_FLAG_LAST (or no memory). */
+int khdays_field_store_place_chests(KhdaysFieldStore *s, int index, int count, unsigned *first);
 
 /* Every mission's progress back to none. */
 void khdays_field_store_clear(KhdaysFieldStore *s);

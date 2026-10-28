@@ -26,6 +26,7 @@ namespace render = khdays::render::kh2;
 std::filesystem::path directory;
 int present = 1, paused = 0, hp = 186, parent_on = 0, reads = 0, uploads = 0, atlases = 0, allocations = 0;
 int masked[4]{}, scale = 2;
+std::vector<std::pair<int, int>> label_border_masks;
 float parent_x = 230, parent_y = 160;
 std::vector<std::vector<std::uint32_t>> images;
 std::vector<KhdaysUiElement> emitted;
@@ -35,6 +36,7 @@ struct RegisteredAtlas {
 };
 std::vector<RegisteredAtlas> registered_atlases;
 bool test_party = false, test_labels = false, native_limit = false;
+bool limit_tiles = true;
 int party_health[]{372, 124, 62};
 void expect(bool value, const char *message)
 {
@@ -144,6 +146,8 @@ void assets()
             word(bytes, 112 + 116 + i * 144 + 16, i * 10);
             word(bytes, 112 + 116 + i * 144 + 20, i * 10 + 59);
         }
+        word(bytes, 112 + 692 + 8, 10); // Non-zero loop point after a one-time entrance.
+        word(bytes, 112 + 692 + 12, 40);
         write(directory / "label.archive", bytes);
         word(bytes, 112 + 48, 1); // Unsupported palette: fail during playback after registering the atlas.
         write(directory / "invalid-label.archive", bytes);
@@ -438,6 +442,14 @@ void labels_runtime()
         khdays_ui_kh2_labels_prepare();
     };
     collect_labels(40);
+    expect(std::find(label_border_masks.begin(), label_border_masks.end(), std::pair{25, 21}) !=
+                   label_border_masks.end() &&
+               std::find(label_border_masks.begin(), label_border_masks.end(), std::pair{26, 21}) !=
+                   label_border_masks.end(),
+           "player replacement left the compact badge's upper border visible");
+    expect(std::find(label_border_masks.begin(), label_border_masks.end(), std::pair{27, 12}) ==
+               label_border_masks.end(),
+           "native party-label fallback lost its original upper border");
     for (int i = 0; i < 5; ++i) {
         KhdaysUiElement box;
         expect(khdays_ui_kh2_label_box(i, &box), "native player/limit label was not found");
@@ -513,9 +525,28 @@ void labels_runtime()
     collect_labels(96);
     expect(!khdays_ui_kh2_party_ready(3) && khdays_ui_kh2_party_ready(1),
            "bad party attachment retried every frame or disabled another slot");
+    test_labels = true;
+    for (unsigned frame = 100; frame <= 141; ++frame) {
+        limit_tiles = frame < 105 || frame > 110;
+        collect_labels(frame);
+        khdays_ui_kh2_labels_commands(programs);
+        if (!native_limit)
+            expect(programs[4].words[KSI_COUNT] != 0, "native LIMIT blinking interrupted the custom animation");
+    }
+    if (!native_limit)
+        expect(std::abs(std::bit_cast<float>(programs[4].words[KSI_HEADER]) - 6.5f) < .001f,
+               "LIMIT replayed its entrance instead of looping to authored frame 10");
+    test_labels = false;
+    collect_labels(142);
+    khdays_ui_kh2_labels_commands(programs);
+    expect(!programs[4].words[KSI_CLEAR], "LIMIT remained after availability ended");
 }
 } // namespace
 extern "C" {
+int khdays_link_limit_available(void)
+{
+    return test_labels;
+}
 int khdays_mods_find(const char *name, char *out, int size)
 {
     const bool party = std::string(name) == "layouts/gauge/en/gauge.json";
@@ -618,14 +649,19 @@ int khdays_bg_cell_shows(int, const KhdaysBgLayer *, unsigned entry)
 unsigned khdays_bg_map_entry(int, const KhdaysBgLayer *, int x, int y)
 {
     if (test_labels) {
+        if (y == 21 && (x == 25 || x == 26))
+            return x == 25 ? 140 : 297;
         if (x == 25 && y == 22)
             return 172;
         if (x == 26 && y == 22)
             return 173;
-        if (x >= 22 && x < 26 && y == 17) {
+        if (limit_tiles && x >= 22 && x < 26 && y == 17) {
             const unsigned tiles[]{0x180, 0x181, 0x1a0, 0x1a1};
             return tiles[x - 22];
         }
+        for (int i = 0; i < 3; ++i)
+            if (y == 12 - i * 3 && (x == 27 || x == 28))
+                return x == 27 ? 140 : 297;
         for (int i = 0; i < 3; ++i)
             if (y == 13 - i * 3 && (x == 27 || x == 28)) {
                 const unsigned numbers[]{174, 141, 142};
@@ -650,6 +686,8 @@ int khdays_ui_cell_taken(int, int, int, int)
 }
 void khdays_ui_left_out_cell(int, int, int, int x, int y)
 {
+    if (test_labels)
+        label_border_masks.emplace_back(x, y);
     KhdaysBgLayer l{};
     const int slot = portrait::portrait_tile_slot(khdays_bg_map_entry(0, &l, x, y) * 32);
     if (slot >= 0)

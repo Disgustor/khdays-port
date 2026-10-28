@@ -287,6 +287,15 @@ int khdays_link_player_limit_hp(void)
     return Ov022_ComputeChipGauge(block);
 }
 
+int khdays_link_limit_available(void)
+{
+    if (!khdays_overlay_loaded(OV_FIELD) || khdays_link_scene(NULL) != FIELD_SCENE)
+        return 0;
+    const unsigned context = rd32(0x0207f618u);
+    /* Ov022_UpdateSubsystems -> Ov002_SetPanelMode_2 arms LIMIT's tag 0x1a and stores +0x2c. */
+    return khdays_game_ram(context) && khdays_game_ram(context + 0x2fu) && rd32(context + 0x2cu) != 0;
+}
+
 int khdays_link_player_limit_clock(struct KhdaysLinkLimitClock *clock)
 {
     const unsigned actor = player_actor();

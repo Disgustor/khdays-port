@@ -383,6 +383,11 @@ supported DDS textures use the existing decoders. A label sequence's origin is
 placed at the native label's center; source-origin settings preserve relative
 animation motion when recentering an existing resource.
 
+Compact native badges have a separate upper border (main.p2 entry 0's first
+NSCR, tiles 140/297 above 172 and the number tile). A successful replacement
+suppresses that exact adjacent pair without changing the replacement's anchor;
+native fallback retains it. The source pixels are in entry 4's NCGR.
+
 Player icons also expose `p1`, `p2`, `p3`, and `p4` clip assignments (-1). A
 nonnegative number-specific assignment overrides `animation`, selected by the
 number actually drawn by Days, including when the local multiplayer player is
@@ -392,9 +397,11 @@ move native artwork too, so a replacement is not required for positioning.
 
 The native BG3 player-number and LIMIT tiles were identified from the original
 Days `UI/btl/main.p2` NSCR/NCGR/NCLR resources, independently of face tiles and HP
-fill uploads. Only those tiles are regrouped. LIMIT replacement visibility follows
-the presence of Days' own LIMIT text, preserving its display conditions instead
-of inferring availability from HP. Slot geometry and origins retain the checks
+fill uploads. Only those tiles are regrouped. LIMIT replacement visibility initially follows
+the native text's tiles. Playback then follows the native availability flag
+(Ov002_SetPanelMode_2, gauge context +0x2c, tag 0x1a), so blank phases of the
+DS artwork cannot restart the custom clip. SEQD's loop count and restart frame
+control its animation; availability is not inferred from HP. Slot geometry and origins retain the checks
 against the native HUD resource. Sequence labels use cached GPU images and
 atlases; playback pauses with the game. These replacements are disabled in the
 generated JSON until artwork is supplied.

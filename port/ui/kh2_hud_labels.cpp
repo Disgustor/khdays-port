@@ -38,7 +38,7 @@ struct Label {
     gauge::GaugeLabelConfig config;
     std::shared_ptr<Resource> resource;
     seq::SequencePlayer player;
-    bool present = false, shown = false, was = false;
+    bool present = false, shown = false, was = false, running = false;
     unsigned drawn_frame = ~0u;
     int number = 0, image = -1, width = 0, height = 0, scale = 0;
     KhdaysUiElement box{}, anchor{}, element{};
@@ -50,6 +50,7 @@ std::array<Label, 5> labels;
 std::map<std::tuple<std::string, std::string, std::string>, std::shared_ptr<Resource>> resources;
 std::array<gauge::HpGaugeConfig, 4> gauges;
 bool tried = false, loaded = false, reference = true;
+bool limit_available = false;
 unsigned previous_frame = 0;
 float elapsed = 0;
 constexpr const char *ids[]{"hud.player_icon", "hud.party1.icon", "hud.party2.icon", "hud.party3.icon",
@@ -160,9 +161,11 @@ bool draw(Label &s, int index)
     if (clip < 0)
         return false;
     const auto &a = s.resource->asset;
-    s.player.select(a.sequence, std::size_t(clip), !s.was);
-    if (s.was && s.drawn_frame != previous_frame)
+    const bool continuing = index == 4 ? s.running : s.was;
+    s.player.select(a.sequence, std::size_t(clip), !continuing);
+    if (continuing && s.drawn_frame != previous_frame)
         s.player.advance(a.sequence, elapsed * s.config.frames_per_tick);
+    s.running = true;
     s.drawn_frame = previous_frame;
     const auto p = parent(index, s.anchor);
     seq::SequencePose pose;
@@ -236,6 +239,10 @@ bool draw(Label &s, int index)
 extern "C" void khdays_ui_kh2_labels_frame(unsigned frame)
 {
     load();
+    const bool available = khdays_link_limit_available() != 0;
+    if ((available && !limit_available) || frame < previous_frame)
+        labels[4].running = false;
+    limit_available = available;
     elapsed = frame >= previous_frame && !khdays_link_paused() ? float(frame - previous_frame) : 0;
     previous_frame = frame;
     if (elapsed > 0 && std::any_of(labels.begin(), labels.end(), [](const auto &s) { return bool(s.resource); }))
@@ -350,11 +357,32 @@ extern "C" void khdays_ui_kh2_labels_prepare(void)
         auto &s = labels[i];
         const auto &b = bounds[i];
         s.present = b[2] > b[0] && b[3] > b[1];
+        // The original label can blink without ending the LIMIT-available state.
+        const bool retained = i == 4 && limit_available && s.running && s.resource;
+        if (!s.present && retained)
+            s.present = true;
+        else if (!s.present && i == 4)
+            s.running = false;
         if (!s.present)
             continue;
-        s.box = {ids[i], 0, 3, float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1]), -1};
+        if (b[2] > b[0] && b[3] > b[1])
+            s.box = {ids[i], 0, 3, float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1]), -1};
         try {
             s.shown = draw(s, i);
+            if (s.shown && i < 4) {
+                const int x = (int(s.box.x) + l.hofs) / 8, y = (int(s.box.y) + l.vofs) / 8 - 1;
+                const unsigned left = khdays_bg_map_entry(0, &l, x, y);
+                const unsigned right = khdays_bg_map_entry(0, &l, x + 1, y);
+                // The compact badge's border is a separate row above its two text tiles.
+                if ((left & 1023u) == 140 && (right & 1023u) == 297) {
+                    for (int column = 0; column < 2; ++column) {
+                        const unsigned entry = column == 0 ? left : right;
+                        const char *origin = khdays_bg_origin(0, l.chars + (entry & 1023u) * 32);
+                        if (origin && std::strstr(origin, "UI/btl/") && std::strstr(origin, "main.p2"))
+                            khdays_ui_left_out_cell(KHDAYS_UI_HUD, 0, 3, (x + column) % l.wt, (y % l.ht + l.ht) % l.ht);
+                    }
+                }
+            }
         } catch (const std::exception &e) {
             khdays_log("kh2 label: %s; keeping the native label", e.what());
             s.resource.reset();

@@ -62,6 +62,8 @@ int khdays_link_player_low_hp(void);
 int khdays_link_hud_portrait(int slot, int *icon, int *hp, int *maximum, int *low_hp);
 /* The vanilla limit threshold in HP, including ability, use count and battle settings; 0 disabled. */
 int khdays_link_player_limit_hp(void);
+/* The native LIMIT label's armed state, independent of its flashing tile artwork. */
+int khdays_link_limit_available(void);
 /* Original limit clock and entry HP, before the DS HUD rounds its position to pixels. */
 struct KhdaysLinkLimitClock {
     int elapsed, outward, start_hp, step;

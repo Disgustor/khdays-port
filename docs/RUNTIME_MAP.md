@@ -5298,3 +5298,17 @@ Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on 
   1.17 for its other kind). Every player overlay makes its own moves' damage through
   `Ov022_ScaleRowValues` (the actor's seat's strength and bonuses, capped at 999, times the factor), which
   the port joins for a new character's `[limit] damage`.
+
+## 31. Mods' native plugins
+
+- **How the game closes** (read 2026-10-28, `host/app/window.c`): the window's close (`SDL_EVENT_QUIT`) ends the
+  process at once with `_Exit(0)` from the window's thread, the game's thread still running its frame; nothing of the
+  game is stopped. The port's native plugins (`port/runtime/plugins`, docs/MODDING_NATIVE.md) are stopped on the
+  game's thread first: the window asks (`khdays_plugins_quit`) and waits up to a second, the game's thread stops them
+  at its next frame (`khdays_plugins_frame`, from `khdays_host_frame`). Seen with the SDK's Hello World: its goodbye
+  logged and its library released before the process ended.
+- **The first hook points** (seen 2026-10-28 with `sdk/examples/AdvancedNativeMod` in `missions_waves`):
+  `Ov022_ActorSetHp` runs for the player's HP (a Shadow's hit of 1 on a 359-HP player) but not for the enemies'
+  (the Lua mods' `hp` event hears no enemy either): their HP goes another way, a point of its own to find.
+  `PlaySound` starts the menus' sound effects (6-7 a scene there) but none of the field's, which go through
+  `Slot_Spawn` (`Ov022_PlayEntityVoice`, section 30).

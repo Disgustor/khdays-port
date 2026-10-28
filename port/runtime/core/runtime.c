@@ -16,6 +16,7 @@
 #include "session_log.h"
 #include "../movies/scene_trace.h"
 #include "../characters/characters.h"
+#include "../plugins/plugins.h"
 #include "../missions/missions.h"
 
 #include <stdio.h>
@@ -370,6 +371,7 @@ void khdays_host_frame(void)
         logged_scene = scene[2];
         khdays_characters_scene((int)scene[2]);
     }
+    khdays_plugins_frame(); /* the window asked them to stop: on this, the game's thread */
     khdays_scene_trace_frame(frame);
     trace_player(frame);
     trace_heap(frame);

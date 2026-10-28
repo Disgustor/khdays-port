@@ -14,7 +14,7 @@ endif()
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" KHDAYS_VERSION LIMIT_COUNT 1)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION")
 # only the files that tell it (the update check, the settings menu's corner): a new version rebuilds them alone
-set_source_files_properties(host/app/updates.c host/settings/settings_menu.cpp
+set_source_files_properties(host/app/updates.c host/settings/settings_menu.cpp runtime/plugins/plugins.c
                             PROPERTIES COMPILE_DEFINITIONS "KHDAYS_VERSION=\"${KHDAYS_VERSION}\"")
 
 set(KHDAYS_GEN "" CACHE PATH "Output directory of port/tools/prepare.py")
@@ -426,6 +426,9 @@ add_executable(khdays-native
     runtime/characters/characters.c    # ... their folders served and their numbers answered in the game
     runtime/characters/moveset.c       # ... their [moveset] in their combo files
     runtime/characters/packed.cpp      # ... packed as the game's
+    runtime/plugins/plugins.c          # the mods' native plugins (the KH Mod SDK, sdk/): found, loaded,
+    runtime/plugins/interfaces.c       # ... given services, events and hooks,
+    runtime/plugins/engine.c           # ... and the engine by name
     runtime/missions/build.cpp         # ... a mission built from a mod's description, by khdays-studio's builder:
     ../studio/core/missions/mission_build.cpp
     ../studio/core/missions/missions.cpp
@@ -526,6 +529,7 @@ add_executable(khdays-native
     "${CMAKE_CURRENT_BINARY_DIR}/stop_magic_text.c"
     host/render/gpu_hd.c
     "${KHDAYS_GEN}/ds_functions.c"  # the native function at each DS address
+    "${KHDAYS_GEN}/ds_names.c"      # the game's routines and data by name (runtime/plugins/engine.c)
     ../assets/src/mesh.cpp         # DS models decoded, for the graphics dump's glTF
     ../assets/src/audio.cpp        # the sound archive's streams and waves, for the menu's samples
     ../assets/src/gltf_export.cpp
@@ -535,7 +539,7 @@ add_executable(khdays-native
     ../assets/src/graphics2d.cpp   # the game's 2D sheets, for the rooms' signal
     ../assets/src/cell.cpp         # their cells
     ../assets/src/filesystem.cpp)  # the port's VFS: files and mods
-target_include_directories(khdays-native PRIVATE ../assets/include)
+target_include_directories(khdays-native PRIVATE ../assets/include ../sdk/include)
 # the frame decoder's state (runtime/movies/video.c)
 set_source_files_properties(runtime/movies/video.c PROPERTIES INCLUDE_DIRECTORIES "${MOBICLIP_PORTABLE}")
 # the port's wording holds the game's own texts in UTF-16 literals, written in UTF-8
@@ -755,6 +759,48 @@ target_compile_options(khdays-script-test PRIVATE
     $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
     $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
 add_test(NAME khdays-script COMMAND khdays-script-test)
+
+# The mods' native plugins (runtime/plugins/): the SDK's Hello World and the test plugins built as real
+# libraries, put in made-up mods, loaded, started, stopped from another thread's request, released; native
+# code off and safe mode load none.
+add_library(khdays-test-hello MODULE ../sdk/examples/HelloWorld/hello_world.cpp)
+target_include_directories(khdays-test-hello PRIVATE ../sdk/include)
+target_compile_options(khdays-test-hello PRIVATE /W4 /std:c++20 /EHsc)
+foreach(kind IN ITEMS 1 2 3 4 5)
+    if(kind LESS 4)
+        add_library(khdays-test-plugin${kind} MODULE tests/plugins/test_plugins.c)
+    else()
+        add_library(khdays-test-plugin${kind} MODULE tests/plugins/core_plugins.c)
+    endif()
+    target_include_directories(khdays-test-plugin${kind} PRIVATE ../sdk/include)
+    target_compile_definitions(khdays-test-plugin${kind} PRIVATE KHDAYS_TEST_PLUGIN=${kind})
+    target_compile_options(khdays-test-plugin${kind} PRIVATE /W4 /std:c17)
+endforeach()
+add_executable(khdays-plugins-test tests/plugins_test.c runtime/plugins/plugins.c runtime/plugins/interfaces.c
+               runtime/plugins/engine.c runtime/scripts/manifest.c runtime/scripts/folders.cpp
+               runtime/core/sha256.c)
+target_include_directories(khdays-plugins-test PRIVATE ../sdk/include)
+target_link_libraries(khdays-plugins-test PRIVATE SDL3::SDL3)
+target_compile_definitions(khdays-plugins-test PRIVATE
+    KHDAYS_TEST_HELLO="$<TARGET_FILE:khdays-test-hello>"
+    KHDAYS_TEST_OTHER_SDK="$<TARGET_FILE:khdays-test-plugin1>"
+    KHDAYS_TEST_FAILING="$<TARGET_FILE:khdays-test-plugin2>"
+    KHDAYS_TEST_COUNTING="$<TARGET_FILE:khdays-test-plugin3>"
+    KHDAYS_TEST_PROVIDER="$<TARGET_FILE:khdays-test-plugin4>"
+    KHDAYS_TEST_USER="$<TARGET_FILE:khdays-test-plugin5>"
+    KHDAYS_TEST_HOOK_POINTS="${CMAKE_CURRENT_SOURCE_DIR}/tests/plugins/hook_points.h"
+    KHDAYS_VERSION="test")
+target_compile_options(khdays-plugins-test PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
+    $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
+add_dependencies(khdays-plugins-test khdays-test-hello khdays-test-plugin1 khdays-test-plugin2
+                 khdays-test-plugin3 khdays-test-plugin4 khdays-test-plugin5)
+foreach(mode IN ITEMS off safe on)
+    # each in its folder: its made-up mods and the file the counting plugin leaves
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins-${mode}")
+    add_test(NAME khdays-plugins-${mode} COMMAND khdays-plugins-test ${mode}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins-${mode}")
+endforeach()
 
 # The sound's tests: the channels and mixers against fixed programs, the
 # bridge's queues, and (to come) the drivers, the stream reader and the

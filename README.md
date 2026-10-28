@@ -736,6 +736,10 @@ outside their own folder, nor any memory but the game's. `docs/SCRIPTING.md` des
 as `mods-examples/`) has examples to copy into `mods/`; khdays-studio's Console shows what the
 mods print and reloads them while the game runs.
 
+For what scripts cannot do, a mod can carry a native plugin: C++ built for the player's computer
+against the KH Mod SDK (`sdk/`), loaded only once the player has turned native code on (it runs
+inside the game, unisolated). `docs/MODDING_NATIVE.md` describes it.
+
 ## Multiplayer
 
 Mission Mode's multiplayer works over the PC's network: the game's own

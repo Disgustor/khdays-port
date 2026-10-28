@@ -245,6 +245,21 @@ void khdays_net_set_mods(unsigned int fingerprint, const unsigned char *list, un
     memcpy(fake_mods_list, list, size < sizeof(fake_mods_list) ? size : sizeof(fake_mods_list));
 }
 
+/* no native plugins (runtime/plugins/plugins.h) */
+int khdays_plugins_listening(void)
+{
+    return 0;
+}
+void khdays_plugins_game_event(const char *name, long long a, long long b, long long c, long long d, const char *text)
+{
+    (void)name;
+    (void)a;
+    (void)b;
+    (void)c;
+    (void)d;
+    (void)text;
+}
+
 /* the mods' characters (runtime/characters/characters.h): `fake_characters` of them, each part filled with
  * `fake_character_part` */
 static int fake_characters;

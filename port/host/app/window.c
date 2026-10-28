@@ -11,6 +11,7 @@
 #include "../../runtime/menus/newgame.h"
 #include "../../runtime/menus/savelist.h"
 #include "../../runtime/battle/stop_magic.h"
+#include "../../runtime/plugins/plugins.h"
 #include "../settings/settings_model.h"
 #include "../settings/settings_sample.h"
 #include "../settings/settings_ui.h"
@@ -557,7 +558,8 @@ static int host_thread(void *unused)
         khdays_sound_output_set(&profile.sound);
         khdays_log_want(profile.session_log);
         khdays_savelist_set_settings(profile.save.all_files, profile.save.autosave);
-        khdays_stop_set_enabled(profile.gameplay.stop_magic); /* for this run: a change waits for the next */
+        khdays_stop_set_enabled(profile.gameplay.stop_magic);     /* for this run: a change waits for the next */
+        khdays_plugins_set_native_code(profile.mods.native_code); /* the same */
     }
     window = open_window(&profile);
     host_window = window;
@@ -652,6 +654,7 @@ static int host_thread(void *unused)
             if (khdays_settings_is_open() && khdays_settings_profile_changed()) {
                 save_settings(); /* closed with the menu open: keep what was changed */
             }
+            khdays_plugins_quit(1000); /* stopped on the game's thread, if it answers within a second */
             _Exit(0);
         }
         if (event.type == close_event) {

@@ -17,6 +17,7 @@
 #include "sandbox.h"
 #include "view.h"
 #include "../characters/characters.h"
+#include "../plugins/plugins.h"
 #include "../core/sha256.h"
 #include "../menus/autosave.h"
 #include "../net/net_session.h"
@@ -232,15 +233,41 @@ typedef struct Found {
     int count, capacity;
 } Found;
 
+static void no_name(const char *name, void *context)
+{
+    (void)name;
+    (void)context;
+}
+
+/* Whether a mod's folder is a native plugin's alone: no scripts/ folder, and its mod.ini names the plugin's SDK
+ * (`sdk`: runtime/plugins/plugins.h). */
+static int native_only(const char *folder, const char *ini)
+{
+    char *scripts = joined(folder, "scripts"), *text, *sdk;
+    size_t size = 0;
+    const int has_scripts = scripts != NULL && khdays_folders_list(scripts, no_name, NULL);
+    free(scripts);
+    if (has_scripts || (text = khdays_folders_read(ini, &size)) == NULL) {
+        return 0;
+    }
+    sdk = khdays_manifest_value(text, size, "sdk");
+    free(text);
+    if (sdk == NULL) {
+        return 0;
+    }
+    free(sdk);
+    return 1;
+}
+
 static void found_folder(const char *name, void *context)
 {
     Found *f = context;
     char *folder = joined(f->mods, name), *ini = folder != NULL ? joined(folder, "mod.ini") : NULL;
-    const int scripted = ini != NULL && khdays_folders_is_file(ini);
+    const int scripted = ini != NULL && khdays_folders_is_file(ini) && !native_only(folder, ini);
     free(ini);
     free(folder);
     if (!scripted) {
-        return; /* a content mod: not this module's */
+        return; /* a content mod, or a native plugin's (runtime/plugins): not this module's */
     }
     if (f->count == f->capacity) {
         const int grown = f->capacity == 0 ? 8 : f->capacity * 2;
@@ -668,6 +695,12 @@ static void trace_time(void)
     }
 }
 
+/* Whether anything hears the game's events: a Lua mod, or a native plugin (runtime/plugins/plugins.h). */
+static int heard(void)
+{
+    return count > 0 || khdays_plugins_listening();
+}
+
 void khdays_scripts_frame(void)
 {
     if (tracing < 0) {
@@ -688,6 +721,9 @@ void khdays_scripts_frame(void)
         khdays_scripts_start_in(mods_path, user);
     }
     if (count == 0) {
+        if (khdays_plugins_listening()) {
+            khdays_script_events_frame(); /* the native plugins' events */
+        }
         return;
     }
     for (int i = 0; i < count; ++i) {
@@ -729,10 +765,12 @@ void khdays_scripts_mission_start(void)
     if (tracing > 0) {
         fprintf(stderr, "mods-trace: mission start: mission %d\n", khdays_link_mission());
     }
-    if (count == 0) {
+    if (!heard()) {
         return;
     }
-    khdays_api_time_mission_start(); /* every player of a room draws the same from here */
+    if (count > 0) {
+        khdays_api_time_mission_start(); /* every player of a room draws the same from here */
+    }
     memset(&e, 0, sizeof(e));
     e.id = KHDAYS_EVENT_MISSION_START;
     e.a = khdays_link_mission();
@@ -756,7 +794,7 @@ void khdays_scripts_mission_end(int mission, int rank, int complete)
         fprintf(stderr, "mods-trace: mission end: mission %d, rank %d, complete %d, given up %d, %s\n", mission, rank,
                 complete, given_up, ending(given_up));
     }
-    if (count == 0) {
+    if (!heard()) {
         return;
     }
     memset(&e, 0, sizeof(e));
@@ -777,7 +815,7 @@ void khdays_scripts_hp(void *entity, int before)
     if (hp == 0 && before > 0 && khdays_link_is_player(entity)) {
         fell_at = khdays_link_frame() + 1u;
     }
-    if (count == 0) {
+    if (!heard()) {
         return;
     }
     if (hp == before) {
@@ -803,7 +841,7 @@ uint16_t khdays_scripts_buttons(uint16_t buttons)
 void khdays_scripts_saved(void)
 {
     KhdaysEvent e;
-    if (count == 0) {
+    if (!heard()) {
         return;
     }
     memset(&e, 0, sizeof(e));

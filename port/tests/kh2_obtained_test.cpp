@@ -264,6 +264,15 @@ void hidden_hud()
             khdays_ui_notification_commands(result);
             expect(result[k - 1].words[KSI_CLEAR] && khdays_ui_notification_owns(k),
                    "notification fell back to native art after HUD return");
+            const unsigned anchor_x = result[k - 1].words[KSI_ANCHOR_X];
+            const unsigned anchor_y = result[k - 1].words[KSI_ANCHOR_Y];
+            context.mission_start = 4;
+            step(false);
+            khdays_ui_notification_commands(result);
+            expect(result[k - 1].words[KSI_CLEAR] && result[k - 1].words[KSI_ANCHOR_X] == anchor_x &&
+                       result[k - 1].words[KSI_ANCHOR_Y] == anchor_y,
+                   "upper INFORMATION moved the notification box anchor");
+            context.mission_start = 0;
             hide();
             step(false);
             show();

@@ -111,6 +111,8 @@ struct HeartPointsConfig final {
 HeartPointsConfig load_heart_points_config(const std::filesystem::path &path);
 struct MissionPanelConfig final {
     bool enabled = false;
+    bool pause_only = false;
+    float pause_offset_x = 0, pause_offset_y = 0;
     std::string archive = "mission.2dd", texture = "mission.png", entry = "miss";
     int reference = 0, intro = 1, outro = 2, track = 3, fill = 4, ready_fill = 5, full_fill = 6;
     int heading = 7, complete_heading = 8, full_marker = 9, minimum_marker = 10;
@@ -124,6 +126,10 @@ struct MissionPanelConfig final {
     float heading_x = 23, heading_y = 40, full_marker_x = 254, full_marker_y = 50, minimum_marker_y = 50;
 };
 MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path);
+struct HudPresentationConfig final {
+    bool keep_hud_during_information = false, align_hud_to_edges = false, pause_mission_target = false;
+};
+HudPresentationConfig load_hud_presentation_config(const std::filesystem::path &path);
 // Player settings at the root; shared party settings and per-slot overrides below party.
 std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &path);
 HpGaugeConfig load_hp_gauge_config(const std::filesystem::path &path);

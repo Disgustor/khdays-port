@@ -64,6 +64,8 @@ int khdays_link_hud_portrait(int slot, int *icon, int *hp, int *maximum, int *lo
 int khdays_link_player_limit_hp(void);
 /* The native LIMIT label's armed state, independent of its flashing tile artwork. */
 int khdays_link_limit_available(void);
+/* Active lower-panel target resource; negative native selection means the ordinary world panel. */
+int khdays_link_mission_target(int *entry, int *primary);
 /* Original limit clock and entry HP, before the DS HUD rounds its position to pixels. */
 struct KhdaysLinkLimitClock {
     int elapsed, outward, start_hp, step;

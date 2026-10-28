@@ -271,6 +271,7 @@ void context_tests()
         expect(!khdays_ui_information_wants() && khdays_ui_information_state() == KHDAYS_INFORMATION_AVAILABLE &&
                    !emitted,
                "information escaped into a menu, movie, tutorial, or event");
+        expect(khdays_ui_information_configured(), "temporary context hiding lost configured replacement availability");
         situation = field;
         step();
         expect(khdays_ui_information_wants() && emitted, "caption did not resume when field display returned");
@@ -556,6 +557,7 @@ int main(int argc, char **argv)
         else if (legacy || missing) {
             step();
             expect(clip() < 0 && !emitted && !khdays_ui_information_state(), "unavailable replacement rendered");
+            expect(!khdays_ui_information_configured(), "missing replacement reported available for HUD fade control");
         } else {
             test();
             context_tests();

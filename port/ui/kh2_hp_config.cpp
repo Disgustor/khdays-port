@@ -129,7 +129,7 @@ class Reader {
                         (prefix.empty() &&
                          (key == "party" || key == "enemy" || key == "reticles" || key == "information" ||
                           key == "obtained" || key == "backpack_full" || key == "breakthrough" || key == "locked_on" ||
-                          key == "mission_panel" || key == "heart_points" || label)) ||
+                          key == "mission_panel" || key == "heart_points" || key == "presentation" || label)) ||
                         (prefix == "heart_points." && key == "animations") ||
                         (prefix == "reticles." && (key == "soft_lock" || key == "hard_lock" || key == "interact" ||
                                                    key == "chain" || key == "error")) ||
@@ -293,6 +293,7 @@ std::array<HpGaugeConfig, 4> load_hp_gauge_configs(const std::filesystem::path &
     extract("locked_on.");
     extract("mission_panel.");
     extract("heart_points.");
+    extract("presentation.");
     std::array<Object, 3> overrides;
     for (int i = 0; i < 3; ++i)
         overrides[i] = extract("party.slots." + std::to_string(i + 1) + '.');
@@ -571,6 +572,9 @@ MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
             o.emplace(key.substr(14), value);
     MissionPanelConfig c;
     c.enabled = get(o, "enabled", false);
+    c.pause_only = get(o, "pause_only", false);
+    c.pause_offset_x = float(number(o, "pause_offset_x", 0, -4096, 4096));
+    c.pause_offset_y = float(number(o, "pause_offset_y", 0, -4096, 4096));
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
         if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")
@@ -625,6 +629,20 @@ MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
         throw std::runtime_error("gauge JSON: mission panel bar end must follow its start");
     if (!o.empty())
         throw std::runtime_error("gauge JSON: unknown mission panel key " + o.begin()->first);
+    return c;
+}
+HudPresentationConfig load_hud_presentation_config(const std::filesystem::path &path)
+{
+    Object o;
+    for (const auto &[key, value] : read_file(path))
+        if (key.starts_with("presentation."))
+            o.emplace(key.substr(13), value);
+    HudPresentationConfig c;
+    c.keep_hud_during_information = get(o, "keep_hud_during_information", false);
+    c.align_hud_to_edges = get(o, "align_hud_to_edges", false);
+    c.pause_mission_target = get(o, "pause_mission_target", false);
+    if (!o.empty())
+        throw std::runtime_error("gauge JSON: unknown presentation key " + o.begin()->first);
     return c;
 }
 } // namespace khdays::ui::kh2

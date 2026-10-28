@@ -282,6 +282,7 @@ class GaugeImport(unittest.TestCase):
                 "enemy": {"offset_x": -4, "scale": 0.75, "fill": 43, "enabled": False},
                 "reticles": {"soft_lock": {"scale": 0.8, "offset_y": 6, "end_animation": -1}},
                 "information": {"clip_width": 280, "text_offset_x": 3, "scale": 0.65},
+                "presentation": {"align_hud_to_edges": True, "pause_mission_target": True},
             }
             (previous / "gauge.json").write_text(json.dumps(custom))
             (previous / "party.json").write_text(json.dumps({"offset_y": 9, "center_override": 156, "limit_bar": 140}))
@@ -298,6 +299,10 @@ class GaugeImport(unittest.TestCase):
             for key, value in custom["information"].items():
                 self.assertEqual(config["information"][key], value)
             party = config["party"]
+            self.assertTrue(config["presentation"]["align_hud_to_edges"])
+            self.assertTrue(config["presentation"]["pause_mission_target"])
+            self.assertFalse(config["presentation"]["keep_hud_during_information"])
+            self.assertNotIn("presentation", party)
             self.assertEqual((party["offset_y"], party["center_override"], party["limit_bar"]), (9, 156, -1))
             self.assertEqual(json.loads((previous / "gauge.json").read_text()), custom)
 

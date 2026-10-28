@@ -3,6 +3,7 @@
  *   ctest --test-dir build/port/obj-x64 -R khdays-onescreen --output-on-failure */
 #include "../gfx/describe.h"
 #include "../ui/composition.h"
+#include "../ui/hud_options.h"
 #include "../host/render/png_io.h"
 #include "../host/render/onescreen_images.h"
 #include "../runtime/display/frame_package.h"
@@ -585,6 +586,95 @@ static void test_field_hud_reference(void)
 }
 
 /* A file of the test's, in the build's directory. */
+static void test_hud_edge_alignment(void)
+{
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    KhdaysSituation field = {KHDAYS_SIT_FIELD, 1u << KHDAYS_ST_HUD};
+    for (int size = 1; size <= 8; ++size) {
+        khdays_composition_set_hud_size(size);
+        for (int width = 256; width <= 342; width += 43) {
+            KhdaysComposition c;
+            khdays_composition_set_hud_options(KHDAYS_HUD_ALIGN_EDGES);
+            khdays_composition_for(&field, width, &c);
+            int command = 0, health = 0;
+            for (int i = 0; i < c.shape_count; ++i) {
+                const uint32_t *w = c.shapes[i].words;
+                if (word_float(w, KO_SRC_X) == 0 && word_float(w, KO_SRC_Y) == 84 && word_float(w, KO_SRC_W) == 112) {
+                    CHECK(fabsf(word_float(w, KO_DST_Y2) - 192) < .001f);
+                    CHECK(fabsf(word_float(w, KO_DST_X1)) < .001f);
+                    ++command;
+                }
+                if (word_float(w, KO_SRC_X) == 128 && word_float(w, KO_SRC_Y) == 84) {
+                    CHECK(fabsf(word_float(w, KO_DST_Y2) - 192) < .001f);
+                    CHECK(fabsf(word_float(w, KO_DST_X2) - width) < .001f);
+                    ++health;
+                }
+            }
+            CHECK(command == 1 && health == 1);
+            khdays_composition_set_hud_options(KHDAYS_HUD_ALIGN_EDGES | KHDAYS_HUD_PANEL_HIDDEN);
+            khdays_composition_for(&field, width, &c);
+            for (int i = 0; i < c.shape_count; ++i) {
+                const uint32_t *w = c.shapes[i].words;
+                if (word_float(w, KO_SRC_W) == 108 && word_float(w, KO_SRC_H) == 86)
+                    CHECK(fabsf(word_float(w, KO_DST_Y1)) < .001f);
+            }
+        }
+    }
+    khdays_composition_set_hud_options(0);
+    khdays_composition_set_hud_size(3);
+    mods_file = NULL;
+}
+
+static void test_pause_target_placement(void)
+{
+    KhdaysFramePackage *p = calloc(1, sizeof(*p));
+    CHECK(p != NULL);
+    if (!p)
+        return;
+    uint32_t record[KE_WORDS] = {0};
+    record[KE_SLOT] = KES_PICTURE | KES_PAUSE_LAYOUT | KES_DIRECT | 2;
+    record[KE_IMAGE] = 333;
+    record[KE_IW] = 64;
+    record[KE_IH] = 96;
+    const float x = 107.2f, y = 54, w = 41.6f, h = 62.4f;
+    memcpy(record + KE_X, &x, 4);
+    memcpy(record + KE_Y, &y, 4);
+    memcpy(record + KE_W, &w, 4);
+    memcpy(record + KE_H, &h, 4);
+    p->elements[0].records = record;
+    p->elements[0].count = 1;
+    mods_file = KHDAYS_PORT_COMPOSITIONS_FILE;
+    khdays_composition_load();
+    KhdaysSituation s = {KHDAYS_SIT_PAUSE, 0};
+    KhdaysComposition c;
+    khdays_composition_for(&s, 342, &c);
+    khdays_onescreen_images(p, &s, &c);
+    int found = 0;
+    const float factor = khdays_composition_hud_factor();
+    for (int i = 0; i < c.shape_count; ++i) {
+        const uint32_t *shape = c.shapes[i].words;
+        if ((shape[KO_FLAGS] & KOF_IMAGE) && shape[KO_KEYS] == 333) {
+            CHECK(fabsf(word_float(shape, KO_DST_X1) - (171 + (x - 128) * factor)) < .001f);
+            CHECK(fabsf(word_float(shape, KO_DST_Y2) - word_float(shape, KO_DST_Y1) - h * factor) < .001f);
+            ++found;
+        }
+    }
+    CHECK(found == 1);
+    for (int i = 0; i < c.shape_count; ++i) {
+        const uint32_t *shape = c.shapes[i].words;
+        CHECK((shape[KO_FLAGS] & (KOF_IMAGE | KOF_LOWER)) || word_float(shape, KO_SRC_X) != 72 ||
+              word_float(shape, KO_SRC_Y) != 64);
+    }
+    s.states = 1u << KHDAYS_ST_EVENT;
+    khdays_composition_for(&s, 342, &c);
+    khdays_onescreen_images(p, &s, &c);
+    for (int i = 0; i < c.shape_count; ++i)
+        CHECK(!(c.shapes[i].words[KO_FLAGS] & KOF_IMAGE));
+    free(p);
+    mods_file = NULL;
+}
+
 static const char *test_file(const char *suffix, const char *text)
 {
     static char paths[4][512];
@@ -1150,6 +1240,26 @@ static void test_information_image(void)
     CHECK(!(native_upper.states & (1u << KHDAYS_ST_HUD)));
     khdays_composition_for(&native_upper, 342, &comp);
     CHECK(comp.shape3d_count == 1 && comp.shapes3d[0].hide);
+    p->hud_options = KHDAYS_HUD_KEEP_INFORMATION;
+    p->situation.event_status = 1; // A mission script can show INFORMATION without being a cutscene/dialog.
+    p->situation.updates[KHDAYS_UPD_Ov023_SceneRun / 64] |= 1ull << (KHDAYS_UPD_Ov023_SceneRun % 64);
+    khdays_composition_set_hud_options(p->hud_options);
+    khdays_onescreen_information(p, &native_upper);
+    CHECK(native_upper.states & (1u << KHDAYS_ST_HUD));
+    khdays_composition_for(&native_upper, 342, &comp);
+    CHECK(comp.shape3d_count > 0 && !comp.shapes3d[0].hide);
+    native_upper.states &= ~(1u << KHDAYS_ST_HUD);
+    p->situation.event_status = 3;
+    khdays_onescreen_information(p, &native_upper);
+    CHECK(native_upper.states & (1u << KHDAYS_ST_HUD));
+    native_upper.states &= ~(1u << KHDAYS_ST_HUD);
+    native_upper.states |= 1u << KHDAYS_ST_DIALOG;
+    khdays_onescreen_information(p, &native_upper);
+    CHECK(!(native_upper.states & (1u << KHDAYS_ST_HUD)));
+    native_upper.states &= ~(1u << KHDAYS_ST_DIALOG);
+    p->situation.event_status = -1;
+    p->hud_options = 0;
+    khdays_composition_set_hud_options(0);
     // Pause uses the retained lower caption even if the upper exit was still running.
     p->information_state |= 0x100u;
     KhdaysSituation paused_handoff = {KHDAYS_SIT_PAUSE, 0};
@@ -1682,6 +1792,37 @@ static void test_minimap_image(void)
         CHECK(found == 1);
         memset(&p->radar_image, 0, sizeof(p->radar_image));
     }
+    khdays_composition_set_hud_options(KHDAYS_HUD_ALIGN_EDGES);
+    for (int radar = 0; radar < 2; ++radar) {
+        p->radar_image.words[KSI_CLEAR] = radar;
+        p->radar_image.words[KSI_RADAR_MASK] = radar ? 99 : 0;
+        p->radar_image.words[KSI_OUTPUT] = 91;
+        p->radar_image.words[KSI_WIDTH] = p->radar_image.words[KSI_HEIGHT] = 192;
+        put_float(p->radar_image.words, KSI_RADAR_SCALE, .65f);
+        float gameplay[4] = {0};
+        for (int paused = 0; paused < 2; ++paused) {
+            KhdaysSituation scene = {paused ? KHDAYS_SIT_PAUSE : KHDAYS_SIT_FIELD, s.states};
+            KhdaysComposition c;
+            khdays_composition_for(&scene, 342, &c);
+            khdays_onescreen_images(p, &scene, &c);
+            int found = 0;
+            for (int i = 0; i < c.shape_count; ++i) {
+                const uint32_t *w = c.shapes[i].words;
+                if (!(w[KO_FLAGS] & KOF_IMAGE) || w[KO_KEYS] != (radar ? 91u : 90u))
+                    continue;
+                for (int coordinate = 0; coordinate < 4; ++coordinate) {
+                    const float value = word_float(w, KO_DST_X1 + coordinate);
+                    if (!paused)
+                        gameplay[coordinate] = value;
+                    else
+                        CHECK(fabsf(value - gameplay[coordinate]) < .001f);
+                }
+                ++found;
+            }
+            CHECK(found == 1);
+        }
+    }
+    khdays_composition_set_hud_options(0);
     free(p);
 }
 
@@ -1690,6 +1831,8 @@ int main(void)
     test_places();
     test_real_file();
     test_field_hud_reference();
+    test_hud_edge_alignment();
+    test_pause_target_placement();
     test_inside();
     CHECK(outside_pieces == 0 && inside_pieces > 1000);
     test_apart();

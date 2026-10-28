@@ -1128,3 +1128,116 @@ sprite-group references of each animation so editor indices can be checked.
 Single-frame holds use positive half-open intervals, so editors never display
 zero-duration layers. The current 43-clip export reduces 315 animation records
 to 171, with 35 parts and 32 shared sprite groups.
+
+
+## Optional HUD presentation and pause target
+
+`gauge.json` now accepts a root `presentation` object. All switches default to
+false; existing layouts and dual-screen HUD positioning retain their previous
+behavior. Restart the game after changing these settings.
+
+```json
+"presentation": {
+  "keep_hud_during_information": false,
+  "align_hud_to_edges": false,
+  "pause_mission_target": false
+}
+```
+
+`keep_hud_during_information` retains the HUD during a native upper INFORMATION
+banner when its KH2 replacement is available. The banner-specific HUD fades, map suspension, original banner-art callback and HUD scroll
+write are bypassed; its message, snapshot lifetime, state transitions and timing remain
+native. Pause, tutorial and cutscene hiding retain their normal paths.
+Command navigation (including the port's D-pad enhancement), shortcuts and selected
+command types also remain available. Actor-state, pause and scripted input locks
+are unchanged. Pickup, interaction and panel scheduling gates stay native to avoid
+starting conflicting requests on the active INFORMATION controller.
+The command hook adapts ov022 `Ov022_UpdateCommandInput` (0x020a2978), from
+`khdays-decomp` a2b0478b87e3102732094c34f6ca89595f98ab93. Its local panel-open
+queries, including the port control-sampling hook, use a command-only predicate;
+`Ov002_Hud_IsPanelOpen` itself is unchanged. Synthetic actor tests execute the
+generated dispatcher across panel states 0..11, both command-list modes and both
+control schemes, checking navigation, shortcuts, command arguments and pause,
+scripted-control and zero-HP suppression, with the option enabled and disabled.
+
+`align_hud_to_edges` removes the deliberate outer field HUD inset in single-screen
+mode. The command menu touches the bottom and left edges and the HP gauge reaches
+the bottom and right edges. Internal spacing, including the heart counter beneath
+a visible mission panel and the padding around the minimap, is preserved. It does
+not change dual-screen positioning or the selected HUD size.
+
+The existing `mission_panel` object also accepts `pause_only` (false),
+`pause_offset_x` (0) and `pause_offset_y` (0). The pause offsets add to its ordinary
+position, in the same coordinate units as `offset_x/y`. With `pause_only`, native
+panel tiles remain suppressed during gameplay and the heart counter returns to
+its usual top-left position. The panel is drawn while paused without freezing on
+an invisible entrance frame. A missing/disabled replacement retains native behavior.
+
+`pause_mission_target` adds the native TARGET artwork between the PAUSE header and
+the buttons in an ordinary gameplay pause. It uses a 0.65 scale and moves the menu
+pieces to make room. A world-only panel, cutscene pause, or unavailable resource
+keeps the normal pause. The target is decoded from its native D2KP palette, tile
+and map resources, rather than sampled from the composed lower-screen framebuffer.
+Existing pause PNG replacements are retained; native tile artwork is the fallback.
+
+Provenance: `external/khdays-decomp` a2b0478b87e3102732094c34f6ca89595f98ab93,
+overlay 002 `Ov002_RequestPanelScreen`, `Ov002_FinishPanelFadeIn`,
+`Ov002_QueuePanelGraphics`, and `Ov002_RecolourGaugeBlock`. The field context
+referenced at 0x0207f630 stores the target selector at +0xac: negative means the
+world panel, zero selects locale map.p2 entry 11, and 1..61 select mapchr.p2
+entries selector+0x2f. Native text and mission logic are not changed.
+
+Regression coverage checks unchanged default composition output, command/HP edge
+placement across HUD sizes/aspect ratios, hidden-panel counter placement,
+configuration parsing, paused panel offsets and lifetime, and target tile palette,
+flip and bounds handling. In-game comparison still needs a mission target and a
+world-only mission, ordinary/cutscene pauses, top INFORMATION and tutorials, in
+both screen modes with the switches on and off.
+
+
+The upper INFORMATION fade option checks configured resource availability rather
+than this frame's drawing eligibility: a mission script can request the banner
+while the replacement renderer is temporarily suspended. That must not start a
+native HUD fade when keeping the HUD is enabled. Single-screen composition also
+allows the HUD during that explicit upper-information state regardless of script
+activity, while ordinary dialog, movie, tutorial and pause contexts remain hidden.
+
+The native pause fallback keeps the title's original 12-by-2 tile proportions.
+Retry and Withdraw reuse the existing cursor-specific cached native line states;
+they must not both inherit the currently lit Give Up row. Once the target menu
+has been fully prepared, it owns the original pause BG layer, including tiles
+outside the piece descriptors. The old single-screen pause crop is omitted as
+well. Synthetic native-tile tests cover header proportions and each Retry cursor
+state; composition tests check that no original pause crop remains behind the
+independent target menu.
+
+
+INFORMATION normally snapshots and clears BG1/BG2/BG3 through ResetFaders.
+With keep_hud_during_information, all three maps remain live: BG1 contains command
+labels, enemy names and notification text as well as the caption. The native
+snapshot node still has a balanced push/pop lifetime, but has no saved HUD maps
+to overwrite live updates on exit. Only the caption scratch rows at map offsets
+0x700..0x7ff are saved/restored separately. Other snapshot callers are unaffected.
+The original banner-art callback is skipped for this option.
+
+BG1 and BG3 retain their mandatory native scroll callbacks. The BG3 callback
+suppresses its register write; BG1 records the caption scroll without moving the
+physical text layer. Only INFORMATION canvas discovery and compositing use that
+virtual scroll, for original and replacement-font glyphs. All other text uses
+the physical layer coordinates. The main-screen resting scroll offsets are also
+preserved through the transition, preventing the brief return-position snap.
+Native-code tests cover all three maps, live text/art updates, caption scratch
+restoration, nested snapshots and both option states. Font tests cover virtual
+caption discovery and command/obtained/backpack/recon text while INFORMATION is
+active. Map composition tests compare gameplay/pause rectangles for both the
+rectangular and KH2 minimap when edge alignment is enabled.
+The PAUSE title ends six native layout units above the target, for either native
+art or a replacement PNG, using its actual displayed height.
+
+
+The BG3 scroll callback at panel +0x234 is mandatory: UpdatePanelScroll calls it
+without a null check while the offset tween is active. Keeping the HUD must leave
+that callback installed. The port instead suppresses the write inside its target,
+Ov002_SetBgOfs_main001c, when the option is enabled. The native-code regression
+runs UpdatePanelScroll through that callback with an active tween and verifies
+that disabled settings still write the original scroll value.

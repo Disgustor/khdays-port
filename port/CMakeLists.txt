@@ -318,6 +318,31 @@ target_link_libraries(khdays-kh2-portrait-test PRIVATE khdays-kh2-portrait khday
 target_compile_options(khdays-kh2-portrait-test PRIVATE /W4 /std:c++20 /EHsc)
 add_test(NAME khdays-kh2-portrait COMMAND khdays-kh2-portrait-test)
 
+add_executable(khdays-pause-target-test tests/pause_target_test.cpp ../assets/src/graphics2d.cpp)
+target_include_directories(khdays-pause-target-test PRIVATE ../assets/include)
+target_compile_options(khdays-pause-target-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-pause-target COMMAND khdays-pause-target-test)
+add_executable(khdays-pause-layout-test tests/pause_layout_test.cpp ../assets/src/graphics2d.cpp)
+target_include_directories(khdays-pause-layout-test PRIVATE ../assets/include)
+target_compile_options(khdays-pause-layout-test PRIVATE /W4 /std:c++20 /EHsc)
+add_test(NAME khdays-pause-layout COMMAND khdays-pause-layout-test)
+add_executable(khdays-information-maps-test tests/information_maps_test.cpp ui/hud_options.cpp
+    tests/information_input_fixture.cpp
+    "${KHDAYS_GEN}/rewritten/src/overlays/field/ov022_battle/Ov022_UpdateCommandInput.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_Hud_IsPanelOpen.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_PushMapSnapshot.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_PopMapSnapshot.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_SetPanelMode.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_SetBgOfs_main001c.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_SetBgOfs_main0014.c"
+    "${KHDAYS_GEN}/rewritten/src/overlays/scenes/ov002_field/Ov002_UpdatePanelScroll.c")
+target_include_directories(khdays-information-maps-test PRIVATE ../assets/include compat "${KHDAYS_GEN}")
+target_compile_options(khdays-information-maps-test PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:/W4;/EHsc>" "$<$<COMPILE_LANGUAGE:C>:/W0;/Zp4;/std:c17>")
+set_property(TARGET khdays-information-maps-test PROPERTY CXX_STANDARD 20)
+add_test(NAME khdays-information-maps COMMAND khdays-information-maps-test)
+add_test(NAME khdays-information-maps-disabled COMMAND khdays-information-maps-test --disabled)
+
 add_executable(khdays-kh2-sequence-test tests/kh2_sequence_test.cpp)
 target_link_libraries(khdays-kh2-sequence-test PRIVATE khdays-kh2-gauge)
 target_compile_options(khdays-kh2-sequence-test PRIVATE /W4 /std:c++20 /EHsc)
@@ -600,6 +625,7 @@ add_executable(khdays-native
     ui/kh2_hp_hud.cpp
     ui/kh2_enemy_hud.cpp
     ui/heart_points.cpp
+    ui/hud_options.cpp
     tools/heart_model_export.cpp
     ../assets/src/animation.cpp
     ui/kh2_reticles.cpp

@@ -713,8 +713,8 @@ void draw(const Status &s)
     KhdaysUiElement e{"hud.mission_panel",
                       1,
                       KES_DIRECT | KES_FINE | KES_PICTURE | 2,
-                      left + config.offset_x,
-                      152 + top + config.offset_y,
+                      left + config.offset_x + (context.pause_mode ? config.pause_offset_x : 0),
+                      152 + top + config.offset_y + (context.pause_mode ? config.pause_offset_y : 0),
                       float(width),
                       float(height),
                       image};
@@ -753,39 +753,47 @@ extern "C" void khdays_ui_mission_panel_emit(void)
     }
     try {
         native = visible();
-        float delta = khdays_link_paused() || now < previous ? 0 : float(now - previous) * config.frames_per_tick;
-        previous = now;
-        if (native && (!active || closing)) {
-            active = true;
-            closing = false;
-            age = 0;
-            player.select(asset->sequence, config.intro, true);
-            // A newly shown paused panel must not freeze on a transparent entrance frame.
-            if (khdays_link_paused())
-                player.seek(float(seq::sequence_frame_count(asset->sequence, config.intro) - 1));
-            delta = 0;
-        }
-        if (!native && active && !closing) {
-            closing = true;
-            player.select(asset->sequence, config.outro, true);
-            delta = 0;
-        }
-        if (!active)
-            return;
-        age += delta;
-        if (closing) {
-            float end = float(seq::sequence_frame_count(asset->sequence, config.outro));
-            float t = player.frame() + delta;
-            if (t >= end) {
-                active = false;
+        const bool hidden = config.pause_only && !context.pause_mode;
+        if (hidden) {
+            active = closing = false;
+            previous = now;
+            if (!native)
                 return;
+        } else {
+            float delta = khdays_link_paused() || now < previous ? 0 : float(now - previous) * config.frames_per_tick;
+            previous = now;
+            if (native && (!active || closing)) {
+                active = true;
+                closing = false;
+                age = 0;
+                player.select(asset->sequence, config.intro, true);
+                // A newly shown paused panel must not freeze on a transparent entrance frame.
+                if (khdays_link_paused())
+                    player.seek(float(seq::sequence_frame_count(asset->sequence, config.intro) - 1));
+                delta = 0;
             }
-            player.seek(t);
-        } else
-            player.advance(asset->sequence, delta);
-        if (native)
-            last_status = snapshot();
-        draw(last_status);
+            if (!native && active && !closing) {
+                closing = true;
+                player.select(asset->sequence, config.outro, true);
+                delta = 0;
+            }
+            if (!active)
+                return;
+            age += delta;
+            if (closing) {
+                float end = float(seq::sequence_frame_count(asset->sequence, config.outro));
+                float t = player.frame() + delta;
+                if (t >= end) {
+                    active = false;
+                    return;
+                }
+                player.seek(t);
+            } else
+                player.advance(asset->sequence, delta);
+            if (native)
+                last_status = snapshot();
+            draw(last_status);
+        }
         owns = true;
         for (int bg : {0, 2}) {
             KhdaysBgLayer l;
@@ -819,7 +827,8 @@ extern "C" void khdays_ui_mission_panel_commands(KhdaysSequenceImage *out)
 }
 extern "C" unsigned khdays_ui_mission_panel_state(void)
 {
-    return (owns ? 1u : 0u) | (owns && native ? 2u : 0u);
+    return (owns ? 1u : 0u) | (owns && native ? 2u : 0u) |
+           (allowed && config.pause_only && !context.pause_mode && enabled() ? 4u : 0u);
 }
 extern "C" int khdays_ui_mission_panel_backdrop(void)
 {

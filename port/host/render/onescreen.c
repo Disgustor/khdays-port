@@ -1,5 +1,6 @@
 /* The one-screen picture, on the presenting side (see onescreen.h). */
 #include "onescreen.h"
+#include "../../ui/hud_options.h"
 #include "onescreen_images.h"
 #include "../../gfx/describe.h"
 #include "../screens/camp_screen.h"
@@ -589,6 +590,7 @@ void khdays_onescreen_prepare(const KhdaysFramePackage *p, int columns, KhdaysCo
     situation.frame =
         khdays_events_vblank_count(); /* an animated backdrop's clock: it moves when the frames are alike */
     settings_prompt();
+    khdays_composition_set_hud_options(p->hud_options | ((p->mission_panel_state & 4u) ? KHDAYS_HUD_PANEL_HIDDEN : 0u));
     khdays_composition_for(&situation, columns, composition);
     model_window(p, columns, composition);
     khdays_onescreen_images(p, &situation, composition);

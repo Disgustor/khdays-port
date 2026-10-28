@@ -443,6 +443,11 @@ extern "C" int khdays_ui_information_wants(void)
 {
     return enabled;
 }
+extern "C" int khdays_ui_information_configured(void)
+{
+    load();
+    return asset && khdays_textures_hd();
+}
 extern "C" int khdays_ui_information_active(int engine)
 {
     return enabled && engine >= 0 && engine < 2 && windows[std::size_t(engine)].started;

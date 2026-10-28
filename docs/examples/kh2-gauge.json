@@ -322,7 +322,10 @@
     "full_marker_y": 50.0,
     "minimum_marker_y": 50.0,
     "counter_text_offset_y": 0,
-    "counters_scale": 1
+    "counters_scale": 1,
+    "pause_only": false,
+    "pause_offset_x": 0,
+    "pause_offset_y": 0
   },
   "backpack_full": {
     "enabled": false,
@@ -437,5 +440,10 @@
       "total_gain_final": 41,
       "chain_warning": 42
     }
+  },
+  "presentation": {
+    "keep_hud_during_information": false,
+    "align_hud_to_edges": false,
+    "pause_mission_target": false
   }
 }

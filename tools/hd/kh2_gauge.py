@@ -88,6 +88,7 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
             "locked_on",
             "mission_panel",
             "heart_points",
+            "presentation",
         }
         if previous and previous.is_file():
             custom = json.loads(previous.read_text(encoding="utf-8"))

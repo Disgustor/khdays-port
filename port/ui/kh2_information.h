@@ -15,6 +15,7 @@ unsigned khdays_ui_information_epoch(void);
 void khdays_ui_information_hold(int held, int leaving);
 void khdays_ui_information_begin(void);
 int khdays_ui_information_wants(void);
+int khdays_ui_information_configured(void);
 /* RGBA contains only glyphs, rasterized by the existing Days font painter. */
 int khdays_ui_information_text(const KhdaysUiElement *anchor, const unsigned *rgba, int w, int h, unsigned version,
                                float first_x, float first_y, unsigned coverage);

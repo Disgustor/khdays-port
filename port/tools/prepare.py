@@ -1307,6 +1307,10 @@ HOOKS = {
             " pActor->nMenuState, gPadHeld, gPadPressed, pMenu[0], pMenu[1], Ov022_GetRepeatKeys()); }\n"
             "    if (pActor->nMenuState == 2 || pActor->nMenuState == 3) {\n",
         ),
+        (  # Retained INFORMATION leaves command navigation, shortcuts and command kinds intact.
+            "Ov002_Hud_IsPanelOpen",
+            "khdays_ui_command_panel_open",
+        ),
         (
             "Ov002_SelectShortcut(nCmd);",
             '(khdays_trace_call_arg("SetPanelModeForRequest", nCmd), Ov002_SelectShortcut(nCmd));',
@@ -2377,10 +2381,74 @@ FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_SetCaptionText.c"] = [
 ]
 FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_RequestPanelScreen.c"] = [
     (
+        "    Ov002_StartBlendFade(-1, 0, 300);",
+        "    { extern int khdays_ui_information_keep_hud(void);\n"
+        "      if (!khdays_ui_information_keep_hud()) Ov002_StartBlendFade(-1, 0, 300); }",
+    ),
+    (
         "    StrCopy16(ctx->pCrawlText, pText);",
         "    StrCopy16(ctx->pCrawlText, pText);\n"
         "    { extern void khdays_ui_information_panel(const unsigned short *text);\n"
         "      khdays_ui_information_panel(pText); }",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_FinishPanelFadeIn.c"] = [
+    (
+        "        Ov002_PopMapSnapshot();",
+        "        { extern void khdays_ui_information_pop_maps(void);\n          khdays_ui_information_pop_maps(); }",
+    ),
+    (
+        "        Ov002_StartBlendFade(0, 0x10, 300);",
+        "        { extern int khdays_ui_information_keep_hud(void);\n"
+        "          if (!khdays_ui_information_keep_hud()) Ov002_StartBlendFade(0, 0x10, 300); }",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_ResetFaders.c"] = [
+    (
+        "    Ov002_PushMapSnapshot(0);",
+        "    { extern void khdays_ui_information_push_maps(void);\n      khdays_ui_information_push_maps(); }",
+    ),
+    (
+        "    Ov002_Ctx_InvokeTagTrackerCallback(Ov002_ForwardToSubDc(0x50));",
+        "    { extern int khdays_ui_information_keep_hud(void);\n"
+        "      if (!khdays_ui_information_keep_hud())\n"
+        "          Ov002_Ctx_InvokeTagTrackerCallback(Ov002_ForwardToSubDc(0x50)); }",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_PushMapSnapshot.c"] = [
+    (
+        "    for (i = 0; i <= 2; i++) {",
+        "    for (i = 0; i <= 2; i++) {\n"
+        "        extern int khdays_ui_information_preserving_maps(void);\n"
+        "        if (khdays_ui_information_preserving_maps()) continue;",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_SetPanelMode.c"] = [
+    (
+        "        pOfs[0] = 0x180000;",
+        "        { extern int khdays_ui_information_keep_hud(void);\n"
+        "          if (nMode != 0 || !khdays_ui_information_keep_hud()) pOfs[0] = 0x180000; }",
+    ),
+    (
+        "        pOfs[2] = 0x180000;",
+        "        { extern int khdays_ui_information_keep_hud(void);\n"
+        "          if (!khdays_ui_information_keep_hud()) pOfs[2] = 0x180000; }",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_SetBgOfs_main001c.c"] = [
+    (
+        "void Ov002_SetBgOfs_main001c(unsigned int param_1, unsigned int param_2) {",
+        "void Ov002_SetBgOfs_main001c(unsigned int param_1, unsigned int param_2) {\n"
+        "    { extern int khdays_ui_information_keep_hud(void);\n"
+        "      if (khdays_ui_information_keep_hud()) return; }",
+    ),
+]
+FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_SetBgOfs_main0014.c"] = [
+    (
+        "void Ov002_SetBgOfs_main0014(unsigned int param_1, unsigned int param_2) {",
+        "void Ov002_SetBgOfs_main0014(unsigned int param_1, unsigned int param_2) {\n"
+        "    { extern int khdays_ui_information_capture_scroll(unsigned int x, unsigned int y);\n"
+        "      if (khdays_ui_information_capture_scroll(param_1, param_2)) return; }",
     ),
 ]
 FILE_HOOKS["src/overlays/scenes/ov002_field/Ov002_BeginTextCrawl.c"] = [

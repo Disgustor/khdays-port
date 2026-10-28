@@ -1,6 +1,7 @@
 /* Independent HUD images keep their screen shape's priority and dimming without inheriting its crop. */
 #include "onescreen_images.h"
 #include "../../runtime/display/frame_package.h"
+#include "../../ui/hud_options.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,11 @@ int khdays_onescreen_information(const KhdaysFramePackage *p, KhdaysSituation *s
     if (!(p->information_state & KHDAYS_INFORMATION_AVAILABLE))
         return 0;
     s->states |= 1u << KHDAYS_ST_INFORMATION_MOD;
+    if ((p->hud_options & KHDAYS_HUD_KEEP_INFORMATION) &&
+        (s->scene == KHDAYS_SIT_FIELD || s->scene == KHDAYS_SIT_FIELD_3D_BOTH) &&
+        (s->states & (1u << KHDAYS_ST_INFO_UPPER)) && !(s->states & (1u << KHDAYS_ST_DIALOG)) && !p->situation.movie &&
+        !p->situation.tutorial && khdays_situation_hud_mode() != KHDAYS_HUD_NONE)
+        s->states |= 1u << KHDAYS_ST_HUD;
     /* INFO_UPPER controls the native HUD's placement as well as the banner crop. Its lifetime
      * must remain the game's, even while the independent sequence is entering or leaving. */
     s->states &= ~(1u << KHDAYS_ST_INFO_NEW);
@@ -82,7 +88,7 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                              KhdaysComposition *composition)
 {
     size_t maximum = 0, count = 0, out = 0;
-    int radar_owner = -1;
+    int radar_owner = -1, pause_layout = 0;
     for (int e = 0; e < 2; ++e)
         maximum += p->elements[e].count;
     if (!maximum)
@@ -112,6 +118,18 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
             memcpy(&y, r + KE_Y, 4);
             memcpy(&w, r + KE_W, 4);
             memcpy(&h, r + KE_H, 4);
+            if (r[KE_SLOT] & KES_PAUSE_LAYOUT) {
+                if (situation->scene != KHDAYS_SIT_PAUSE || (situation->states & (1u << KHDAYS_ST_EVENT)))
+                    continue;
+                const float factor = khdays_composition_hud_factor();
+                pause_layout = 1;
+                const float columns = (float)khdays_composition_columns();
+                Picture *picture = &pictures[count++];
+                picture->owner = -1;
+                image_shape(&picture->shape, r, 0, columns * .5f + (x - 128) * factor, 96 + (y - 96) * factor,
+                            w * factor, h * factor);
+                continue;
+            }
             float anchor_x = (x + w < 256 ? x + w : 256) - 2;
             float anchor_y = (y + h < 192 ? y + h : 192) - 2;
             const unsigned *map = p->minimap_images[0].words;
@@ -150,8 +168,9 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                 const float factor = khdays_composition_hud_factor(), scale = 0.766667f * factor;
                 Picture *picture = &pictures[count++];
                 picture->owner = information ? -2 : -1;
-                image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0, x * scale, 5 * factor + y * scale,
-                            w * scale, h * scale);
+                image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0, x * scale,
+                            ((p->hud_options & KHDAYS_HUD_ALIGN_EDGES) ? 0 : 5 * factor) + y * scale, w * scale,
+                            h * scale);
                 continue;
             }
             const uint32_t lower = e != p->upper ? KOF_LOWER : 0;
@@ -269,6 +288,9 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
         KhdaysShape shape = composition->shapes[s];
         float source[4];
         memcpy(source, shape.words + KO_SRC_X, sizeof(source));
+        if (pause_layout && !(shape.words[KO_FLAGS] & (KOF_IMAGE | KOF_3D | KOF_LOWER)) && source[0] == 72 &&
+            source[1] == 64 && source[2] == 112 && source[3] == 76)
+            continue;
         if (radar_owner >= 0 && (s == radar_owner || (!(shape.words[KO_FLAGS] & (KOF_IMAGE | KOF_3D)) &&
                                                       (shape.words[KO_FLAGS] & KOF_LOWER) && source[0] == 186 &&
                                                       source[1] == 156 && source[2] == 2 && source[3] == 12)))

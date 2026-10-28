@@ -175,6 +175,21 @@ void assets()
 }
 void configuration()
 {
+    text(directory / "presentation.json", R"({"presentation":{"align_hud_to_edges":true,
+        "keep_hud_during_information":true,"pause_mission_target":true}})");
+    const auto presentation = portrait::load_hud_presentation_config(directory / "presentation.json");
+    expect(presentation.align_hud_to_edges && presentation.keep_hud_during_information &&
+               presentation.pause_mission_target,
+           "presentation options ignored");
+    expect(portrait::load_hp_gauge_config(directory / "presentation.json").scale == .65f,
+           "presentation settings broke gauge parsing");
+    text(directory / "presentation.json", "{}");
+    const auto defaults = portrait::load_hud_presentation_config(directory / "presentation.json");
+    expect(!defaults.align_hud_to_edges && !defaults.keep_hud_during_information && !defaults.pause_mission_target,
+           "presentation defaults changed native behavior");
+    text(directory / "presentation.json", R"({"presentation":{"unknown":true}})");
+    rejects([&] { portrait::load_hud_presentation_config(directory / "presentation.json"); },
+            "unknown presentation option accepted");
     {
         std::ifstream input(directory / "portrait.any-extension", std::ios::binary);
         std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});

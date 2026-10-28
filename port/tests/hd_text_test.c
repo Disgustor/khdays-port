@@ -15,6 +15,7 @@ int khdays_ui_mission_panel_cell(int engine, int bg, int x, int y)
 }
 static int obtained_sequence_enabled, obtained_sequence_owned, obtained_sequence_calls, retiring_notice;
 static unsigned obtained_sequence_ink;
+static KhdaysUiElement notification_anchors[3];
 int khdays_ui_obtained_enabled(void)
 {
     return obtained_sequence_enabled;
@@ -32,7 +33,7 @@ int khdays_ui_obtained_owns(void)
 void khdays_ui_obtained_end(void) {}
 int khdays_ui_obtained_text(const KhdaysUiElement *e, const unsigned *rgba, int w, int h, unsigned version)
 {
-    (void)e;
+    notification_anchors[0] = *e;
     (void)version;
     obtained_sequence_owned = 1;
     ++obtained_sequence_calls;
@@ -69,7 +70,8 @@ int khdays_ui_notification_cell(int engine, int bg, int x, int y)
 }
 int khdays_ui_notification_text(int k, const KhdaysUiElement *e, const unsigned *rgba, int w, int h, unsigned v)
 {
-    (void)e;
+    if (k == 1 || k == 2)
+        notification_anchors[k] = *e;
     (void)v;
     unsigned ink = 0;
     for (int i = 0; i < w * h; ++i)
@@ -330,6 +332,15 @@ static uint32_t *test_images[32];
 static int image_ends, paint_calls, failures;
 static int image_requests, test_scale = 1, fail_direct_images;
 static int test_hofs, test_vofs, test_colors256;
+static int virtual_caption_scroll;
+int khdays_ui_information_text_scroll(int *x, int *y)
+{
+    if (!virtual_caption_scroll)
+        return 0;
+    *x = test_hofs;
+    *y = test_vofs + 216;
+    return 1;
+}
 static int test_map_bg = -1, test_bg_colors256[4] = {-1, -1, -1, -1};
 static size_t image_bytes[32], live_bytes, peak_bytes;
 static uint16_t map_cells[1024] = {1, 2};
@@ -1429,13 +1440,14 @@ static void fitted_duplicate_tail_tests(void)
 
 static void information_planes(void)
 {
-    for (int variation = 0; variation < 4; ++variation) {
-        const int native = variation & 1, engine = variation >> 1, bg = engine ? 0 : 1;
+    for (int variation = 0; variation < 6; ++variation) {
+        const int native = variation & 1, engine = variation < 4 ? variation >> 1 : 0, bg = engine ? 0 : 1;
         setup(4);
+        virtual_caption_scroll = variation >= 4;
         test_map_bg = bg;
         const int base_vofs = engine ? 216 : 0;
         test_vofs = base_vofs;
-        if (engine) {
+        if (engine || virtual_caption_scroll) {
             // SetCaptionText builds at tile row 28 of sub BG0, scrolled to y=8 on screen.
             map_width = map_height = 32;
             memset(map_cells, 0, sizeof(map_cells));
@@ -1457,7 +1469,8 @@ static void information_planes(void)
         memcpy(vram + 32, ram + 4096, bytes);
         chars_loaded(engine, bg, ram + 4096, 32, bytes);
         c = &canvases[0];
-        map_cells[(engine ? 28 * 32 : 0) + 1] = 0; // Retain offscreen glyphs for the KH2 marquee.
+        map_cells[(engine || virtual_caption_scroll ? 28 * 32 : 0) + 1] =
+            0; // Retain offscreen glyphs for the KH2 marquee.
         information_enabled = 1;
         information_calls = 0;
         emit();
@@ -1496,6 +1509,7 @@ static void information_planes(void)
         chars_loaded(engine, bg, ram + 4096, 32, bytes);
         CHECK(!canvases[1].display_information);
         information_enabled = 0;
+        virtual_caption_scroll = 0;
         test_mappings = mapping_ready = 1;
     }
 }
@@ -1511,6 +1525,15 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
     obtained_popup();
+    KhdaysUiElement ordinary_anchors[3];
+    memcpy(ordinary_anchors, notification_anchors, sizeof(ordinary_anchors));
+    information_enabled = virtual_caption_scroll = 1;
+    obtained_popup(); // Command labels and obtained/backpack/recon text must also survive a visible upper caption.
+    for (int k = 0; k < 3; ++k) {
+        CHECK(notification_anchors[k].x == ordinary_anchors[k].x && notification_anchors[k].y == ordinary_anchors[k].y);
+        CHECK(notification_anchors[k].w == ordinary_anchors[k].w && notification_anchors[k].h == ordinary_anchors[k].h);
+    }
+    information_enabled = virtual_caption_scroll = 0;
     information_planes();
     button_icon_tests();
     fitted_capture_tests();

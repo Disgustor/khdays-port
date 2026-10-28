@@ -132,6 +132,7 @@ def party_config(player: dict, mapping: dict[str, int]) -> dict:
             "locked_on",
             "mission_panel",
             "heart_points",
+            "presentation",
         )
     }
     result.update(

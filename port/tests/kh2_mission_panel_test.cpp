@@ -282,6 +282,28 @@ void tests()
     test_context.camp_screen = KHDAYS_CAMP_NONE;
     step();
     check(owns, "return to field failed");
+    const auto normal_x = test_element.x, normal_y = test_element.y;
+    config.pause_offset_x = 5;
+    config.pause_offset_y = 11;
+    test_context.pause_mode = 1;
+    test_paused = true;
+    step();
+    check(std::abs(test_element.x - normal_x - 5) < .001f && std::abs(test_element.y - normal_y - 11) < .001f,
+          "paused panel position ignored");
+    config.pause_only = true;
+    test_context.pause_mode = 0;
+    test_paused = false;
+    step();
+    check(owns && (khdays_ui_mission_panel_state() & 4) && !program.words[KSI_CLEAR],
+          "pause-only panel did not hide while retaining native suppression");
+    test_context.pause_mode = 1;
+    test_paused = true;
+    step();
+    check(owns && !(khdays_ui_mission_panel_state() & 4) && program.words[KSI_CLEAR],
+          "pause-only panel did not return on pause");
+    test_context.pause_mode = 0;
+    test_paused = false;
+    config.pause_only = false;
     config.enabled = false;
     asset.reset();
     step();

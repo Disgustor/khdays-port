@@ -26,6 +26,7 @@
 #include "../../ui/heart_points.h"
 #include "../../ui/kh2_information.h"
 #include "../../ui/kh2_obtained.h"
+#include "../../ui/hud_options.h"
 #include "../../ui/kh2_mission_panel.h"
 #include "../../ui/minimap.h"
 #include "../../ui/pause.h"
@@ -898,6 +899,9 @@ static void ui_frame(KhdaysFramePackage *p, const KhdaysGpuInput *in, int refere
     khdays_ui_kh2_portrait_reference(reference);
     khdays_ui_kh2_party_reference(reference);
     khdays_ui_kh2_labels_reference(reference);
+    p->hud_options = khdays_ui_hud_options();
+    if (!khdays_ui_information_keep_hud())
+        p->hud_options &= ~KHDAYS_HUD_KEEP_INFORMATION;
     khdays_ui_kh2_enemy_reference(reference);
     khdays_ui_collect((p->wants & KHDAYS_WANT_SITUATION) ? 0 : (int)p->desc2d[0][KD_WIDE], p->upper);
     khdays_ui_kh2_hp_commands(&p->sequence_image);
@@ -1139,6 +1143,7 @@ static void begin_package(KhdaysFramePackage *p, u32 frame, int want, int captur
     p->mission_panel_backdrop = -1;
     p->information_hold_frames = 0;
     p->information_state = 0;
+    p->hud_options = 0;
     p->enemy_image.words[KSI_COUNT] = p->enemy_image.words[KSI_CLEAR] = p->enemy_image.words[KSI_ANCHORED] = 0;
     for (int i = 0; i < 4; ++i) {
         p->portrait_images[i].words[KSI_COUNT] = p->portrait_images[i].words[KSI_CLEAR] = 0;

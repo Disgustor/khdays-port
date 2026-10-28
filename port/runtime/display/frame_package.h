@@ -142,6 +142,7 @@ typedef struct KhdaysFramePackage {
     int mission_panel_backdrop;
     uint32_t information_hold_frames;
     uint32_t information_state;
+    uint32_t hud_options;
 } KhdaysFramePackage;
 
 /* What KHDAYS_RECORD_FRAMES writes of a package (version 14): all of it but

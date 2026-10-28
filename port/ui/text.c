@@ -7,6 +7,7 @@
 #include "elements.h"
 #include "parts.h"
 #include "kh2_information.h"
+#include "hud_options.h"
 #include "kh2_obtained.h"
 #include "kh2_mission_panel.h"
 #include "../gpu/gpu2d.h"
@@ -2552,7 +2553,15 @@ static int display_layer(Canvas *c, KhdaysBgLayer *l, int *ox, int *oy)
         const int bg = attempt < 0 ? uploaded : attempt;
         if (attempt >= 0 && bg == uploaded)
             continue;
-        if (!khdays_bg_text_layer(c->engine, bg, l) || l->colors256 != (c->bpp == 8) || !shown_at(c, l, ox, oy))
+        if (!khdays_bg_text_layer(c->engine, bg, l) || l->colors256 != (c->bpp == 8))
+            continue;
+        int caption_x, caption_y;
+        if (c->display_information && khdays_ui_information_wants() && !c->engine && bg == 1 &&
+            khdays_ui_information_text_scroll(&caption_x, &caption_y)) {
+            l->hofs = caption_x;
+            l->vofs = caption_y;
+        }
+        if (!shown_at(c, l, ox, oy))
             continue;
         if (tracing() && bg != uploaded)
             say("canvas %08x displayed on engine %c BG%d via shared character memory (upload BG%d)", c->cc,
@@ -3052,6 +3061,14 @@ static int emit_information(Canvas *c, int ox, int oy, const KhdaysBgLayer *laye
         return khdays_ui_information_active(c->engine);
     if (!c->display_count)
         return khdays_ui_information_active(c->engine);
+    KhdaysBgLayer caption_layer;
+    int caption_x, caption_y;
+    if (!c->engine && khdays_ui_information_text_scroll(&caption_x, &caption_y)) {
+        caption_layer = *layer;
+        caption_layer.hofs = caption_x;
+        caption_layer.vofs = caption_y;
+        layer = &caption_layer;
+    }
     const int lw = layer->wt * 8, lh = layer->ht * 8;
     int px = ((ox * 8 - layer->hofs) % lw + lw) % lw;
     int py = ((oy * 8 - layer->vofs) % lh + lh) % lh;

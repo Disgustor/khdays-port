@@ -296,6 +296,21 @@ int khdays_link_limit_available(void)
     return khdays_game_ram(context) && khdays_game_ram(context + 0x2fu) && rd32(context + 0x2cu) != 0;
 }
 
+int khdays_link_mission_target(int *entry, int *primary)
+{
+    if (!khdays_overlay_loaded(OV_FIELD) || khdays_link_scene(NULL) != FIELD_SCENE)
+        return 0;
+    const unsigned context = rd32(0x0207f630u); /* Ov002_QueuePanelGraphics / Ov002_Field_GetWordAC */
+    if (!khdays_game_ram(context) || !khdays_game_ram(context + 0xafu))
+        return 0;
+    const int selected = (int)rd32(context + 0xacu);
+    if (selected < 0 || selected > 0x3d)
+        return 0;
+    *primary = selected == 0;
+    *entry = selected == 0 ? 11 : selected + 0x2f;
+    return 1;
+}
+
 int khdays_link_player_limit_clock(struct KhdaysLinkLimitClock *clock)
 {
     const unsigned actor = player_actor();

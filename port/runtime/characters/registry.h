@@ -36,6 +36,30 @@ typedef struct KhdaysCharacterAction {
     int root_keep; /* the clip's own travel of its root kept (else the game's movement alone) */
 } KhdaysCharacterAction;
 
+/* A combo of the character's ([moveset] ground / air): the base's attacks in order (their records' numbers in its
+ * cm.b), then its finisher; each keyblade's combo of the base's is replaced by it. */
+typedef struct KhdaysCharacterCombo {
+    int *attacks;
+    int count;    /* 0: each keyblade's own chain */
+    int finisher; /* -1: each keyblade's own */
+} KhdaysCharacterCombo;
+
+/* One of the base's attacks changed ([moveset] attack <number>): its hits' damage, reach (their radius and how far
+ * out they are) and push, times the base's. */
+typedef struct KhdaysCharacterAttack {
+    int id;
+    float damage, reach, push;
+} KhdaysCharacterAttack;
+
+#define KHDAYS_CHARACTER_GROUND 0
+#define KHDAYS_CHARACTER_AIR 1
+
+/* One of the base's sounds the character makes its own way ([sounds]): its voice. */
+typedef struct KhdaysCharacterSound {
+    char *game; /* the sound's name in the game ("seqarc/PLY_ROX/vo_rs02at07"); ending in '*': each one it begins */
+    char *file; /* relative to the character's folder; NULL: not heard */
+} KhdaysCharacterSound;
+
 typedef struct KhdaysCharacter {
     char *identity;  /* "<mod id>/<key>" */
     const char *key; /* inside identity: the character's folder's name */
@@ -50,6 +74,11 @@ typedef struct KhdaysCharacter {
     float model_scale;              /* the model's size to the game's (an FBX in centimetres: 100); 0 not given */
     KhdaysCharacterAction *actions; /* skeleton = own: [actions] */
     int action_count;
+    KhdaysCharacterSound *sounds; /* [sounds] */
+    int sound_count;
+    KhdaysCharacterCombo combos[2]; /* [moveset]: KHDAYS_CHARACTER_GROUND, KHDAYS_CHARACTER_AIR */
+    KhdaysCharacterAttack *attacks;
+    int attack_count;
     char *fallback;         /* the clip of an animation with none */
     char *weapon_bone;      /* skeleton = own: its bone the weapon follows; NULL: the base's hand's place */
     char *base_weapon_node; /* the base model's node the game puts the weapon on; NULL: its *_w_tg_R */
@@ -99,6 +128,10 @@ const KhdaysCharacter *khdays_characters_by_number(const KhdaysCharacters *r, in
 
 /* The action of the base's animation `game`; NULL when the character gives it no clip. */
 const KhdaysCharacterAction *khdays_characters_action(const KhdaysCharacter *c, const char *game);
+
+/* What the character makes of the base's sound `game`: its own line for it, else the longest of its lines ending
+ * in '*' that begins it; NULL when it has none (the game's sound plays). */
+const KhdaysCharacterSound *khdays_characters_sound(const KhdaysCharacter *c, const char *game);
 
 /* The character's name, or its weapon's, in language `l` (0-4): its own, else the one without a language. */
 const char *khdays_characters_name(const KhdaysCharacter *c, int l);

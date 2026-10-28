@@ -60,13 +60,23 @@ static void free_character(KhdaysCharacter *c)
     free(c->face);
     free(c->model);
 #pragma warning(push)
-#pragma warning(disable : 6001) /* the actions up to action_count are read_action's, both strings set */
+/* the actions and sounds up to their counts are read_action's and read_sound's, their strings set (a sound's file
+ * NULL for none); the combos' lists are read_moveset's, or NULL from the reading's memset */
+#pragma warning(disable : 6001)
     for (int i = 0; i < c->action_count; ++i) {
         free(c->actions[i].game);
         free(c->actions[i].clip);
     }
+    for (int i = 0; i < c->sound_count; ++i) {
+        free(c->sounds[i].game);
+        free(c->sounds[i].file);
+    }
+    free(c->combos[KHDAYS_CHARACTER_GROUND].attacks);
+    free(c->combos[KHDAYS_CHARACTER_AIR].attacks);
 #pragma warning(pop)
     free(c->actions);
+    free(c->sounds);
+    free(c->attacks);
     free(c->fallback);
     free(c->weapon_bone);
     free(c->base_weapon_node);
@@ -178,7 +188,90 @@ static int add_mod(KhdaysCharacters *r, const char *id, const char *folder)
     return r->mod_count++;
 }
 
-enum Section { NONE, CHARACTER, MODEL, ACTIONS, OTHER };
+enum Section { NONE, CHARACTER, MODEL, ACTIONS, SOUNDS, MOVESET, OTHER };
+
+/* An attack's number: 0 or more, and nothing else. */
+static int read_attack(const char *text, int *out)
+{
+    char *end;
+    const long v = strtol(text, &end, 10);
+    if (end == text || *end != '\0' || v < 0 || v > 0x7fffffff) {
+        return 0;
+    }
+    *out = (int)v;
+    return 1;
+}
+
+/* A [moveset] line: `ground` / `air` = the base's attacks in order; `ground finisher` / `air finisher` = one;
+ * `attack <number>` = any of damage <x>, reach <x>, push <x> (times the base's). */
+static void read_moveset(KhdaysCharacter *c, const char *name, const char *value, char *why, size_t why_size)
+{
+    char word[32] = "", number[32] = "";
+    int used = 0, id;
+    for (int g = 0; g < 2; ++g) {
+        const char *combo = g == KHDAYS_CHARACTER_GROUND ? "ground" : "air";
+        KhdaysCharacterCombo *k = &c->combos[g];
+        char finisher[40];
+        snprintf(finisher, sizeof(finisher), "%s finisher", combo);
+        if (strcmp(name, finisher) == 0) {
+            if (!read_attack(value, &k->finisher)) {
+                snprintf(why, why_size, "%s: %.40s is not an attack's number", finisher, value);
+            }
+            return;
+        }
+        if (strcmp(name, combo) != 0) {
+            continue;
+        }
+        k->count = 0;
+        for (const char *p = value; sscanf(p, "%31s%n", number, &used) == 1; p += used) {
+            int *grown = realloc(k->attacks, (size_t)(k->count + 1) * sizeof(*grown));
+            if (grown == NULL) {
+                snprintf(why, why_size, "out of memory");
+                return;
+            }
+            k->attacks = grown;
+            if (!read_attack(number, &k->attacks[k->count])) {
+                snprintf(why, why_size, "%s: %.30s is not an attack's number", combo, number);
+                return;
+            }
+            ++k->count;
+        }
+        if (k->count == 0) {
+            snprintf(why, why_size, "%s: no attacks (the base's attacks' numbers, in order)", combo);
+        }
+        return;
+    }
+    if (strncmp(name, "attack ", 7) != 0 || !read_attack(name + 7, &id)) {
+        snprintf(why, why_size, "%.60s: ground, air, ground finisher, air finisher or attack <number>", name);
+        return;
+    }
+    KhdaysCharacterAttack a = {id, 1.0f, 1.0f, 1.0f};
+    for (const char *p = value; sscanf(p, "%31s%n", word, &used) == 1;) {
+        char *end;
+        float *field = strcmp(word, "damage") == 0  ? &a.damage
+                       : strcmp(word, "reach") == 0 ? &a.reach
+                       : strcmp(word, "push") == 0  ? &a.push
+                                                    : NULL;
+        p += used;
+        if (field == NULL || sscanf(p, "%31s%n", number, &used) != 1) {
+            snprintf(why, why_size, "%.60s: %.30s is not damage, reach or push <times>", name, word);
+            return;
+        }
+        p += used;
+        *field = strtof(number, &end);
+        if (end == number || *end != '\0' || !(*field >= 0.0f)) {
+            snprintf(why, why_size, "%.60s: %.30s %.30s is not a number of times, 0 or more", name, word, number);
+            return;
+        }
+    }
+    KhdaysCharacterAttack *grown = realloc(c->attacks, (size_t)(c->attack_count + 1) * sizeof(*grown));
+    if (grown == NULL) {
+        snprintf(why, why_size, "out of memory");
+        return;
+    }
+    c->attacks = grown;
+    c->attacks[c->attack_count++] = a;
+}
 
 /* An [actions] line: `fallback = <clip>`, or `<the base's animation> = <clip> [blend <ms>] [root keep|remove]`.
  * A clip's path has no spaces. */
@@ -242,6 +335,41 @@ static void read_action(KhdaysCharacter *c, const char *name, const char *value,
     ++c->action_count;
 }
 
+/* A [sounds] line: `<the base's sound> = <file>` or `= none`; a later line for the same sound replaces it. */
+static void read_sound(KhdaysCharacter *c, const char *name, const char *value, char *why, size_t why_size)
+{
+    const int silent = same_word(value, "none");
+    if (!silent && !good_reference(value)) {
+        snprintf(why, why_size, "%.60s: %.80s is neither none nor a file inside the character's folder", name, value);
+        return;
+    }
+    KhdaysCharacterSound *s = NULL;
+    for (int i = 0; i < c->sound_count && s == NULL; ++i) {
+        s = strcmp(c->sounds[i].game, name) == 0 ? &c->sounds[i] : NULL;
+    }
+    if (s == NULL) {
+        KhdaysCharacterSound *grown = realloc(c->sounds, (size_t)(c->sound_count + 1) * sizeof(*grown));
+        if (grown == NULL) {
+            snprintf(why, why_size, "out of memory");
+            return;
+        }
+        c->sounds = grown;
+        s = &c->sounds[c->sound_count];
+        s->game = copy(name);
+        s->file = NULL;
+        if (s->game == NULL) {
+            snprintf(why, why_size, "out of memory");
+            return;
+        }
+        ++c->sound_count;
+    }
+    free(s->file);
+    s->file = silent ? NULL : copy(value);
+    if (!silent && s->file == NULL) {
+        snprintf(why, why_size, "out of memory");
+    }
+}
+
 int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *mod_folder, const char *key,
                            const char *text, size_t size, KhdaysCharactersReport report, void *context)
 {
@@ -251,6 +379,7 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
     enum Section section = NONE;
     memset(&c, 0, sizeof(c));
     c.base = -1;
+    c.combos[KHDAYS_CHARACTER_GROUND].finisher = c.combos[KHDAYS_CHARACTER_AIR].finisher = -1;
     if (!good_key(key)) {
         report(mod_id, key, 0, "its folder's name is not a key (letters, digits, '_' and '-' only)", context);
         return 0;
@@ -296,6 +425,8 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
             section = strcmp(s, "[character]") == 0 ? CHARACTER
                       : strcmp(s, "[model]") == 0   ? MODEL
                       : strcmp(s, "[actions]") == 0 ? ACTIONS
+                      : strcmp(s, "[sounds]") == 0  ? SOUNDS
+                      : strcmp(s, "[moveset]") == 0 ? MOVESET
                                                     : OTHER;
             if (section == OTHER) {
                 char note[200];
@@ -331,6 +462,10 @@ int khdays_characters_read(KhdaysCharacters *r, const char *mod_id, const char *
             /* told at the part's head */
         } else if (section == ACTIONS) {
             read_action(&c, name, value, why, sizeof(why));
+        } else if (section == SOUNDS) {
+            read_sound(&c, name, value, why, sizeof(why));
+        } else if (section == MOVESET) {
+            read_moveset(&c, name, value, why, sizeof(why));
         } else if (section == NONE) {
             snprintf(why, sizeof(why), "%.60s: before any part ([character] first)", name);
         } else if (section == CHARACTER && strcmp(name, "format") == 0) {
@@ -547,6 +682,24 @@ const KhdaysCharacterAction *khdays_characters_action(const KhdaysCharacter *c, 
         }
     }
     return NULL;
+}
+
+const KhdaysCharacterSound *khdays_characters_sound(const KhdaysCharacter *c, const char *game)
+{
+    const KhdaysCharacterSound *found = NULL;
+    size_t longest = 0;
+    for (int i = 0; c != NULL && game != NULL && i < c->sound_count; ++i) {
+        const char *pattern = c->sounds[i].game;
+        const size_t n = strlen(pattern);
+        if (strcmp(pattern, game) == 0) {
+            return &c->sounds[i];
+        }
+        if (n > 0 && pattern[n - 1] == '*' && n - 1 >= longest && strncmp(pattern, game, n - 1) == 0) {
+            found = &c->sounds[i];
+            longest = n - 1;
+        }
+    }
+    return found;
 }
 
 const char *khdays_characters_name(const KhdaysCharacter *c, int l)

@@ -5261,3 +5261,30 @@ Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on 
   by the node's callback (`NNS_G3dGetCurrentMtx` at `NODEDESC`, timing 3: the camp's
   `Ov008_RefreshMatchingMatrices`; the field's actor finds the node by name in `Ov030_CreateActor`). The
   port loads the character's own weapon bone's matrix there first, so the game's weapon follows it.
+- **Its voice** (read 2026-10-28; heard in `missions_waves`'s session log): an actor's sounds start through
+  `Ov022_PlayEntityVoice(actor, archive, entry)` (its action's cues from `Ov022_StepReactionCues`, its hurt,
+  the player overlay's own: `Ov030_UpdateMotionController`) and `Ov022_SpawnVoiceCue`, both into `Slot_Spawn` ->
+  `NNS_SndArcPlayerStartSeqArcEx`, which starts the entry at once. The actor's seat is its +9, its character
+  its +0xc (`PlayEntityVoice`'s switch on it picks Roxas, Sora, Riku, Xion, Mickey, Donald). Roxas's attack
+  shouts: `seqarc/PLY_ROX/vo_rs02atNN` on a voices' player; his swings `seqarc/WEP_ROX26/se_rox_weap_swingNN`
+  and run steps `seqarc/FIELD_ROX_FS_LAST/se_rox_fs_last_run01/02` are effects. The port is told the actor
+  around those two `Slot_Spawn`s, and a new character's `[sounds]` choose the entry's file then.
+- **Its combos** (`ba/ch/<code>/ci.b.z`, unpacked by its name's `.z`; read 2026-10-28 from Roxas's): a word
+  counting the keyblades (Roxas 18), then 0x34 bytes each -- the six pools' places from the file's start, their
+  counts (u16 x3 a graph), each graph's four entry points into its first pool (s16 x4) -- then the pools, 8
+  bytes a node (the attack's number, then s16 the node it goes on to and the branch: an index in the pool,
+  0x80 the graph's entry point with the next pool as its alternate, -1 none). The keyblade's record is the one
+  `Ov022_RebaseAnimRecord` takes (`ActionTable` +0x18); its graph 0 is the ground combo, 1 the air one
+  (`Ov022_BuildNodeGraph`): pool 0 the chain, pool 1 the finisher, pool 2 the branches' nodes; entry 1 is where
+  the chain's last node goes on (0: from the start), entry 2 its last node. Roxas's first keyblade: ground
+  `0 1`, finisher `2`; air `3 4`, finisher `5`; the others' attacks are numbered by keyblade (1010, 1060, 1000;
+  2060, 2080, 2050 ...).
+- **Its attacks** (`cm.b.z`): a word whose low byte counts them (Roxas 96), their places, then each a record of
+  15 words -- its number, its hits' kind, the animation's row its attack plays (`Ov022_FindOrClaimTagSlot`'s tag:
+  16 rows a keyblade), ..., the hits' count -- and its hits (`Ov022_UnpackChannelGrid`). A sweeping hit (kind
+  0, `Ov022_RunContactMode0`) is 15 words: its damage (fx32, `Ov022_ComputeStrengthDamage`'s factor), its first
+  and last frame, its push out and up, two flags, a level, then its place (x, y, z: turned by the actor's facing),
+  its radius, its spread's cosine and its event. Roxas's first hit: damage 0.75 over frames 6-12 at 1.19 radius;
+  the finisher five hits of 1.5 sweeping round over frames 12-21. `Ov022_LinkActionAnims` keeps at most 64
+  attacks of a keyblade's two graphs. The port writes a new character's `[moveset]` into its own copies of
+  both (unpacked, rewritten, packed again as LZ11 literals) when the game starts.

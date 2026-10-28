@@ -1,5 +1,7 @@
 /* The mods' characters in the running game (characters.h). */
 #include "characters.h"
+#include "moveset.h"
+#include "packed.h"
 
 #include "../../host/app/instance.h"
 #include "../core/rom.h"
@@ -157,6 +159,14 @@ static int files_there(const KhdaysCharacter *c)
             note(registry.mods[c->mod].id, c->key, 0, why, NULL);
         }
     }
+    for (int i = 0; i < c->sound_count; ++i) {
+        if (c->sounds[i].file != NULL &&
+            !(khdays_characters_file(c, c->sounds[i].file, path, sizeof(path)) && khdays_folders_is_file(path))) {
+            snprintf(why, sizeof(why), "%.200s (for %.60s) cannot be read: the game's sound plays", c->sounds[i].file,
+                     c->sounds[i].game);
+            note(registry.mods[c->mod].id, c->key, 0, why, NULL);
+        }
+    }
     if (c->own_skeleton && c->fallback == NULL) {
         note(registry.mods[c->mod].id, c->key, 0,
              "skeleton = own without [actions] fallback: an animation with no clip shows its rest pose", NULL);
@@ -164,15 +174,74 @@ static int files_there(const KhdaysCharacter *c)
     return 1;
 }
 
-/* Its folder ba/ch/<code>/: every file of its base's folder, the mod's data/<file> when there, else a copy of
- * the base's bytes (its own place in the ROM: what is loaded from it is known as the character's). */
+/* Its combo files with its [moveset] (moveset.h), packed as the game's: NULL when it changes nothing there, or
+ * when they cannot be made (told: its base's moves play). */
+typedef struct Moveset {
+    unsigned char *ci, *cm;
+    size_t ci_size, cm_size;
+} Moveset;
+
+/* A file of its base's folder, unpacked; NULL when it cannot be. */
+static unsigned char *base_file(const KhdaysCharacter *c, const char *name, size_t *size)
+{
+    char path[64];
+    u32 offset, bytes;
+    unsigned char *packed, *raw = NULL;
+    snprintf(path, sizeof(path), "ba/ch/%s/%s", khdays_character_base_code(c->base), name);
+    if (!khdays_rom_find(path, &offset, &bytes) || (packed = malloc(bytes > 0 ? bytes : 1)) == NULL) {
+        return NULL;
+    }
+    khdays_rom_read(offset, packed, bytes);
+    if (!khdays_characters_unpack(packed, bytes, &raw, size)) {
+        raw = NULL;
+    }
+    free(packed);
+    return raw;
+}
+
+static void moveset_files(const KhdaysCharacter *c, Moveset *m)
+{
+    char why[300] = "", note_text[340];
+    size_t ci_size = 0, cm_size = 0, combos_size = 0;
+    unsigned char *ci, *cm, *combos = NULL;
+    memset(m, 0, sizeof(*m));
+    if (!khdays_moveset_wanted(c)) {
+        return;
+    }
+    ci = base_file(c, "ci.b.z", &ci_size);
+    cm = base_file(c, "cm.b.z", &cm_size);
+    if (ci == NULL || cm == NULL) {
+        snprintf(why, sizeof(why), "its base's combo files (ci.b.z, cm.b.z) cannot be read");
+    } else if (khdays_moveset_attacks(c, cm, cm_size, why, sizeof(why)) &&
+               khdays_moveset_combos(c, ci, ci_size, cm, cm_size, &combos, &combos_size, why, sizeof(why)) &&
+               (!khdays_characters_pack(combos, combos_size, &m->ci, &m->ci_size) ||
+                (c->attack_count > 0 && !khdays_characters_pack(cm, cm_size, &m->cm, &m->cm_size)))) {
+        snprintf(why, sizeof(why), "out of memory");
+    }
+    if (why[0] != '\0') {
+        snprintf(note_text, sizeof(note_text), "[moveset] %s: its base's moves play", why);
+        note(registry.mods[c->mod].id, c->key, 0, note_text, NULL);
+        free(m->ci);
+        free(m->cm);
+        memset(m, 0, sizeof(*m));
+    }
+    free(ci);
+    free(cm);
+    free(combos);
+}
+
+/* Its folder ba/ch/<code>/: every file of its base's folder, the mod's data/<file> when there, else its
+ * [moveset]'s combo files, else a copy of the base's bytes (its own place in the ROM: what is loaded from it is
+ * known as the character's). */
 static int serve_folder(const KhdaysCharacter *c)
 {
     char base[24], own[24], path[256], target[256], disk[1024];
+    Moveset moveset;
     snprintf(base, sizeof(base), "ba/ch/%s/", khdays_character_base_code(c->base));
     snprintf(own, sizeof(own), "ba/ch/c%02x/", c->number);
     const size_t base_length = strlen(base);
     int served = 0;
+    moveset_files(c, &moveset);
     for (int id = 0; id < khdays_rom_file_count(); ++id) {
         u32 offset, bytes;
         if (!khdays_rom_file_info(id, path, (int)sizeof(path), &offset, &bytes) ||
@@ -184,7 +253,20 @@ static int serve_folder(const KhdaysCharacter *c)
         snprintf(target, sizeof(target), "%s%s", own, rest);
         snprintf(relative, sizeof(relative), "data/%s", rest);
         if (khdays_characters_file(c, relative, disk, sizeof(disk)) && khdays_folders_is_file(disk)) {
+            if ((moveset.ci != NULL && strcmp(rest, "ci.b.z") == 0) ||
+                (moveset.cm != NULL && strcmp(rest, "cm.b.z") == 0)) {
+                note(registry.mods[c->mod].id, c->key, 0, "[moveset] left out where its mod's data/ has the file",
+                     NULL);
+            }
             served += khdays_rom_add_file(target, disk);
+            continue;
+        }
+        if (moveset.ci != NULL && strcmp(rest, "ci.b.z") == 0) {
+            served += khdays_rom_add_bytes(target, moveset.ci, (unsigned)moveset.ci_size);
+            continue;
+        }
+        if (moveset.cm != NULL && strcmp(rest, "cm.b.z") == 0) {
+            served += khdays_rom_add_bytes(target, moveset.cm, (unsigned)moveset.cm_size);
             continue;
         }
         unsigned char *data = malloc(bytes > 0 ? bytes : 1);
@@ -195,6 +277,8 @@ static int serve_folder(const KhdaysCharacter *c)
         served += khdays_rom_add_bytes(target, data, bytes);
         free(data);
     }
+    free(moveset.ci);
+    free(moveset.cm);
     return served;
 }
 
@@ -319,6 +403,60 @@ int khdays_characters_of(int slot, int kind)
         }
     }
     return c->number;
+}
+
+/* The new character whose actor the game starts sounds for, NULL none. */
+static const KhdaysCharacter *speaker;
+
+void khdays_characters_speaker(int seat, int kind)
+{
+    const int n = seat >= 0 && kind >= 0 ? khdays_characters_of(seat, kind) : kind;
+    speaker = n != kind ? khdays_characters_numbered(n) : NULL;
+}
+
+/* A character's sound file: its path, and the name the traces give it ("<identity>: <file>"). */
+static int sound_path(const KhdaysCharacter *c, const char *file, char *path, int size, char *name, int name_size)
+{
+    snprintf(name, (size_t)name_size, "%s: %s", c->identity, file);
+    return khdays_characters_file(c, file, path, size);
+}
+
+int khdays_characters_speaker_sound(const char *game, char *path, int size, char *name, int name_size)
+{
+    const KhdaysCharacterSound *s = khdays_characters_sound(speaker, game);
+    if (s == NULL) {
+        return 0;
+    }
+    if (tracing) {
+        khdays_log("characters: %s's %s: %s", speaker->identity, game, s->file != NULL ? s->file : "none");
+    }
+    return s->file == NULL ? -1 : sound_path(speaker, s->file, path, size, name, name_size) ? 1 : 0;
+}
+
+int khdays_characters_have_sounds(void)
+{
+    for (int i = 0; i < numbered_count; ++i) {
+        if (numbered[i] != NULL && numbered[i]->sound_count > 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int khdays_characters_sound_file(int index, char *path, int size, char *name, int name_size)
+{
+    for (int i = 0; i < numbered_count; ++i) {
+        const KhdaysCharacter *c = numbered[i];
+        for (int s = 0; c != NULL && s < c->sound_count; ++s) {
+            if (c->sounds[s].file != NULL && index-- == 0) {
+                if (!sound_path(c, c->sounds[s].file, path, size, name, name_size)) {
+                    path[0] = '\0';
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
 }
 
 /* The select's place of each game character by its data folder's number (Ov006_MenuEntryToSlot's inverse). */

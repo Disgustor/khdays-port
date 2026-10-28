@@ -320,6 +320,16 @@ Taken up (for the record of what the old names were):
   - `Ov008_Menu_InitSceneObject`'s `*param_2` ("sceneId") is the camp's character (member 0's): its model
     pack, camera turn and texts by it; `data_ov008_0208e9c4`'s 0x34-byte records by character (the folder
     code, then the weapon nodes' names `Ov008_Menu_BindScenePanels` looks up).
+  - `Ov022_PlayEntityVoice(pActor, nKind, nRequest)`: `nKind` is the sequence archive and `nRequest` its entry
+    (`Slot_Spawn`'s two), and its `Actor.nState` (+0xc) is the actor's character (`nCharacter`: the switch's
+    0, 5, 0xb, 0xe, 0x10, 0x11 are Roxas, Sora, Riku, Xion, Mickey, Donald), as `Ov022_SpawnVoiceCue`'s
+    `nModelId` and `Ov022_BuildActorSlot`'s `nKind` name it; its unnamed +9 is the actor's seat (`nId`).
+  - `Ov022_RunContactMode0`'s `ScaledFanSlot.nFace` (+0x00) is the hit's damage factor (fx32, given to
+    `Ov022_ComputeStrengthDamage`), not a face; with `Ov022_UnpackChannelGrid`'s `Channel` it is `nA`, whose
+    `nB`/`nC` are the first and last frame, `nD`/`nE` the push out and up, and the mode-0 tail's `nA`-`nC` the
+    hit's place, `nD` its radius, `nE` its spread's cosine (RUNTIME_MAP section 30, "Its attacks").
+  - `Ov022_BuildNodeGraph`'s graphs are a keyblade's combos (graph 0 the ground one, 1 the air one): `nValue`
+    an attack's number in `cm.b`, `pLeft` the next attack, the pools the chain, its finisher and the branches.
 
 ### 1.5 What agrees with the ROM only in the DS's frame or names
 

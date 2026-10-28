@@ -2500,6 +2500,25 @@ HOOKS["main@0202b914"] = [
         "    }\n",
     )
 ]
+# ... its voice: the sounds an actor starts are its seat's (the actor's +9, its character at +0xc), so that a new
+# character's [sounds] replace the base's only for its own actor (runtime/sound/sound_mods.c)
+_SPEAKER = "extern void khdays_characters_speaker(int seat, int kind);\n"
+HOOKS["ov022@020a4490"] = [
+    (  # Ov022_PlayEntityVoice: an actor's cues and voices
+        "        nRet = Slot_Spawn(nFirst, nSecond, &pActor->vecPos, nFlags);\n",
+        "        { " + _SPEAKER + "        khdays_characters_speaker(((u8 *)pActor)[9], pActor->nState);\n"
+        "        nRet = Slot_Spawn(nFirst, nSecond, &pActor->vecPos, nFlags);\n"
+        "        khdays_characters_speaker(-1, -1); }\n",
+    )
+]
+HOOKS["ov022@020a48c8"] = [
+    (  # Ov022_SpawnVoiceCue: the cue of an actor's action
+        "        Slot_Spawn(nHandlerId, nCue, pPos, nFlags);\n",
+        "        { " + _SPEAKER + "        khdays_characters_speaker(pActor->nId, pActor->nModelId);\n"
+        "        Slot_Spawn(nHandlerId, nCue, pPos, nFlags);\n"
+        "        khdays_characters_speaker(-1, -1); }\n",
+    )
+]
 
 
 # The routines whose drawing the port takes over: (function, part, the port's function, kind).

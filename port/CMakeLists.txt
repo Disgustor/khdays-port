@@ -424,6 +424,8 @@ add_executable(khdays-native
     runtime/missions/missions.c        # ... and all of it in the game
     runtime/characters/registry.c      # the mods' characters: read and numbered,
     runtime/characters/characters.c    # ... their folders served and their numbers answered in the game
+    runtime/characters/moveset.c       # ... their [moveset] in their combo files
+    runtime/characters/packed.cpp      # ... packed as the game's
     runtime/missions/build.cpp         # ... a mission built from a mod's description, by khdays-studio's builder:
     ../studio/core/missions/mission_build.cpp
     ../studio/core/missions/missions.cpp
@@ -620,8 +622,9 @@ if(KHDAYS_DECOMPRESSED)
     list(GET KHDAYS_DECOMPRESSED 0 KHDAYS_DECOMPRESSED_FIRST)
 endif()
 add_test(NAME khdays-missions COMMAND khdays-missions-test "${KHDAYS_DECOMPRESSED_FIRST}")
-# The mods' characters (runtime/characters/): descriptions, refusals, numbers.
-add_executable(khdays-characters-test tests/characters_test.c runtime/characters/registry.c)
+# The mods' characters (runtime/characters/): descriptions, refusals, numbers, movesets.
+add_executable(khdays-characters-test tests/characters_test.c runtime/characters/registry.c
+    runtime/characters/moveset.c)
 target_compile_options(khdays-characters-test PRIVATE /W4 /std:c17)
 add_test(NAME khdays-characters COMMAND khdays-characters-test)
 # A replaced room's own animation (runtime/mods/room_animation.cpp): keys, loops, scrolls, frames.

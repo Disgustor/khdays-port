@@ -53,6 +53,20 @@ int khdays_characters_file(const KhdaysCharacter *c, const char *relative, char 
  * for any other. */
 const KhdaysCharacter *khdays_characters_of_model(const char *name);
 
+/* The game starts the sounds of seat `seat`'s actor, which plays as `kind` (Ov022_PlayEntityVoice's join), until
+ * it is called again with -1. */
+void khdays_characters_speaker(int seat, int kind);
+
+/* For the sounds (runtime/sound/sound_mods.c): what the new character whose actor starts the game's sound `game`
+ * now makes of it -- 0 nothing (the game's plays, or a sound mod's), 1 its own file (`path`, `name` what the
+ * traces call it), -1 silence. */
+int khdays_characters_speaker_sound(const char *game, char *path, int size, char *name, int name_size);
+
+/* For the sounds: whether any character has [sounds]; its files one by one (`index` from 0, 0 past the last; an
+ * empty `path` for one that cannot be named), as khdays_characters_speaker_sound gives them. */
+int khdays_characters_have_sounds(void);
+int khdays_characters_sound_file(int index, char *path, int size, char *name, int name_size);
+
 /* For the models (runtime/mods/models.cpp): the model file drawn for the game model `name` ("ba/ch/c16/def.p.z/
  * mdl/roxas_b"), a model of a character's own folder, into `path`; 0 for any other. */
 int khdays_characters_model(const char *name, char *path, int size);

@@ -91,6 +91,56 @@ b_ro_B009 = clips/200.fbx root keep         # the combo's first hit, its own for
 - Clips are drawn at every displayed frame between two of the game's (the port's 3D smoothing): the game's logic
   keeps its own pace.
 
+## Its voice (`[sounds]`)
+
+The game starts its base's sounds for the character (its attacks' shouts, its hurt and Limit voices); each one can
+be given a file of the character's own, or silence, and only for the character: the base, played by anyone else in
+the same room, keeps its voice.
+
+```ini
+[sounds]
+seqarc/PLY_ROX/vo_rs02at07 = voices/attack1.wav   # one of Roxas's shouts
+seqarc/PLY_ROX/vo_* = none                         # his other voices: not heard
+```
+
+- `<the base's sound> = <file>` (`.wav`, `.flac` or `.ogg`, decoded when the game starts) or `none`. A name ending in
+  `*` is every sound it begins; a sound's own line wins over those, and the longest of those over the others.
+- The names are a sound mod's (SOUND.md, "Mods' sounds"): `seqarc/<archive>/<sound>`. Roxas's voices are in
+  `PLY_ROX`; his swings (`WEP_ROX26/...`) and steps are effects, not his voice, but can be given files the same
+  way. With the session log on, it names each sound as it starts (`sound: seqarc/PLY_ROX/vo_rs02at07 starts on
+  player 6`); `KHDAYS_TRACE_CHARACTERS=1` also names the character's line chosen for it.
+- What is the character's: the sounds the game starts for its actor (`Ov022_PlayEntityVoice`,
+  `Ov022_SpawnVoiceCue`). A file that cannot be read is told; the base's sound plays in its place.
+
+## Its moveset (`[moveset]`)
+
+The character fights with its base's combat: its combos are made of its base's attacks, each with its hits'
+frames, reach and damage and the animation the game plays for it (which `[actions]` gives a clip). `[moveset]`
+chains those attacks its own way and changes them; the port writes the result into the character's own copies of
+its base's combo files (`ci.b.z`, `cm.b.z`) when the game starts, and the game's own combat runs them.
+
+```ini
+[moveset]
+ground = 0 1 10                      # the ground combo: these attacks in order, then again
+ground finisher = 2                  # and its finisher
+air = 3 4
+air finisher = 5
+attack 1 = damage 1.5 reach 1.2      # this attack's hits: half again the damage, a fifth more reach
+attack 10 = push 2                   # knocked twice as far
+```
+
+- `ground` / `air` -- the attacks' numbers (their records in the base's `cm.b.z`) in order. They replace every
+  keyblade's combo of the base's (the game gives each keyblade its own), with no branches; the finisher is each
+  keyblade's own unless `ground finisher` / `air finisher` names one.
+- `attack <number> = [damage <times>] [reach <times>] [push <times>]` -- each of that attack's hits, times the
+  base's: its damage; its radius and how far out it is (not its height); how far it knocks out and up. Only the
+  attacks whose hits sweep (most of the combos'; RUNTIME_MAP section 30) can be changed.
+- Roxas's first keyblade's combo is `0 1`, finisher `2`; in the air `3 4`, finisher `5`; the others' attacks are
+  numbered by keyblade (1000s for the second, 2000s for the third, ...). Any of the base's attacks can be used:
+  a keyblade's two combos may hold at most 64 attacks and 16 of their animations (the game's tables).
+- A moveset that names an attack its base does not have, or passes those tables, is told in the mods' log and left
+  out: the base's moves play. A mod's own `data/ci.b.z` or `data/cm.b.z` wins over it (told).
+
 ## Limits
 
 The select keeps a place's character in a signed byte: the mods' characters take the numbers 0x16-0x7f, 106 at
@@ -101,5 +151,5 @@ character loads without the mod, its base standing in.
 ## Not yet
 
 - The game's own select (two screens, without the select's layout of the HD pieces) does not list them.
-- Their own movesets, Limits and voices, the studio's editor (spec 034's later phases); the field's portrait
-  and the results' model are still the base's.
+- Attacks of their own (new kinds of moves, not the base's), their Limits, the studio's editor (spec 034's later
+  phases); the field's portrait and the results' model are still the base's.

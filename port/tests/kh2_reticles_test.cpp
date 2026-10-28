@@ -1,4 +1,5 @@
 // Selection states, GPU-only images, retained lists, and exact native fallback boundaries.
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_reticles.h"
 #include "../ui/kh2_hp_config.h"
 #include "../host/render/kh2_sequence_asset.h"
@@ -382,6 +383,22 @@ int main(int argc, char **argv)
             configs();
             playback();
             anchors();
+        }
+        if (!missing && !legacy && !partial) {
+            int preferences[KHDAYS_OPT_COUNT];
+            khdays_hud_settings_default(preferences);
+            preferences[KHDAYS_OPT_RETICLES] = 0;
+            khdays_hud_settings_publish(preferences);
+            begin();
+            for (int kind = 0; kind < 5; ++kind)
+                expect(!mark(kind), "disabled reticle suppressed its native fallback");
+            finish();
+            expect(polygons.empty(), "live reticle off retained replacement polygons");
+            preferences[KHDAYS_OPT_RETICLES] = 1;
+            khdays_hud_settings_publish(preferences);
+            begin();
+            expect(mark(optional ? 3 : 0), "reticle could not be enabled without a reload");
+            finish();
         }
         std::filesystem::remove(settings);
         std::cout << "KH2 reticle states, world anchors, retained GPU images and native fallback passed\n";

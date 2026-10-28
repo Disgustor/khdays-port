@@ -76,6 +76,8 @@ class MinimapAtlas(unittest.TestCase):
                 patch.object(icons.ds, "palette", return_value=(palette, 16)),
             ):
                 config = icons.make(root / "data", output)
+                self.assertTrue(config["kh2map"])
+                self.assertEqual(config["map_icon_scale"], 1)
                 with Image.open(output / "minimap.png") as sheet:
                     self.assertEqual(sheet.size, (256, 128))
                     for player in range(4):

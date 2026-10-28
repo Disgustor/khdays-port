@@ -1,5 +1,6 @@
 // Exercise the generated native snapshot code, including nested snapshots and live HUD updates.
 #include "../ui/hud_options.h"
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_hp_config.h"
 extern "C" {
 #include "../runtime/core/window.h"
@@ -125,12 +126,15 @@ int khdays_ui_information_configured(void)
     return configured;
 }
 void khdays_log(const char *, ...) {}
+void khdays_ui_changed(void) {}
+void khdays_ui_text_settings_changed(void) {}
 }
 namespace khdays::ui::kh2 {
 HudPresentationConfig load_hud_presentation_config(const std::filesystem::path &)
 {
     HudPresentationConfig config;
     config.keep_hud_during_information = keep;
+    config.align_hud_to_edges = keep;
     return config;
 }
 } // namespace khdays::ui::kh2
@@ -196,6 +200,30 @@ int main(int argc, char **)
         Ov002_SetPanelMode(0);
         require(word(bg3_scroll) == (keep ? 77u : 0x180000u), "INFORMATION exit displaced HUD");
         require(word(bg1_scroll) == (keep ? 0u : 0x180000u), "INFORMATION exit displaced HUD text");
+        int preferences[KHDAYS_OPT_COUNT];
+        khdays_hud_settings_default(preferences);
+        word(panel + 0x18c) = 0;
+        require(khdays_ui_information_policy() == 3, "initial INFORMATION preferences");
+        word(panel + 0x18c) = 4;
+        require(khdays_ui_information_policy() == 3, "INFORMATION preference latch");
+        preferences[KHDAYS_OPT_INFORMATION] = preferences[KHDAYS_OPT_INFORMATION_HUD] = 0;
+        khdays_hud_settings_publish(preferences);
+        require(khdays_ui_information_policy() == 3, "live preference interrupted native snapshot lifetime");
+        word(panel + 0x18c) = 0;
+        require(khdays_ui_information_policy() == 0, "INFORMATION preferences not applied after close");
+        preferences[KHDAYS_OPT_INFORMATION] = preferences[KHDAYS_OPT_INFORMATION_HUD] = 1;
+        khdays_hud_settings_publish(preferences);
+        require(khdays_ui_information_policy() == 3, "INFORMATION could not be re-enabled live");
+        khdays_hud_settings_default(preferences);
+        require(preferences[KHDAYS_OPT_UI_PADDING] == 0, "UI padding default must be off");
+        khdays_hud_settings_publish(preferences);
+        require(khdays_ui_hud_options() & KHDAYS_HUD_ALIGN_EDGES, "padding off must align screen edges live");
+        preferences[KHDAYS_OPT_UI_PADDING] = 1;
+        khdays_hud_settings_publish(preferences);
+        require(!(khdays_ui_hud_options() & KHDAYS_HUD_ALIGN_EDGES), "padding on must restore the original inset live");
+        preferences[KHDAYS_OPT_UI_PADDING] = 0;
+        khdays_hud_settings_publish(preferences);
+        require(khdays_ui_hud_options() & KHDAYS_HUD_ALIGN_EDGES, "padding must toggle repeatedly without reloading");
         std::free(khdays_window);
         std::cout << "native INFORMATION snapshots passed\n";
         return 0;

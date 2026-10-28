@@ -22,7 +22,11 @@ indices (157/158/159 for the verified PC resources). The output goes into
 Source archives and the game installation are read only; private development
 extractions and backups are not inputs to the installer.
 
-The JSON starts with `docs/examples/kh2-gauge.json`. On rebuilding an existing
+The JSON starts with `docs/examples/kh2-gauge.json`. The HD pack places the
+player and party gauges at Y offset -4. Obtained text uses Y offset 2 and scale
+1.25. Its presentation defaults enable HUD edge alignment, retained HUD/control
+during INFORMATION and the pause-menu target, subject to the saved menu settings.
+On rebuilding an existing
 pack, custom animation assignments, positions, scale and enable/disable settings
 are retained. Resource filenames, entry and source origin follow the freshly
 generated files. The converters and JSON template are included in the installer's
@@ -709,7 +713,7 @@ does not disable reticles. Restart after changing the file.
 
 The fields are `animation` and `end_animation`. A negative start animation keeps
 the Days draw; a negative exit animation removes the replacement immediately.
-The defaults use `fiel` and `US_zz0field_2dd0.png` at scale 0.65. PNG and supported
+The HD pack defaults use `fiel` and `US_zz0field_2dd0.png` at scale 0.35. PNG and supported
 DDS atlases use the existing loader. Offsets are DS screen dots relative to the
 projected target; source origin is in KH2 logical units. The original `fiel`
 coordinates are already centered. No binary recentering is needed. Its IMGD is
@@ -1254,3 +1258,46 @@ that callback installed. The port instead suppresses the write inside its target
 Ov002_SetBgOfs_main001c, when the option is enabled. The native-code regression
 runs UpdatePanelScroll through that callback with an active tween and verifies
 that disabled settings still write the original scroll value.
+
+
+## Live Enhancements preferences
+
+The Enhancements menu stores HUD choices only in the usual settings.ini under
+[enhancements]. It never writes gauge.json, minimap.json or font metadata.
+Replacement switches default on and act as additional gates: disabled JSON entries,
+missing resources and invalid assets still retain their normal native fallback.
+Player/party HP includes HUD portraits, player-number labels and LIMIT text.
+Notification boxes groups Obtained, Backpack Full and Recon Breakthrough; LOCKED ON
+has its own switch. The KH2 minimap preference changes only single-screen map
+presentation; map textures and icon replacements remain independent.
+
+UI padding is saved as ui_padding and defaults to off. For an active HD
+presentation in single-screen mode, off removes the existing outer inset and on
+restores it. This menu choice takes precedence over presentation.align_hud_to_edges
+in memory without changing the JSON file. It applies immediately and leaves
+HUD size and dual-screen placement unchanged.
+
+Mission visibility and both nine-position anchors are saved menu preferences,
+taking precedence over their JSON counterparts in memory. Defaults are Always,
+Top left in gameplay and Bottom while paused. JSON scale and offsets still apply.
+The file stores visibility as 0 (Always) or 1 (Pause only), and anchors as 1..9 in
+row-major order from top-left through bottom-right.
+
+Preferences are published atomically and applied without restarting. Cached text
+is invalidated on a preference change, including an active obtained-item canvas.
+Resources remain cached across off/on changes. Notifications continue observing
+native requests while disabled so enabling a still-visible box works. Font
+character mappings remain bound while disabled so newly loaded fonts can later
+use HD replacements without reinitialization.
+
+The INFORMATION replacement and Allow HUD/control choices are latched for native
+upper-panel states 1..8. An already-open message completes its balanced map
+snapshot/scroll transition before adopting a changed preference. Lower-screen
+messages and other replacements switch when the game resumes. Pause, dialogue,
+cutscene and scripted control restrictions are preserved. Allow HUD/control also
+requires presentation.keep_hud_during_information and a valid INFORMATION asset.
+The pause-target preference likewise gates presentation.pause_mission_target.
+
+Regression coverage includes settings-file round trips, missing-setting defaults,
+menu rows and localized choices, live renderer gates, JSON precedence, retained
+map icons, font mapping/cache reuse and INFORMATION transition latching.

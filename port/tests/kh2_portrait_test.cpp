@@ -1,4 +1,5 @@
 // Synthetic assets exercise the live adapter, exact tile suppression, fallback, playback, and parent.
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_portrait.h"
 #include "../ui/kh2_portrait_hud.h"
 #include "../ui/kh2_hp_hud.h"
@@ -436,6 +437,22 @@ void party_runtime()
     paused = 0;
     collect_party(22, true);
     expect(uploads > uploads_before, "party CPU reference did not render");
+    int preferences[KHDAYS_OPT_COUNT];
+    khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_PARTY_HP] = 0;
+    khdays_hud_settings_publish(preferences);
+    khdays_ui_kh2_party_frame(23);
+    khdays_ui_kh2_party_reference(0);
+    khdays_ui_kh2_party_prepare();
+    KhdaysUiElement disabled_box{};
+    expect(!khdays_ui_kh2_party_ready(1) && !khdays_ui_kh2_party_box(1, &disabled_box),
+           "party HP toggle retained replacement");
+    collect(23);
+    expect(emitted.empty() && !masked[0] && !masked[1], "HUD portrait toggle retained drawing or suppression");
+    preferences[KHDAYS_OPT_PARTY_HP] = 1;
+    khdays_hud_settings_publish(preferences);
+    collect_party(24);
+    expect(khdays_ui_kh2_party_ready(1) && !emitted.empty(), "party HP required a reload to enable");
     present = 0;
     khdays_ui_kh2_party_frame(23);
     khdays_ui_kh2_party_reference(0);

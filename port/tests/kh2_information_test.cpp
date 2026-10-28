@@ -1,5 +1,6 @@
 // Synthetic information timelines, native/HD glyph planes, cached uploads and fallback.
 #include "../ui/kh2_information.h"
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_hp_config.h"
 #include "../host/render/kh2_sequence_asset.h"
 #include "khdays/assets/kh2_bar.h"
@@ -458,6 +459,10 @@ const char *khdays_language_code(int)
 }
 void khdays_log(const char *, ...) {}
 void khdays_ui_changed(void) {}
+unsigned khdays_ui_information_policy(void)
+{
+    return khdays_hud_setting(KHDAYS_OPT_INFORMATION) ? 3u : 0u;
+}
 void khdays_situation_take(KhdaysSituationInputs *out, unsigned)
 {
     *out = situation;
@@ -563,6 +568,16 @@ int main(int argc, char **argv)
             context_tests();
             pause_during_intro();
             marquee_end();
+            int preferences[KHDAYS_OPT_COUNT];
+            khdays_hud_settings_default(preferences);
+            preferences[KHDAYS_OPT_INFORMATION] = 0;
+            khdays_hud_settings_publish(preferences);
+            step();
+            expect(!khdays_ui_information_wants() && !khdays_ui_information_configured(), "information off gate");
+            preferences[KHDAYS_OPT_INFORMATION] = 1;
+            khdays_hud_settings_publish(preferences);
+            step();
+            expect(khdays_ui_information_configured(), "information could not be re-enabled live");
             loop_clip->restart = ~0u;
             khdays_ui_information_reset();
             const unsigned short broken[]{'x', 0};

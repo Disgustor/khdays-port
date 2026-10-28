@@ -1,4 +1,6 @@
 // gaug 0 -> 1, independent 0 -> 2 reveal, and 3 on closing; Days owns the message and glyphs.
+#include "../host/app/hud_settings.h"
+#include "hud_options.h"
 #include "kh2_information.h"
 #include "kh2_hp_config.h"
 #include "../gfx/kh2_sequence.h"
@@ -376,7 +378,8 @@ extern "C" void khdays_ui_information_hold(int value, int leaving)
 extern "C" void khdays_ui_information_begin(void)
 {
     load();
-    available = asset && khdays_textures_hd() && (khdays_host_frame_wants() & (KHDAYS_WANT_2D | KHDAYS_WANT_3D));
+    available = (khdays_ui_information_policy() & 1u) && asset && khdays_textures_hd() &&
+                (khdays_host_frame_wants() & (KHDAYS_WANT_2D | KHDAYS_WANT_3D));
     enabled = available && context_allowed;
     const bool single = (khdays_host_graphics_flags() & KHDAYS_HOST_ONE_SCREEN) != 0;
     if (mode_known && single_mode != single && messages[1].present && windows[1].started) {
@@ -408,6 +411,7 @@ extern "C" void khdays_ui_information_begin(void)
         s.coverage = 0;
         s.program = {};
         if (!enabled) {
+            s.active = s.started = s.closing = s.text_ready = false;
             s.previous = now;
             continue;
         }
@@ -446,7 +450,7 @@ extern "C" int khdays_ui_information_wants(void)
 extern "C" int khdays_ui_information_configured(void)
 {
     load();
-    return asset && khdays_textures_hd();
+    return (khdays_ui_information_policy() & 1u) && asset && khdays_textures_hd();
 }
 extern "C" int khdays_ui_information_active(int engine)
 {

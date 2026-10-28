@@ -1,4 +1,5 @@
 // Sprite-only minimap layer, drawn by the existing GPU quad renderer at the native layer's position.
+#include "../host/app/hud_settings.h"
 #include "minimap.h"
 #include "minimap_config.h"
 #include "kh2_portrait.h"
@@ -193,9 +194,10 @@ void push(std::string sprite, float x, float y, float angle = 0, float scale = 1
         float radius = std::hypot(std::max(std::abs(s.pivot_x), std::abs(s.draw_width - s.pivot_x)),
                                   std::max(std::abs(s.pivot_y), std::abs(s.draw_height - s.pivot_y))) *
                        s.scale * scale;
-        radius *= config.kh2map ? std::max(1.f, config.map_icon_scale) : 1;
+        radius *= (config.kh2map && khdays_hud_setting(KHDAYS_OPT_MINIMAP)) ? std::max(1.f, config.map_icon_scale) : 1;
         if (x + s.offset_x + radius <= 0 || x + s.offset_x - radius >= 120 ||
-            y + s.offset_y + radius <= (config.kh2map ? -8 : 0) || y + s.offset_y - radius >= (config.kh2map ? 88 : 80))
+            y + s.offset_y + radius <= ((config.kh2map && khdays_hud_setting(KHDAYS_OPT_MINIMAP)) ? -8 : 0) ||
+            y + s.offset_y - radius >= ((config.kh2map && khdays_hud_setting(KHDAYS_OPT_MINIMAP)) ? 88 : 80))
             return;
     }
     if (draws.size() >= KHDAYS_MINIMAP_BATCHES * KSI_MAX_QUADS) {
@@ -391,7 +393,7 @@ seq::SequenceQuad sprite_quad(const Draw &d, bool radar = false)
 }
 void radar(int resolution)
 {
-    if (!config.kh2map)
+    if (!config.kh2map || !khdays_hud_setting(KHDAYS_OPT_MINIMAP))
         return;
     if (mask_atlas < 0) {
         terrain_unavailable("radar mask is unavailable");

@@ -158,7 +158,7 @@ void tests()
         config.anchor = anchor;
         config.pause_anchor = 10 - anchor;
         for (int paused = 0; paused < 2; ++paused) {
-            test_context.pause_mode = context.pause_mode = paused;
+            test_context.pause_mode = context.pause_mode = static_cast<unsigned char>(paused);
             draw(st);
             const unsigned chosen = paused ? config.pause_anchor : anchor;
             const float ax = float((chosen - 1) % 3) * .5f, ay = float((chosen - 1) / 3) * .5f;
@@ -341,6 +341,30 @@ void tests()
     test_context.pause_mode = 0;
     test_paused = false;
     config.pause_only = false;
+    int preferences[KHDAYS_OPT_COUNT];
+    khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_MISSION] = 0;
+    khdays_hud_settings_publish(preferences);
+    step();
+    check(!owns && !program.words[KSI_CLEAR], "live panel off suppressed native artwork");
+    preferences[KHDAYS_OPT_MISSION] = 1;
+    preferences[KHDAYS_OPT_MISSION_VISIBILITY] = 1;
+    preferences[KHDAYS_OPT_MISSION_ANCHOR] = 3;
+    preferences[KHDAYS_OPT_MISSION_PAUSE_ANCHOR] = 8;
+    khdays_hud_settings_publish(preferences);
+    step();
+    check(owns && !program.words[KSI_CLEAR] && (khdays_ui_mission_panel_state() & 4), "live pause-only preference");
+    test_context.pause_mode = 1;
+    test_paused = true;
+    step();
+    check(program.words[KSI_PANEL_ANCHOR] == 8, "saved pause anchor did not override JSON");
+    preferences[KHDAYS_OPT_MISSION_VISIBILITY] = 0;
+    khdays_hud_settings_publish(preferences);
+    test_context.pause_mode = 0;
+    test_paused = false;
+    step();
+    check(program.words[KSI_PANEL_ANCHOR] == 3 && !(khdays_ui_mission_panel_state() & 4),
+          "live always/gameplay anchor");
     config.enabled = false;
     asset.reset();
     step();

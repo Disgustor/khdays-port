@@ -12,6 +12,9 @@ enum {
 };
 unsigned khdays_ui_hud_options(void);
 int khdays_ui_information_keep_hud(void);
+unsigned
+khdays_ui_information_policy(void); /* bit 0: replacement, bit 1: retain HUD; held through native transitions */
+void khdays_ui_hud_settings_frame(void);
 int khdays_ui_command_panel_open(void);
 void khdays_ui_information_push_maps(void);
 void khdays_ui_information_pop_maps(void);

@@ -242,6 +242,17 @@ void native_map()
     unsigned uploads = terrain_uploads;
     step();
     check(terrain_uploads == uploads, "unchanged terrain uploaded every frame");
+    int preferences[KHDAYS_OPT_COUNT];
+    khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_MINIMAP] = 0;
+    khdays_hud_settings_publish(preferences);
+    step();
+    check(!radar_program.words[KSI_CLEAR] && owns && programs[0].words[KSI_COUNT],
+          "KH2 map off removed icon replacement or retained the square map");
+    preferences[KHDAYS_OPT_MINIMAP] = 1;
+    khdays_hud_settings_publish(preferences);
+    step();
+    check(radar_program.words[KSI_CLEAR], "KH2 map could not be re-enabled live");
     test_hd_map = true;
     step();
     check(terrain_scale == 2 && images[terrain_image][0] == 0xff123456u && images[terrain_image][15] == 0xff123456u &&

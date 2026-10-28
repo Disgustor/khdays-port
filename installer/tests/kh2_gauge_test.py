@@ -193,6 +193,12 @@ class GaugeImport(unittest.TestCase):
                 self.assertFalse({"enemy", "reticles", "information", "obtained"} & party.keys())
                 self.assertEqual(config["obtained"]["animation"], 76)
                 self.assertEqual(config["obtained"]["scale"], 0.65)
+                self.assertEqual(config["offset_y"], -4)
+                self.assertEqual(party["offset_y"], -4)
+                self.assertEqual(config["obtained"]["text_offset_y"], 2)
+                self.assertEqual(config["obtained"]["text_scale"], 1.25)
+                self.assertEqual(config["reticles"]["scale"], 0.35)
+                self.assertTrue(all(config["presentation"].values()))
                 popup = struct.unpack_from("<H", old[4][76])[0]
                 self.assertEqual(struct.unpack_from("<4i", changed[3][popup], 16), (0, 6, 0, 8))
                 self.assertEqual(party["scale"], 0.65)
@@ -282,7 +288,11 @@ class GaugeImport(unittest.TestCase):
                 "enemy": {"offset_x": -4, "scale": 0.75, "fill": 43, "enabled": False},
                 "reticles": {"soft_lock": {"scale": 0.8, "offset_y": 6, "end_animation": -1}},
                 "information": {"clip_width": 280, "text_offset_x": 3, "scale": 0.65},
-                "presentation": {"align_hud_to_edges": True, "pause_mission_target": True},
+                "presentation": {
+                    "align_hud_to_edges": True,
+                    "pause_mission_target": True,
+                    "keep_hud_during_information": False,
+                },
             }
             (previous / "gauge.json").write_text(json.dumps(custom))
             (previous / "party.json").write_text(json.dumps({"offset_y": 9, "center_override": 156, "limit_bar": 140}))

@@ -2,7 +2,10 @@
 #include "hud_options.h"
 #include "kh2_hp_config.h"
 #include "kh2_information.h"
+#include "../host/app/hud_settings.h"
 extern "C" {
+#include "parts.h"
+#include "text.h"
 #include "../runtime/core/rom.h"
 #include "../runtime/core/window.h"
 #include "../host/screens/ui_text.h"
@@ -29,6 +32,34 @@ static unsigned ram_word(unsigned address)
     unsigned value;
     std::memcpy(&value, KHDAYS_W(address), sizeof(value));
     return value;
+}
+
+extern "C" unsigned khdays_ui_information_policy(void)
+{
+    static bool latched;
+    static unsigned policy;
+    const unsigned wanted = (khdays_hud_setting(KHDAYS_OPT_INFORMATION) ? 1u : 0u) |
+                            (khdays_hud_setting(KHDAYS_OPT_INFORMATION_HUD) ? 2u : 0u);
+    const unsigned panel = khdays_window ? ram_word(0x0207f614) : 0;
+    const unsigned state =
+        panel && khdays_game_ram(panel) && khdays_game_ram(panel + 0x18f) ? ram_word(panel + 0x18c) : 0;
+    if (state < 1 || state > 8)
+        latched = false;
+    if (!latched)
+        policy = wanted;
+    latched = state >= 1 && state <= 8;
+    return policy;
+}
+
+extern "C" void khdays_ui_hud_settings_frame(void)
+{
+    static unsigned previous;
+    const unsigned generation = khdays_hud_settings_generation();
+    if (generation != previous) {
+        previous = generation;
+        khdays_ui_text_settings_changed();
+        khdays_ui_changed();
+    }
 }
 
 extern "C" void khdays_ui_information_push_maps(void)
@@ -90,6 +121,7 @@ extern "C" unsigned khdays_ui_hud_options(void)
 {
     static bool tried = false;
     static unsigned options = 0;
+    static bool presentation_configured = false;
     if (!tried) {
         tried = true;
         try {
@@ -101,6 +133,7 @@ extern "C" unsigned khdays_ui_hud_options(void)
                 khdays_mods_find("layouts/gauge/en/gauge.json", found, sizeof(found))) {
                 const auto config = khdays::ui::kh2::load_hud_presentation_config(
                     std::filesystem::path(std::u8string(reinterpret_cast<const char8_t *>(found))));
+                presentation_configured = true;
                 options = (config.keep_hud_during_information ? KHDAYS_HUD_KEEP_INFORMATION : 0u) |
                           (config.align_hud_to_edges ? KHDAYS_HUD_ALIGN_EDGES : 0u) |
                           (config.pause_mission_target ? KHDAYS_HUD_PAUSE_TARGET : 0u);
@@ -109,7 +142,18 @@ extern "C" unsigned khdays_ui_hud_options(void)
             khdays_log("HUD presentation: %s; retaining default settings", e.what());
         }
     }
-    return khdays_textures_hd() ? options : 0;
+    unsigned live = khdays_textures_hd() ? options : 0;
+    const int padding = khdays_hud_setting(KHDAYS_OPT_UI_PADDING);
+    if (padding >= 0 && presentation_configured && khdays_textures_hd()) {
+        live &= ~KHDAYS_HUD_ALIGN_EDGES;
+        if (!padding)
+            live |= KHDAYS_HUD_ALIGN_EDGES;
+    }
+    if (!khdays_hud_setting(KHDAYS_OPT_PAUSE_TARGET))
+        live &= ~KHDAYS_HUD_PAUSE_TARGET;
+    if (khdays_ui_information_policy() != 3)
+        live &= ~KHDAYS_HUD_KEEP_INFORMATION;
+    return live;
 }
 
 extern "C" int khdays_ui_information_keep_hud(void)

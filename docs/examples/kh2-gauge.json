@@ -5,7 +5,7 @@
   "texture": "US_zz0field_2dd1.png",
   "entry": "gaug",
   "offset_x": 0,
-  "offset_y": 0,
+  "offset_y": -4,
   "scale": 0.65,
   "geometry_scale": 1,
   "canvas_padding": 16,
@@ -84,7 +84,7 @@
     "texture": "US_zz0field_2dd1.png",
     "entry": "gaug",
     "offset_x": 0,
-    "offset_y": 0,
+    "offset_y": -4,
     "scale": 0.65,
     "geometry_scale": 0.5111111111111111,
     "canvas_padding": 16,
@@ -177,7 +177,7 @@
     "entry": "fiel",
     "offset_x": 0,
     "offset_y": 0,
-    "scale": 0.65,
+    "scale": 0.35,
     "source_origin_x": 0,
     "source_origin_y": 0,
     "frames_per_tick": 1,
@@ -244,8 +244,8 @@
     "source_origin_y": 0,
     "frames_per_tick": 1,
     "text_offset_x": 0,
-    "text_offset_y": 0,
-    "text_scale": 1,
+    "text_offset_y": 2,
+    "text_scale": 1.25,
     "loop": false
   },
   "enemy": {
@@ -444,8 +444,8 @@
     }
   },
   "presentation": {
-    "keep_hud_during_information": false,
-    "align_hud_to_edges": false,
-    "pause_mission_target": false
+    "keep_hud_during_information": true,
+    "align_hud_to_edges": true,
+    "pause_mission_target": true
   }
 }

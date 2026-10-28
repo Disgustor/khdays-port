@@ -1,4 +1,5 @@
 // The Days HUD adapter: one cached atlas per mapping and one GPU image per displayed slot.
+#include "../host/app/hud_settings.h"
 #include "kh2_portrait_hud.h"
 #include "kh2_portrait.h"
 #include "kh2_hp_hud.h"
@@ -220,7 +221,7 @@ extern "C" void khdays_ui_kh2_portrait_frame(unsigned frame)
         const bool was = slot.valid;
         int icon, hp, maximum, low;
         slot.valid = false;
-        if (khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
+        if (khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
             khdays_link_hud_portrait(index, &icon, &hp, &maximum, &low)) {
             auto &r = resource(icon, index == 0 ? 0 : 1);
             if (r.asset) {

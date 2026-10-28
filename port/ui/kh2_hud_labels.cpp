@@ -1,4 +1,5 @@
 // Move the original BG labels with their HUD slot, or draw an opt-in SEQD label.
+#include "../host/app/hud_settings.h"
 #include "kh2_hud_labels.h"
 #include "kh2_hp_config.h"
 #include "kh2_hp_hud.h"
@@ -260,7 +261,7 @@ extern "C" void khdays_ui_kh2_labels_reference(int cpu)
 }
 extern "C" void khdays_ui_kh2_labels_prepare(void)
 {
-    if (!loaded || khdays_ui_mode(KHDAYS_UI_HUD) != KHDAYS_UI_ON)
+    if (!khdays_hud_setting(KHDAYS_OPT_PARTY_HP) || !loaded || khdays_ui_mode(KHDAYS_UI_HUD) != KHDAYS_UI_ON)
         return;
     KhdaysBgLayer l;
     if (!khdays_bg_text_layer(0, 3, &l) || l.colors256)

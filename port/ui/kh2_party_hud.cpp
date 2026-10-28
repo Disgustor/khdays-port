@@ -1,4 +1,5 @@
 // The same native gauge evaluator, with small atlas art and independent party samples.
+#include "../host/app/hud_settings.h"
 #include "kh2_party_hud.h"
 #include "kh2_hp_config.h"
 #include "kh2_portrait.h"
@@ -125,7 +126,8 @@ extern "C" void khdays_ui_kh2_party_frame(unsigned frame)
         auto &s = slots[std::size_t(i)];
         const bool was = s.valid;
         int icon = 0, hp = 0, maximum = 0, low = 0;
-        s.valid = configs[std::size_t(i)].enabled && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
+        s.valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && configs[std::size_t(i)].enabled &&
+                  khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
                   khdays_link_hud_portrait(i + 1, &icon, &hp, &maximum, &low);
         if (s.valid) {
             if (!was || icon != s.icon || frame < previous_frame || maximum != int(s.sample.max_hp)) {

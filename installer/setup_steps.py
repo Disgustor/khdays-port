@@ -1010,6 +1010,9 @@ def build_hd(args: argparse.Namespace) -> dict[str, Any]:
                 line += ["--mod", HD_MOD]
             if tool in DATA_TOOLS:
                 line += ["--data", str(data)]
+            if tool == "heart_points.py":
+                # This tool runs below setup/hd-work, away from the installed exporter.
+                line += ["--native", str(install / "khdays-native.exe")]
             return line
 
         log = install / "setup" / HD_ERRORS

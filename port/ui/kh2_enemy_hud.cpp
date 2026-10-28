@@ -1,4 +1,5 @@
 // Read the native target gauge without changing its HP, selection, text, or tween state.
+#include "../host/app/hud_settings.h"
 #include "kh2_enemy_hud.h"
 #include "kh2_hp_config.h"
 #include "hud_gauge_tiles.h"
@@ -87,8 +88,8 @@ extern "C" void khdays_ui_kh2_enemy_frame(unsigned frame)
     load();
     const bool was = valid;
     valid = false;
-    if (asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_overlay_loaded(2) &&
-        khdays_link_scene(nullptr) == 2) {
+    if (khdays_hud_setting(KHDAYS_OPT_ENEMY_HP) && asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
+        khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2) {
         const unsigned context = word(context_address);
         if (khdays_game_ram(context) && khdays_game_ram(context + 0x188) &&
             ((word(context + 0x48) & 1u) || context == previous_context)) {

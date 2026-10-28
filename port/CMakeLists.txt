@@ -285,12 +285,16 @@ set_source_files_properties(sound/third_party_decoders.c PROPERTIES COMPILE_OPTI
 # The port's own graphics: the frame description made from what
 # the game asks for, and its composition -- shared with the GPU's shaders --
 # and the 3D geometry. Plain C with no SDL and no operating system calls.
+add_library(khdays-hud-settings STATIC host/app/hud_settings.c)
+target_link_libraries(khdays-hud-settings PUBLIC SDL3::SDL3)
+target_compile_options(khdays-hud-settings PRIVATE /W4 /std:c17)
 add_library(khdays-gfx STATIC
     gfx/compose_cpu.c
     gfx/describe.c
     gfx/g3d_geometry.c
     gfx/g3d_interp.c)
 target_compile_options(khdays-gfx PRIVATE /W4 /std:c17)
+target_link_libraries(khdays-gfx PUBLIC khdays-hud-settings)
 
 # KH2's native 2D sequences and their reference renderer; also used by the
 # independent viewer, without the game or its generated sources.
@@ -306,7 +310,7 @@ target_include_directories(khdays-kh2-sequence PRIVATE "${stb_SOURCE_DIR}")
 target_compile_options(khdays-kh2-sequence PRIVATE /W4 /std:c++20 /EHsc)
 
 add_library(khdays-kh2-gauge STATIC ui/kh2_hp_gauge.cpp ui/kh2_hp_config.cpp ui/kh2_enemy_gauge.cpp)
-target_link_libraries(khdays-kh2-gauge PUBLIC khdays-kh2-sequence)
+target_link_libraries(khdays-kh2-gauge PUBLIC khdays-kh2-sequence khdays-hud-settings)
 target_compile_options(khdays-kh2-gauge PRIVATE /W4 /std:c++20 /EHsc)
 
 add_library(khdays-kh2-portrait STATIC ui/kh2_portrait.cpp)
@@ -340,6 +344,7 @@ target_include_directories(khdays-information-maps-test PRIVATE ../assets/includ
 target_compile_options(khdays-information-maps-test PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:/W4;/EHsc>" "$<$<COMPILE_LANGUAGE:C>:/W0;/Zp4;/std:c17>")
 set_property(TARGET khdays-information-maps-test PROPERTY CXX_STANDARD 20)
+target_link_libraries(khdays-information-maps-test PRIVATE khdays-hud-settings)
 add_test(NAME khdays-information-maps COMMAND khdays-information-maps-test)
 add_test(NAME khdays-information-maps-disabled COMMAND khdays-information-maps-test --disabled)
 
@@ -449,7 +454,7 @@ add_library(khdays-host-input STATIC
     ../assets/src/font.cpp       # the port's NFTR decoder
     ../assets/src/message.cpp)   # its LZ decompression
 target_include_directories(khdays-host-input PRIVATE ../assets/include "${stb_SOURCE_DIR}" "${KHDAYS_MENU_FONT_DIR}")
-target_link_libraries(khdays-host-input PUBLIC SDL3::SDL3 khdays-host-imgui)
+target_link_libraries(khdays-host-input PUBLIC SDL3::SDL3 khdays-host-imgui khdays-hud-settings)
 target_compile_options(khdays-host-input PRIVATE
     $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
     $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)

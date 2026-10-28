@@ -15,7 +15,7 @@ python tools/hd/minimap_icons.py --data data/extracted/<hash> --output "mods/HD 
 
 No extracted sheet is committed. [Example settings](examples/minimap.json) use
 the exporter's default arrangement, with replacement disabled. The exported
-JSON enables the sheet; all enhancements initially remain off.
+JSON enables the sheet and KH2-style map; smooth rotation and character overrides remain off.
 
 The HD builder also copies KH2's remastered `radar.tm2/-0.dds` from `kh2_first`
 to `layouts/minimap/radar.dds`, preserving its alpha gradients and resolution.
@@ -23,7 +23,7 @@ An existing custom `radar.dds` is preserved on pack regeneration. For a standalo
 export, add `--kh2 <extracted-kh2_first-root>` to the command above. This asset
 supplies the KH2-style map mask. Enable `kh2map` to use it in single-screen mode.
 
-`kh2map` defaults to false. When enabled, the room's loaded Days tile image is
+The HD pack builder enables `kh2map` by default (an omitted field in another mod still defaults to false). When enabled, the room's loaded Days tile image is
 rendered from its resident VRAM tiles through KH2's 96x96 radar mask, independently of the bottom
 screen crop. Days' world-to-map conversion and scroll origin are unchanged.
 Existing indexed and RGBA HD tile replacements are sampled through the normal
@@ -41,8 +41,9 @@ coloured backing when the player approaches the edge of the image.
 
 `map_scale` defaults to 0.65 and follows the same HUD sizing convention as the
 other KH2 replacements. `map_offset_x` and `map_offset_y` move the entire map.
-`map_opacity` defaults to 0.75. `map_icon_scale` defaults to 2, giving an 8-pixel
-Days icon KH2's 16-unit display size before the common UI scale; the existing
+`map_opacity` defaults to 0.75. The HD pack builder sets `map_icon_scale` to 1,
+keeping an 8-pixel Days icon at 8 units before the common UI scale. An omitted
+field in another mod retains the renderer's fallback of 2. The existing
 16-pixel center emblem keeps its size. The DDS supplies the 8-pixel edge strips
 and mirrored corners around an 80x80 center. Source: `dk::RadarRect::createRect`
 (0x73460), `updateRect` (0x732D0), and `Radar::create`/`draw` (0x739C8/0x73FD8).

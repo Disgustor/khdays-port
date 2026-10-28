@@ -12,6 +12,25 @@ import font_fit  # noqa: E402
 
 
 class ScopeHooks(unittest.TestCase):
+    def test_reflow_hooks(self):
+        for rel in (
+            font_layout.DRAW,
+            font_layout.LINE,
+            font_layout.ALIGN,
+            "libs/nns/g2d/calls/Text_AlignAnchor.c",
+            font_fit.DRAW,
+        ):
+            source = prepare.transform((prepare.DECOMP / rel).read_text(encoding="utf-8"))
+            output = font_layout.patch(source, rel)
+            self.assertIn("int token = khdays_ui_text_layout_begin();", output)
+            self.assertIn("khdays_ui_text_layout_actual(token);", output)
+            self.assertIn("khdays_ui_text_layout_end(token);", output)
+            if rel == font_layout.DRAW:
+                self.assertLess(
+                    output.index("if (khdays_ui_text_layout_glyph("),
+                    output.index("khdays_ui_text_position(font, x, y);"),
+                )
+
     def test_speaker_name_only(self):
         rel = "src/overlays/scenes/ov002_field/Ov002_SceneApplyPanelRequest.c"
         text = prepare.transform((prepare.DECOMP / rel).read_text(encoding="utf-8"))

@@ -1,4 +1,5 @@
 // Ov022's screen-projected selection markers, drawn through the existing GPU 3D layer.
+#include "../host/app/hud_settings.h"
 #include "kh2_reticles.h"
 #include "kh2_hp_config.h"
 #include "../gfx/kh2_sequence.h"
@@ -142,7 +143,8 @@ void load()
 bool available()
 {
     // The reference DS renderer deliberately excludes mod polygons, as for mod models.
-    return khdays_textures_hd() && (khdays_host_frame_wants() & KHDAYS_WANT_3D) && khdays_link_scene(nullptr) == 2;
+    return khdays_hud_setting(KHDAYS_OPT_RETICLES) && khdays_textures_hd() &&
+           (khdays_host_frame_wants() & KHDAYS_WANT_3D) && khdays_link_scene(nullptr) == 2;
 }
 
 void draw(Marker &m)

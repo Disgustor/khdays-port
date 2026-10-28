@@ -74,6 +74,9 @@ def make_gauge(source: Path, output: Path, languages: list[str], settings: Path 
         config["information"].update(archive="zz0field.2dd", texture=texture, entry="gaug")
         config.update(limit_circle=limit[0], limit_bar=limit[1], limit_marker=marker)
         party = party_config(config, party_clips)
+        # The converter resets its origin; pack placement comes from the shared template.
+        for key in ("offset_x", "offset_y", "portrait_offset_x", "portrait_offset_y"):
+            party[key] = defaults["party"][key]
         party["slots"] = json.loads(json.dumps(defaults["party"]["slots"]))
         previous = settings / language / "gauge.json" if settings else None
         resources = {"archive", "texture", "entry", "source_origin_x", "source_origin_y"}

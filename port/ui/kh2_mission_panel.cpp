@@ -1,4 +1,5 @@
 // Mission panel: native progress/tallies, authored sequences, and Days NFTR/HD font glyphs.
+#include "../host/app/hud_settings.h"
 #include "kh2_mission_panel.h"
 #include "kh2_hp_config.h"
 #include "kh2_information.h"
@@ -213,11 +214,16 @@ void load()
         disable(e.what());
     }
 }
+bool pause_only()
+{
+    const int setting = khdays_hud_setting(KHDAYS_OPT_MISSION_VISIBILITY);
+    return setting < 0 ? config.pause_only : setting != 0;
+}
 bool enabled()
 {
     load();
-    return asset && khdays_textures_hd() && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
-           khdays_ui_mode(KHDAYS_UI_TEXT) != KHDAYS_UI_OFF;
+    return khdays_hud_setting(KHDAYS_OPT_MISSION) && asset && khdays_textures_hd() &&
+           khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_ui_mode(KHDAYS_UI_TEXT) != KHDAYS_UI_OFF;
 }
 void load_messages()
 {
@@ -719,7 +725,11 @@ void draw(const Status &s)
                       float(width),
                       float(height),
                       image};
-    const unsigned anchor = context.pause_mode ? config.pause_anchor : config.anchor;
+    const int preference =
+        khdays_hud_setting(context.pause_mode ? KHDAYS_OPT_MISSION_PAUSE_ANCHOR : KHDAYS_OPT_MISSION_ANCHOR);
+    const unsigned anchor = preference           ? unsigned(preference)
+                            : context.pause_mode ? config.pause_anchor
+                                                 : config.anchor;
     if (anchor) {
         const auto b = frame_bounds(resting);
         if (b.x1 <= b.x0 || b.y1 <= b.y0)
@@ -736,6 +746,12 @@ extern "C" void khdays_ui_mission_panel_frame(unsigned frame)
 {
     owns = false;
     program = {};
+    static unsigned settings_generation;
+    if (settings_generation != khdays_hud_settings_generation()) {
+        settings_generation = khdays_hud_settings_generation();
+        last_text.clear();
+        khdays_ui_changed();
+    }
     now = frame;
     khdays_situation_take(&context, frame);
     bool event = context.event_status >= 0 && !(context.event_status & 8) &&
@@ -764,7 +780,7 @@ extern "C" void khdays_ui_mission_panel_emit(void)
     }
     try {
         native = visible();
-        const bool hidden = config.pause_only && !context.pause_mode;
+        const bool hidden = pause_only() && !context.pause_mode;
         if (hidden) {
             active = closing = false;
             previous = now;
@@ -839,7 +855,7 @@ extern "C" void khdays_ui_mission_panel_commands(KhdaysSequenceImage *out)
 extern "C" unsigned khdays_ui_mission_panel_state(void)
 {
     return (owns ? 1u : 0u) | (owns && native ? 2u : 0u) |
-           (allowed && config.pause_only && !context.pause_mode && enabled() ? 4u : 0u);
+           (allowed && pause_only() && !context.pause_mode && enabled() ? 4u : 0u);
 }
 extern "C" int khdays_ui_mission_panel_backdrop(void)
 {

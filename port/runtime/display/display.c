@@ -1549,6 +1549,7 @@ void khdays_display_vblank(u32 frame)
         }
         khdays_g3d_set_widen(widen);
     }
+    khdays_ui_hud_settings_frame();
     khdays_ui_kh2_hp_frame(frame);
     khdays_ui_information_frame(frame);
     khdays_ui_obtained_frame(frame);

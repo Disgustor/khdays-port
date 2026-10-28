@@ -471,6 +471,15 @@ flips and supplementary placements. Its native DS samples stay transparent;
 if the RGBA image cannot be allocated, those cells remain with the ordinary
 renderer. Original-sheet matching and file provenance requirements are unchanged.
 
+The HD-font preference changes retained text layout as well as artwork. The
+adapted SDK draw entry points evaluate a second scalar layout pass with the
+opposite font mode; that pass never invokes a game blitter. Captured glyphs retain
+both sets of positions, bearings, sizes, alignment and fitting, plus native glyph
+samples. Switching the preference selects the retained layout and invalidates
+primary, supplementary and sequence-text images. INFORMATION text revisions
+include the font mode, so its cached texture updates without restarting the
+message. Character crawls measure both prefixes, preserving their reveal state.
+
 Unchanged frames reuse images without painting or uploading. Primary tiles skip
 glyph-color scans when neither their dirty bit nor palette changes. Palette
 hashes are shared per engine during submission. Supplementary updates render
@@ -478,7 +487,7 @@ each distinct source tile/palette/flip once, then copy repeated placements.
 Palette keys include extended-palette selectors and the displayed BG slot.
 Serial submission reuses a fixed scratch tile; canvas membership uses a bitset.
 Primary and supplementary DS graphics planes stay at native resolution; the
-compositor scales their indexed pixels. Only PNG artwork uses output-resolution
+compositor scales their indexed pixels. Captured font operations and PNG artwork use output-resolution
 RGBA images. Matching-size, unflipped RGBA tile copies avoid resampling.
 PNG mapping changes dirty only their affected tiles. The mapping cache takes
 four bytes per canvas tile (at most 64 KiB) and introduces no additional image

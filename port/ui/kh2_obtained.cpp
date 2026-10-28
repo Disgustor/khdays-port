@@ -1,4 +1,5 @@
 // Animated field notifications share GPU composition and active-track text anchors.
+#include "../host/app/hud_settings.h"
 #include "kh2_obtained.h"
 #include "kh2_hp_config.h"
 #include "kh2_information.h"
@@ -128,10 +129,14 @@ struct Notification {
             disable(e.what());
         }
     }
-    int enabled()
+    int configured()
     {
         load();
         return asset && khdays_textures_hd() && khdays_ui_mode(KHDAYS_UI_TEXT) == KHDAYS_UI_ON;
+    }
+    int enabled()
+    {
+        return khdays_hud_setting(kind == 3 ? KHDAYS_OPT_LOCKED_ON : KHDAYS_OPT_NOTIFICATIONS) && configured();
     }
     bool suppress(int bg, int x, int y)
     {
@@ -182,7 +187,7 @@ struct Notification {
     }
     void request(int announcement)
     {
-        if (!enabled())
+        if (!configured())
             return;
         if (!announcement)
             retain_native();
@@ -212,13 +217,20 @@ struct Notification {
         allowed = field && !context.movie && !context.tutorial && !event;
         // The existing native-panel reset hook advances this epoch across map/HUD recreation.
         const unsigned epoch = khdays_ui_information_epoch();
-        if (!field || !enabled() || frame < previous || context_epoch != epoch) {
+        if (!field || !configured() || frame < previous || context_epoch != epoch) {
             if (active || pending || started)
                 khdays_ui_changed();
             if (started || retiring)
                 native_cells = {};
             pending = active = started = native = false;
             retiring = false;
+            program = {};
+        }
+        if (!enabled()) {
+            pending = native;
+            if (started || retiring)
+                native_cells = {};
+            active = started = retiring = false;
             program = {};
         }
         // Hiding the HUD does not dismiss its native notification or repeat its request on return.
@@ -242,7 +254,7 @@ struct Notification {
             khdays_ui_changed();
             retiring = std::any_of(native_cells.begin(), native_cells.end(), [](const auto &c) { return c.valid; });
         }
-        if (active || pending)
+        if (enabled() && (active || pending))
             khdays_ui_changed();
     }
     void begin()
@@ -379,6 +391,10 @@ extern "C" int khdays_ui_obtained_enabled(void)
 {
     return notices[0].enabled();
 }
+extern "C" int khdays_ui_obtained_configured(void)
+{
+    return notices[0].configured();
+}
 extern "C" void khdays_ui_obtained_request(int a)
 {
     notices[0].request(a);
@@ -423,6 +439,10 @@ extern "C" void khdays_ui_notification_commands(KhdaysSequenceImage *out)
 extern "C" int khdays_ui_notification_enabled(int kind)
 {
     return valid_kind(kind) && notices[kind].enabled();
+}
+extern "C" int khdays_ui_notification_configured(int kind)
+{
+    return valid_kind(kind) && notices[kind].configured();
 }
 extern "C" void khdays_ui_notification_request(int kind, int present)
 {
@@ -471,7 +491,7 @@ extern "C" void khdays_ui_notification_layout(const void *request, int shown)
         return; // main BG3 in the field layout
     const int tag = word(0);
     int k = tag == 78 || tag == 93 ? 1 : tag == 72 ? 2 : tag == 60 || tag == 61 ? 3 : 0;
-    if (!k || !notices[k].enabled())
+    if (!k || !notices[k].configured())
         return;
     auto &n = notices[k];
     if (!shown) {

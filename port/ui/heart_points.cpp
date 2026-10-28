@@ -1,4 +1,5 @@
 // Ov002's counter: Days supplies values/events; replacement animation lives entirely in SEQD.
+#include "../host/app/hud_settings.h"
 #include "heart_points.h"
 #include "kh2_hp_config.h"
 #include "../gfx/kh2_sequence.h"
@@ -262,8 +263,8 @@ void submit()
 extern "C" void khdays_heart_begin(const void *owner)
 {
     load();
-    observing = asset && khdays_textures_hd() && (khdays_host_frame_wants() & KHDAYS_WANT_3D) &&
-                khdays_link_scene(nullptr) == 2;
+    observing = khdays_hud_setting(KHDAYS_OPT_HEART_POINTS) && asset && khdays_textures_hd() &&
+                (khdays_host_frame_wants() & KHDAYS_WANT_3D) && khdays_link_scene(nullptr) == 2;
     context = observing ? static_cast<const unsigned char *>(owner) : nullptr;
     if (!observing)
         return;

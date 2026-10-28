@@ -1,4 +1,5 @@
 // Synthetic runtime adapter checks: HP, pause, selective suppression, and the face over the gauge.
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_hp_hud.h"
 #include "../ui/kh2_hp_config.h"
 #include "../host/render/kh2_sequence_asset.h"
@@ -442,6 +443,17 @@ int main()
         khdays_ui_kh2_hp_commands(&commands);
         expect(commands.words[KSI_COUNT] + 1 == latched.words[KSI_COUNT], "native flags left a stale divider");
         expect(rgba_reads == 0 && uploads == 0, "divider introduced CPU pixel work");
+        int preferences[KHDAYS_OPT_COUNT];
+        khdays_hud_settings_default(preferences);
+        preferences[KHDAYS_OPT_PARTY_HP] = 0;
+        khdays_hud_settings_publish(preferences);
+        khdays_ui_kh2_hp_frame(219);
+        expect(!khdays_ui_kh2_hp_ready() && !khdays_ui_kh2_hp_compose(&face, nullptr),
+               "live HP off retained ownership");
+        preferences[KHDAYS_OPT_PARTY_HP] = 1;
+        khdays_hud_settings_publish(preferences);
+        khdays_ui_kh2_hp_frame(220);
+        expect(khdays_ui_kh2_hp_ready() && khdays_ui_kh2_hp_compose(&face, nullptr), "live HP on required a reload");
         parent_animation->flags &= ~2u;
         expect(!khdays_ui_kh2_hp_parent(0, &parent) && !khdays_ui_kh2_hp_ready(),
                "invalid animated parent escaped the native fallback");

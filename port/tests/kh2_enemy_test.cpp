@@ -1,4 +1,5 @@
 // Synthetic enemy clips and native RAM: capacity, rollover, selective replacement, and cached GPU commands.
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_enemy_gauge.h"
 #include "../ui/kh2_enemy_hud.h"
 #include "../ui/kh2_hp_config.h"
@@ -443,6 +444,22 @@ int main(int argc, char **argv)
             khdays_ui_kh2_enemy_reference(cpu);
             khdays_ui_kh2_enemy_emit();
             expect(emitted == 1 && suppressed.size() == 10, "moved enemy gauge escaped the old top-right bounds");
+            int preferences[KHDAYS_OPT_COUNT];
+            khdays_hud_settings_default(preferences);
+            preferences[KHDAYS_OPT_ENEMY_HP] = 0;
+            khdays_hud_settings_publish(preferences);
+            khdays_ui_kh2_enemy_frame(206);
+            emitted = 0;
+            suppressed.clear();
+            khdays_ui_kh2_enemy_reference(cpu);
+            khdays_ui_kh2_enemy_emit();
+            expect(emitted == 0 && suppressed.empty(), "live enemy off retained suppression");
+            preferences[KHDAYS_OPT_ENEMY_HP] = 1;
+            khdays_hud_settings_publish(preferences);
+            khdays_ui_kh2_enemy_frame(207);
+            khdays_ui_kh2_enemy_reference(cpu);
+            khdays_ui_kh2_enemy_emit();
+            expect(emitted == 1 && suppressed.size() == 10, "enemy gauge required a reload after enabling");
             enemy_cells = false;
             emitted = 0;
             suppressed.clear();

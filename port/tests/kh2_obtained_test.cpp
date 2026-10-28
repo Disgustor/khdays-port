@@ -1,5 +1,6 @@
 // Synthetic pickup playback: text follows the active track, including its fade and one-shot lifetime.
 #include "../ui/kh2_obtained.h"
+#include "../host/app/hud_settings.h"
 #include "../ui/kh2_hp_config.h"
 #include "../host/render/kh2_sequence_asset.h"
 #include "khdays/assets/kh2_bar.h"
@@ -137,6 +138,18 @@ void test()
     step();
     hd = false;
     expect(!khdays_ui_obtained_enabled() && !khdays_ui_obtained_owns(), "HD-disabled fallback was suppressed");
+    hd = true;
+    int preferences[KHDAYS_OPT_COUNT];
+    khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_NOTIFICATIONS] = 0;
+    khdays_hud_settings_publish(preferences);
+    khdays_ui_obtained_request(1);
+    step(false);
+    expect(!khdays_ui_obtained_owns() && !program.words[KSI_CLEAR], "live notification off hid native popup");
+    preferences[KHDAYS_OPT_NOTIFICATIONS] = 1;
+    khdays_hud_settings_publish(preferences);
+    step();
+    expect(khdays_ui_obtained_owns() && program.words[KSI_COUNT], "existing popup could not be enabled live");
 }
 void notifications()
 {
@@ -151,9 +164,22 @@ void notifications()
     request[6] = 3;
     std::vector<unsigned> ink(64 * scale * 16 * scale, 0xffffffffu);
     KhdaysSequenceImage result[3]{};
+    int preferences[KHDAYS_OPT_COUNT];
+    khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_NOTIFICATIONS] = 0;
+    khdays_hud_settings_publish(preferences);
+    request[0] = 78;
+    khdays_ui_notification_layout(request.data(), 1);
+    step(false);
+    expect(khdays_ui_notification_configured(1) && !khdays_ui_notification_enabled(1) &&
+               khdays_ui_notification_enabled(3) && !khdays_ui_notification_cell(0, 3, 12, 9),
+           "notification family toggle affected LOCKED ON or retained suppression");
+    preferences[KHDAYS_OPT_NOTIFICATIONS] = 1;
+    khdays_hud_settings_publish(preferences);
     for (int k = 1; k <= 3; ++k) {
         request[0] = short(k == 1 ? 78 : k == 2 ? 72 : 60);
-        khdays_ui_notification_layout(request.data(), 1);
+        if (k != 1)
+            khdays_ui_notification_layout(request.data(), 1);
         expect(khdays_ui_notification_cell(0, 3, 12, 9), "notice exposed its box before the text layer was restored");
         khdays_ui_obtained_begin();
         KhdaysUiElement box{};

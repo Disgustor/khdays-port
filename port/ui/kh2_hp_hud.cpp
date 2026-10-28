@@ -1,4 +1,5 @@
 // The Days adapter: live HP, the original gauge's tiles, and the KH2 image behind the face.
+#include "../host/app/hud_settings.h"
 #include "kh2_hp_hud.h"
 #include "kh2_hp_gauge.h"
 #include "kh2_hp_config.h"
@@ -149,8 +150,8 @@ extern "C" void khdays_ui_kh2_hp_frame(unsigned frame)
     load();
     int hp = 0, maximum = 0;
     const bool was = valid;
-    valid = asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON && khdays_overlay_loaded(2) &&
-            khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
+    valid = khdays_hud_setting(KHDAYS_OPT_PARTY_HP) && asset && khdays_ui_mode(KHDAYS_UI_HUD) == KHDAYS_UI_ON &&
+            khdays_overlay_loaded(2) && khdays_link_scene(nullptr) == 2 && khdays_game_ram(read_word(gauge_context)) &&
             khdays_link_player_hp(&hp, &maximum) && maximum > 0;
     if (!valid) {
         gauge_slot = -1;

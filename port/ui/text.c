@@ -2,6 +2,7 @@
  * character transfers into VRAM. The compositor draws both at the original logical size.
  * Original glyph samples never determine replacement coverage. See docs/HD_FONTS.md. */
 #include "text.h"
+#include "../host/app/hud_settings.h"
 #include "bg.h"
 #include "button_icons.h"
 #include "elements.h"
@@ -53,18 +54,27 @@ typedef struct DsFrame { /* TileTextRenderer_Init's Frame */
 
 /* --- The canvases ------------------------------------------------------------------ */
 
+typedef struct GlyphLayout {
+    double x, y, x_scale;
+    int w, h, paint_w, clip_l, clip_t, clip_r, clip_b;
+} GlyphLayout;
+
 typedef struct GlyphOp {
     int source_x, source_y, source_w, source_h; /* Native write footprint, independent of PNG geometry. */
     double x, y;                                /* Exact artwork position; native write bounds remain integer. */
     int w, h, cl, glyph;
     int paint_w;       /* Edited logical width clips artwork; ownership keeps the full cell. */
     double x_scale;    /* Zero retains the original geometry; fitting is an explicit run operation. */
-    int native_glyph;  /* resource stores a 16x16, 4-bpp snapshot from the original glyph blitter. */
+    int native_glyph;  /* This glyph deliberately keeps the original artwork. */
     int button, piece; /* the DS button the glyph draws (KHDAYS_BUTTON_*: its icon instead), which of its glyphs */
     int field;         /* the text tells the field's controls (khdays_button_icon) */
     /* The replacement artwork stays at x/y, but only this surviving rectangle
        is visible after partial clears. Coordinates are in DS pixels. */
     int clip_l, clip_t, clip_r, clip_b;
+    unsigned char native_pixels[256]; /* Original small glyph, retained across font preference changes. */
+    int native_saved;
+    GlyphLayout layouts[2];
+    int layout_mode;
     char resource[160];
 } GlyphOp;
 
@@ -165,6 +175,75 @@ static struct {
 } fit_run;
 static int fitting_native;
 
+/* The alternate pass runs only scalar SDK layout. It never calls a game's blitter. */
+typedef struct LayoutPlacement {
+    KhdaysRef owner, font;
+    unsigned ch;
+    double x, y, origin, left, factor, offset, width;
+} LayoutPlacement;
+static LayoutPlacement *layout_placements, *layout_pending;
+static int layout_depth, layout_probe, layout_count, layout_room, layout_cursor, layout_previous;
+
+int khdays_ui_text_layout_begin(void)
+{
+    if (layout_depth++)
+        return 0;
+    layout_count = layout_cursor = 0;
+    layout_pending = NULL;
+    layout_probe = 1;
+    layout_previous = khdays_hd_font_layout_override(!khdays_hud_setting(KHDAYS_OPT_FONT));
+    return 1;
+}
+void khdays_ui_text_layout_actual(int token)
+{
+    if (!token)
+        return;
+    khdays_hd_font_layout_override(layout_previous);
+    layout_probe = 0;
+    layout_cursor = 0;
+}
+void khdays_ui_text_layout_end(int token)
+{
+    if (layout_depth)
+        --layout_depth;
+    if (token) {
+        khdays_hd_font_layout_override(layout_previous);
+        layout_pending = NULL;
+        layout_probe = 0;
+    }
+}
+int khdays_ui_text_layout_glyph(const void *owner, const void *font, double x, double y, unsigned ch)
+{
+    if (layout_probe) {
+        if (layout_count == layout_room) {
+            const int room = layout_room ? layout_room * 2 : 128;
+            LayoutPlacement *grown = room <= 8192 ? realloc(layout_placements, (size_t)room * sizeof(*grown)) : NULL;
+            if (!grown)
+                return 1;
+            layout_placements = grown;
+            layout_room = room;
+        }
+        layout_placements[layout_count++] = (LayoutPlacement){KHDAYS_REF(owner),
+                                                              KHDAYS_REF(font),
+                                                              ch,
+                                                              x,
+                                                              y,
+                                                              fit_run.origin,
+                                                              fit_run.left,
+                                                              fit_run.font == KHDAYS_REF(font) ? fit_run.factor : 0,
+                                                              fit_run.offset,
+                                                              fit_run.width};
+        return 1;
+    }
+    layout_pending = NULL;
+    if (layout_depth && layout_cursor < layout_count) {
+        LayoutPlacement *p = &layout_placements[layout_cursor++];
+        if (p->owner == KHDAYS_REF(owner) && p->font == KHDAYS_REF(font) && p->ch == ch)
+            layout_pending = p;
+    }
+    return 0;
+}
+
 void khdays_ui_text_fit_begin(const void *font, double origin, double left, double factor, double offset)
 {
     fit_run.font = KHDAYS_REF(font);
@@ -184,21 +263,76 @@ void khdays_ui_text_fit_end(void)
     memset(&fit_run, 0, sizeof(fit_run));
 }
 
-static double fitted_x(double x)
-{
-    return fit_run.origin + (x - fit_run.origin - fit_run.left) * fit_run.factor + fit_run.offset;
-}
-
 typedef struct CrawlPen {
     KhdaysRef context, text;
     int index, next_x, y;
     double residual;
+    KhdaysRef font;
+    double origin_x, origin_y, positions[2][2];
 } CrawlPen;
 static CrawlPen crawl_pens[32];
 static CrawlPen *crawl_active;
 static unsigned int crawl_next;
 static int crawl_x;
 static double crawl_offset;
+static KhdaysRef crawl_font;
+static const char *font_path(KhdaysRef font);
+extern unsigned short NNS_G2dFontFindGlyphIndex(KhdaysRef font, unsigned ch);
+extern KhdaysRef NNS_G2dFontGetCharWidthsFromIndex(KhdaysRef font, unsigned glyph);
+
+void khdays_ui_text_crawl_font(const void *font)
+{
+    crawl_font = font ? KHDAYS_REF(font) : 0;
+}
+
+static void crawl_measure(CrawlPen *pen, int index, int hd, double *x, double *y)
+{
+    const int previous = khdays_hd_font_layout_override(hd);
+    const unsigned short *text = KHDAYS_W(pen->text);
+    const char *path = font_path(pen->font);
+    const KhdaysRef info = *(const unsigned *)KHDAYS_W(pen->font);
+    const KhdaysRef table = *(const unsigned *)((const unsigned char *)KHDAYS_W(info) + 8);
+    const int feed = ((const unsigned char *)KHDAYS_W(table))[1];
+    *x = pen->origin_x;
+    *y = pen->origin_y;
+    unsigned before = 0;
+    for (int i = 0; i <= index && i < 4096 && text[i]; ++i) {
+        const unsigned ch = text[i];
+        if (ch == 10) {
+            if (i == index)
+                break;
+            *x = 0;
+            *y += khdays_hd_font_metric_f(path, -1, KHDF_LINE_FEED, feed) + 3;
+            before = 0;
+            continue;
+        }
+        *x += khdays_hd_font_kerning_f(path, before, ch);
+        if (i == index)
+            break;
+        unsigned glyph = NNS_G2dFontFindGlyphIndex(pen->font, ch);
+        if (glyph == 0xffff)
+            glyph = *(const unsigned short *)((const unsigned char *)KHDAYS_W(info) + 2);
+        const signed char *metrics = KHDAYS_W(NNS_G2dFontGetCharWidthsFromIndex(pen->font, glyph));
+        *x += khdays_hd_font_metric_f(path, (int)glyph, KHDF_ADVANCE, metrics[2]);
+        before = ch;
+    }
+    khdays_hd_font_layout_override(previous);
+}
+
+double khdays_ui_text_layout_x(double x)
+{
+    if (!crawl_active || !crawl_active->font)
+        return x;
+    const int hd = layout_probe ? !khdays_hud_setting(KHDAYS_OPT_FONT) : khdays_hud_setting(KHDAYS_OPT_FONT);
+    return crawl_active->positions[hd != 0][0];
+}
+double khdays_ui_text_layout_y(double y)
+{
+    if (!crawl_active || !crawl_active->font)
+        return y;
+    const int hd = layout_probe ? !khdays_hud_setting(KHDAYS_OPT_FONT) : khdays_hud_setting(KHDAYS_OPT_FONT);
+    return crawl_active->positions[hd != 0][1];
+}
 
 int khdays_ui_text_round(double value)
 {
@@ -238,6 +372,15 @@ void khdays_ui_text_crawl_begin(const void *context, const void *text, int index
     }
     if (!index || pen->index + 1 != index || pen->next_x != x || pen->y != y)
         pen->residual = 0;
+    if (crawl_font) {
+        pen->font = crawl_font;
+        if (!index || pen->index < 0) {
+            pen->origin_x = x;
+            pen->origin_y = y;
+        }
+        for (int hd = 0; hd < 2; ++hd)
+            crawl_measure(pen, index, hd, &pen->positions[hd][0], &pen->positions[hd][1]);
+    }
     pen->index = index;
     pen->y = y;
     crawl_x = x;
@@ -249,7 +392,9 @@ int khdays_ui_text_crawl_advance(double advance)
 {
     if (!crawl_active)
         return khdays_ui_text_round(advance);
-    const double next = crawl_x + crawl_offset + advance;
+    const double next = crawl_active->font
+                            ? crawl_active->positions[khdays_hud_setting(KHDAYS_OPT_FONT) != 0][0] + advance
+                            : crawl_x + crawl_offset + advance;
     const int rounded = khdays_ui_text_round(next);
     crawl_active->next_x = rounded;
     crawl_active->residual = next - rounded;
@@ -282,6 +427,11 @@ static int hd_enabled(void)
         enabled = !(v && *v && strcmp(v, "0") != 0);
     }
     return enabled;
+}
+
+static int font_display_enabled(void)
+{
+    return hd_enabled() && khdays_hud_setting(KHDAYS_OPT_FONT);
 }
 
 static void say(const char *format, ...)
@@ -504,7 +654,7 @@ void khdays_ui_text_scope_pop(void)
 
 static int obtained_wants(unsigned int slot, int announcement, unsigned key, int notification)
 {
-    const int sequence = notification ? khdays_ui_notification_enabled(1) : khdays_ui_obtained_enabled();
+    const int sequence = notification ? khdays_ui_notification_configured(1) : khdays_ui_obtained_configured();
     if (!announcement || slot >= 24 || (!hd_enabled() && !sequence)) {
         obtained_reset();
         return 0;
@@ -627,12 +777,16 @@ static const char *selected_font_path(FontBinding *binding, KhdaysRef font)
     }
     if (strcmp(scope, binding->scope) != 0) {
         snprintf(binding->scope, sizeof(binding->scope), "%s", scope);
+        const int observing = khdays_hd_font_observe(1);
+        const int layout = khdays_hd_font_layout_override(1);
         binding->scoped =
             scope[0] && khdays_hd_font_select(binding->path, scope, binding->selected, sizeof(binding->selected));
         if (binding->scoped) {
             bind_charmap(binding->selected, KHDAYS_W(font));
             binding->scoped = khdays_hd_font_map_ready(binding->selected);
         }
+        khdays_hd_font_layout_override(layout);
+        khdays_hd_font_observe(observing);
         if (tracing() && scope[0])
             say("HD font scope %s: %s -> %s", scope, binding->path,
                 binding->scoped ? binding->selected : binding->path);
@@ -817,7 +971,7 @@ static int glyph_button(const void *font, int glyph, int *piece)
     return f->buttons[glyph] & 31;
 }
 
-static const char *bind_font_file(const void *font, const char *name, KhdaysRef file)
+static const char *bind_font_file_observed(const void *font, const char *name, KhdaysRef file)
 {
     size_t n = 0;
     char path[160];
@@ -871,6 +1025,16 @@ static const char *bind_font_file(const void *font, const char *name, KhdaysRef 
     if (tracing() && replacement)
         say("HD font %08x bound to %s", ref, path);
     return selected_font_path(&font_bindings[pos], ref);
+}
+
+static const char *bind_font_file(const void *font, const char *name, KhdaysRef file)
+{
+    const int observing = khdays_hd_font_observe(1);
+    const int layout = khdays_hd_font_layout_override(1);
+    const char *path = bind_font_file_observed(font, name, file);
+    khdays_hd_font_layout_override(layout);
+    khdays_hd_font_observe(observing);
+    return path;
 }
 
 static void bind_font(void *font, const char *name)
@@ -1062,7 +1226,73 @@ void khdays_ui_text_glyph_before(const void *canvas, const void *font, int x, in
     c->before_glyph = 1;
 }
 
-void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, int cl, const void *glyph)
+static GlyphLayout glyph_layout(const Canvas *c, const GlyphOp *op, const unsigned char *table,
+                                const unsigned char *widths, const char *path, double x, double y, double origin,
+                                double left, double factor, double offset, double limit, int hd)
+{
+    const int previous = khdays_hd_font_layout_override(hd);
+    GlyphLayout g = {0};
+    g.x = x;
+    g.y = y + khdays_hd_font_baseline_f(path, op->glyph, (int)(int8_t)table[4]);
+    g.w = table[0];
+    g.h = table[1];
+    g.paint_w = khdays_hd_font_metric(path, op->glyph, KHDF_WIDTH, widths[1]);
+    if (g.paint_w == widths[1])
+        g.paint_w = g.w;
+    if (khdays_hd_font_metric(path, op->glyph, KHDF_SIZED, 0)) {
+        g.w = (int)ceil(khdays_hd_font_metric_f(path, op->glyph, KHDF_CELL_WIDTH, g.w));
+        g.h = (int)ceil(khdays_hd_font_metric_f(path, op->glyph, KHDF_CELL_HEIGHT, g.h));
+        g.paint_w = (int)ceil(khdays_hd_font_metric_f(path, op->glyph, KHDF_WIDTH, g.paint_w));
+    }
+    if (!hd || op->native_glyph) {
+        g.w = g.paint_w = widths[1];
+        g.h = table[1];
+    }
+    g.clip_l = (int)floor(g.x < op->source_x ? g.x : op->source_x);
+    g.clip_t = (int)floor(g.y < op->source_y ? g.y : op->source_y);
+    g.clip_r = (int)ceil(fmax(g.x + g.w, op->source_x + table[0]));
+    g.clip_b = (int)ceil(fmax(g.y + g.h, op->source_y + table[1]));
+    if (factor > 0 && factor < 1) {
+        g.x = origin + (g.x - origin - left) * factor + offset;
+        g.x_scale = factor;
+        g.clip_l = (int)floor(g.x);
+        g.clip_r = (int)ceil(g.x + g.w * factor);
+        if (limit > 0 && g.clip_r > (int)ceil(origin + offset + limit))
+            g.clip_r = (int)ceil(origin + offset + limit);
+    }
+    if (g.clip_l < 0)
+        g.clip_l = 0;
+    if (g.clip_t < 0)
+        g.clip_t = 0;
+    if (g.clip_r > c->area_w * 8)
+        g.clip_r = c->area_w * 8;
+    if (g.clip_b > c->area_h * 8)
+        g.clip_b = c->area_h * 8;
+    khdays_hd_font_layout_override(previous);
+    return g;
+}
+
+static void apply_layout(GlyphOp *op, int mode, int retain_clip)
+{
+    const GlyphLayout *old = &op->layouts[op->layout_mode], *g = &op->layouts[mode];
+    const int l = retain_clip ? op->clip_l - old->clip_l : 0;
+    const int t = retain_clip ? op->clip_t - old->clip_t : 0;
+    const int r = retain_clip ? old->clip_r - op->clip_r : 0;
+    const int b = retain_clip ? old->clip_b - op->clip_b : 0;
+    op->x = g->x;
+    op->y = g->y;
+    op->x_scale = g->x_scale;
+    op->w = g->w;
+    op->h = g->h;
+    op->paint_w = g->paint_w;
+    op->clip_l = g->clip_l + l;
+    op->clip_t = g->clip_t + t;
+    op->clip_r = g->clip_r - r;
+    op->clip_b = g->clip_b - b;
+    op->layout_mode = mode;
+}
+
+static void capture_glyph(const void *canvas, const void *font, int x, int y, int cl, const void *glyph)
 {
     if (fitting_native)
         return;
@@ -1079,8 +1309,8 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
         c->information_epoch = khdays_ui_information_epoch();
     const int pickup = operation_depth && !operation_overflow &&
                        strcmp(operation_scopes[operation_depth - 1], "field.obtained") == 0 &&
-                       (khdays_ui_obtained_enabled() || khdays_ui_notification_enabled(1));
-    const int notice = c->notification && khdays_ui_notification_enabled(c->notification);
+                       (khdays_ui_obtained_configured() || khdays_ui_notification_configured(1));
+    const int notice = c->notification && khdays_ui_notification_configured(c->notification);
     if ((c->information || pickup || notice) && !path)
         path = "";
     if ((!hd_enabled() && !c->information && !pickup && !notice) || !path || !font || !glyph || c->ops_disabled) {
@@ -1111,12 +1341,12 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
     const int index = (int)((g[1] - start) / stride);
     const int native = !hd_enabled() || !path[0] || !khdays_hd_font_glyph_available(path, index);
     const int fitted = fit_run.font == KHDAYS_REF(font) && fit_run.factor > 0 && fit_run.factor < 1;
-    const int small = c->bpp == 4 && table[0] <= 16 && table[1] <= 16 && widths[1] <= 16;
+    const int small = table[0] <= 16 && table[1] <= 16 && widths[1] <= 16;
     /* a DS button's glyph is kept as an operation (a snapshot of it when the font has no artwork for
        it): the player's input is drawn in its place, the glyph itself when there is no icon */
     int piece = 0;
     const int button = !native || small ? glyph_button(font, index, &piece) : KHDAYS_BUTTON_NONE;
-    if (native && !button && ((!fitted && !c->information && !pickup && !notice) || !small)) {
+    if (native && !button && ((!fitted && !layout_pending && !c->information && !pickup && !notice) || !small)) {
         fallback_glyph(c, font, glyph, x, y);
         return;
     }
@@ -1128,79 +1358,49 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
     op.glyph = index;
     op.button = button;
     op.piece = piece;
-    op.x = x;
-    if (positioned_font == KHDAYS_REF(font))
-        op.x = positioned_x;
     op.source_x = x;
     op.source_y = y;
     op.source_w = widths[1];
     op.source_h = table[1];
-    op.y = (positioned_font == KHDAYS_REF(font) ? positioned_y : y) +
-           khdays_hd_font_baseline_f(path, op.glyph, (int)(int8_t)table[4]);
-    op.w = table[0];
-    op.h = table[1];
-    op.paint_w = khdays_hd_font_metric(path, op.glyph, KHDF_WIDTH, widths[1]);
-    if (op.paint_w == widths[1])
-        op.paint_w = op.w; /* Preserve the existing full-cell PNG for unchanged metrics. */
-    if (khdays_hd_font_metric(path, op.glyph, KHDF_SIZED, 0)) {
-        op.w = (int)ceil(khdays_hd_font_metric_f(path, op.glyph, KHDF_CELL_WIDTH, op.w));
-        op.h = (int)ceil(khdays_hd_font_metric_f(path, op.glyph, KHDF_CELL_HEIGHT, op.h));
-        op.paint_w = (int)ceil(khdays_hd_font_metric_f(path, op.glyph, KHDF_WIDTH, op.paint_w));
-    }
     op.cl = cl;
-    op.clip_l = (int)floor(op.x < x ? op.x : x);
-    op.clip_t = (int)floor(op.y < y ? op.y : y);
-    op.clip_r = (int)ceil(op.x + op.w > x + table[0] ? op.x + op.w : x + table[0]);
-    op.clip_b = (int)ceil(op.y + op.h > y + table[1] ? op.y + op.h : y + table[1]);
-    if (op.clip_l < 0)
-        op.clip_l = 0;
-    if (op.clip_t < 0)
-        op.clip_t = 0;
-    if (op.clip_r > c->area_w * 8)
-        op.clip_r = c->area_w * 8;
-    if (op.clip_b > c->area_h * 8)
-        op.clip_b = c->area_h * 8;
     snprintf(op.resource, sizeof(op.resource), "%s", path);
-    if (native) {
-        unsigned char pixels[128] = {0};
+    if (native || (table[0] <= 16 && table[1] <= 16 && widths[1] <= 16)) {
+        unsigned char pixels[256] = {0};
         DsCanvas scratch = *(const DsCanvas *)canvas;
         scratch.char_base = KHDAYS_REF(pixels);
         scratch.area_width = scratch.area_height = scratch.param = 2;
         fitting_native = 1;
         DrawGlyphLine(KHDAYS_REF(&scratch), KHDAYS_REF(font), 0, 0, cl, KHDAYS_REF(glyph));
         fitting_native = 0;
-        memset(op.resource, 0, sizeof(op.resource));
-        memcpy(op.resource, pixels, sizeof(pixels));
-        op.native_glyph = 1;
-        op.w = op.paint_w = widths[1];
-        op.h = table[1];
+        memcpy(op.native_pixels, pixels, sizeof(pixels));
+        op.native_saved = c->bpp;
     }
-    if (fitted) {
-        op.x = fitted_x(op.x);
-        op.x_scale = fit_run.factor;
-        op.clip_l = (int)floor(op.x);
-        op.clip_r = (int)ceil(op.x + op.w * op.x_scale);
-        if (fit_run.width > 0) {
-            const int right = (int)ceil(fit_run.origin + fit_run.offset + fit_run.width);
-            if (op.clip_r > right)
-                op.clip_r = right;
-        }
-        if (op.clip_l < 0)
-            op.clip_l = 0;
-        if (op.clip_r > c->area_w * 8)
-            op.clip_r = c->area_w * 8;
-        if (fit_run.report) {
-            double bounds[2] = {0, widths[1]};
-            if (!native)
-                khdays_hd_font_ink(path, op.glyph, table[0], table[1], widths[1], bounds);
-            if (bounds[1] > bounds[0]) {
-                const double left = op.x + bounds[0] * op.x_scale, right = op.x + bounds[1] * op.x_scale;
-                if (!fit_run.ink_count || left < fit_run.ink_left)
-                    fit_run.ink_left = left;
-                if (!fit_run.ink_count || right > fit_run.ink_right)
-                    fit_run.ink_right = right;
-                ++fit_run.ink_count;
-            }
+    op.native_glyph = native;
+    const int mode = khdays_hud_setting(KHDAYS_OPT_FONT) != 0;
+    const double layout_x = positioned_font == KHDAYS_REF(font) ? positioned_x : x;
+    const double layout_y = positioned_font == KHDAYS_REF(font) ? positioned_y : y;
+    for (int hd = 0; hd < 2; ++hd) {
+        const LayoutPlacement *p = hd != mode ? layout_pending : NULL;
+        const int fitting = fit_run.font == KHDAYS_REF(font);
+        op.layouts[hd] = glyph_layout(c, &op, table, widths, path, p ? p->x : layout_x, p ? p->y : layout_y,
+                                      p ? p->origin : fit_run.origin, p ? p->left : fit_run.left,
+                                      p         ? p->factor
+                                      : fitting ? fit_run.factor
+                                                : 0,
+                                      p ? p->offset : fit_run.offset, p ? p->width : fit_run.width, hd);
+    }
+    apply_layout(&op, mode, 0);
+    if (fitted && fit_run.report) {
+        double bounds[2] = {0, widths[1]};
+        if (!native)
+            khdays_hd_font_ink(path, op.glyph, table[0], table[1], widths[1], bounds);
+        if (bounds[1] > bounds[0]) {
+            const double low = op.x + bounds[0] * op.x_scale, high = op.x + bounds[1] * op.x_scale;
+            if (!fit_run.ink_count || low < fit_run.ink_left)
+                fit_run.ink_left = low;
+            if (!fit_run.ink_count || high > fit_run.ink_right)
+                fit_run.ink_right = high;
+            ++fit_run.ink_count;
         }
     }
     /* Reissuing at the same pen position replaces that draw, including colour. */
@@ -1236,6 +1436,16 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
                 first->paint_w = (int)ceil((right - first->x) / (first->x_scale > 0 ? first->x_scale : 1));
             if (first->clip_r < (int)ceil(right))
                 first->clip_r = (int)ceil(right) < c->area_w * 8 ? (int)ceil(right) : c->area_w * 8;
+            for (int hd = 0; hd < 2; ++hd) {
+                GlyphLayout *group = &first->layouts[hd];
+                const GlyphLayout *tail = &op.layouts[hd];
+                const double right_edge = tail->x + tail->paint_w * (tail->x_scale > 0 ? tail->x_scale : 1);
+                const int extent = (int)ceil((right_edge - group->x) / (group->x_scale > 0 ? group->x_scale : 1));
+                if (group->paint_w < extent)
+                    group->paint_w = extent;
+                if (group->clip_r < (int)ceil(right_edge))
+                    group->clip_r = (int)ceil(right_edge);
+            }
             break;
         }
     }
@@ -1248,6 +1458,13 @@ void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, in
                 put_pixel(c, c->source, px, py, pixel(c, now, px, py));
     } else
         fallback_glyph(c, font, glyph, x, y);
+}
+
+void khdays_ui_text_glyph(const void *canvas, const void *font, int x, int y, int cl, const void *glyph)
+{
+    const int observing = khdays_hd_font_observe(1);
+    capture_glyph(canvas, font, x, y, cl, glyph);
+    khdays_hd_font_observe(observing);
 }
 
 void khdays_ui_text_clear(const void *canvas, int cl)
@@ -1594,6 +1811,13 @@ void khdays_ui_text_scroll(const void *window, int amount)
         GlyphOp op = c->ops[i];
         op.y -= amount;
         op.source_y -= amount;
+        for (int hd = 0; hd < 2; ++hd) {
+            op.layouts[hd].y -= amount;
+            op.layouts[hd].clip_t -= amount;
+            op.layouts[hd].clip_b -= amount;
+            if (op.layouts[hd].clip_t < 0)
+                op.layouts[hd].clip_t = 0;
+        }
         op.clip_t -= amount;
         op.clip_b -= amount;
         if (op.clip_t < 0)
@@ -2310,10 +2534,31 @@ static int paint_button(const Canvas *c, const GlyphOp *op, uint16_t cell, doubl
 static void paint_op(const Canvas *c, const GlyphOp *op, uint16_t cell, double x, double y, uint32_t *out, int width,
                      int height, int scale, int l, int t, int r, int b)
 {
+    /* Sequence text still needs the native font when only font replacement is off. */
+    if (!font_display_enabled() && !op->native_glyph && !op->native_saved) {
+        for (int py = t * scale; py < b * scale && py < height; ++py) {
+            const int sy = (int)floor((py + .5) / scale - y) + op->source_y;
+            for (int px = l * scale; px < r * scale && px < width; ++px) {
+                const int sx = (int)floor(((px + .5) / scale - x) / (op->x_scale > 0 ? op->x_scale : 1)) + op->source_x;
+                if (sx < op->source_x || sy < op->source_y || sx >= op->source_x + op->source_w ||
+                    sy >= op->source_y + op->source_h || sx < 0 || sy < 0 || sx >= c->area_w * 8 || sy >= c->area_h * 8)
+                    continue;
+                const unsigned value = pixel(c, c->seen, sx, sy);
+                if (!value)
+                    continue;
+                const unsigned pal = (unsigned)cell >> 12;
+                const unsigned ink = c->bpp == 4 ? KET_OPAQUE | pal * 16u | value
+                                                 : KET_OPAQUE | KET_EXTENDED | pal << KET_EXT_PAL_SHIFT | value;
+                uint32_t *dest = out + (size_t)py * width + px;
+                *dest = over_graphics(khdays_ui_palette_colour(c->engine, (uint32_t)c->bg, ink), *dest);
+            }
+        }
+        return;
+    }
     if (op->button && paint_button(c, op, cell, x, y, out, width, height, scale, l, t, r, b))
         return;
     const double factor = op->x_scale > 0 ? op->x_scale : 1;
-    if (!op->native_glyph) {
+    if (!op->native_glyph && font_display_enabled()) {
         if (factor == 1)
             khdays_hd_font_paint_clipped(op->resource, op->glyph, x, y, op->w, op->h, glyph_colour(c, op, cell), out,
                                          width, height, scale, l, t, r, b);
@@ -2322,8 +2567,9 @@ static void paint_op(const Canvas *c, const GlyphOp *op, uint16_t cell, double x
                                         width, height, scale, l, t, r, b, factor);
         return;
     }
-    uint32_t colours[16] = {0};
-    const unsigned char *pixels = (const unsigned char *)op->resource;
+    uint32_t colours[256] = {0};
+    const int bpp = op->native_saved;
+    const unsigned char *pixels = op->native_pixels;
     for (int py = t * scale; py < b * scale && py < height; ++py) {
         const int sy = (int)floor((py + .5) / scale - y);
         if (sy < 0 || sy >= op->h)
@@ -2332,13 +2578,16 @@ static void paint_op(const Canvas *c, const GlyphOp *op, uint16_t cell, double x
             const int sx = (int)floor(((px + .5) / scale - x) / factor);
             if (sx < 0 || sx >= op->w)
                 continue;
-            const int at = ((sy / 8) * 2 + sx / 8) * 32 + (sy & 7) * 4 + (sx & 7) / 2;
-            const unsigned value = (pixels[at] >> ((sx & 1) * 4)) & 15u;
+            const int at = ((sy / 8) * 2 + sx / 8) * (8 * bpp) + (sy & 7) * bpp + (sx & 7) / (8 / bpp);
+            const unsigned value = bpp == 4 ? (pixels[at] >> ((sx & 1) * 4)) & 15u : pixels[at];
             if (!value)
                 continue;
-            if (!colours[value])
-                colours[value] = khdays_ui_palette_colour(c->engine, (uint32_t)c->bg,
-                                                          KET_OPAQUE | ((uint32_t)cell >> 12) * 16u | value);
+            if (!colours[value]) {
+                const unsigned pal = (unsigned)cell >> 12;
+                const unsigned ink = bpp == 4 ? KET_OPAQUE | pal * 16u | value
+                                              : KET_OPAQUE | KET_EXTENDED | pal << KET_EXT_PAL_SHIFT | value;
+                colours[value] = khdays_ui_palette_colour(c->engine, (uint32_t)c->bg, ink);
+            }
             out[(size_t)py * width + px] = over_graphics(colours[value], out[(size_t)py * width + px]);
         }
     }
@@ -2947,7 +3196,7 @@ static int notification_glyphs(Canvas *c, int scale, unsigned key, unsigned *ver
     const int w = c->area_w * 8 * scale, h = c->area_h * 8 * scale;
     const size_t count = (size_t)w * h;
     uint32_t signature = (khdays_ui_palette_hash(0) ^ c->version) * 16777619u ^ (unsigned)scale;
-    signature = (signature ^ key) * 16777619u;
+    signature = (signature ^ key ^ (unsigned)font_display_enabled()) * 16777619u;
     for (int i = 0; i < c->display_count; ++i) {
         const unsigned char *bytes = (const unsigned char *)&c->display_ops[i];
         for (size_t k = 0; k < sizeof(GlyphOp); ++k)
@@ -3102,7 +3351,7 @@ static int emit_information(Canvas *c, int ox, int oy, const KhdaysBgLayer *laye
     if (!coverage)
         return khdays_ui_information_active(c->engine);
     const size_t count = (size_t)width * height;
-    uint32_t signature = (palette ^ (uint32_t)c->display_count) * 16777619u;
+    uint32_t signature = (palette ^ (uint32_t)c->display_count ^ (unsigned)font_display_enabled()) * 16777619u;
     for (int i = 0; i < c->display_count; ++i) {
         const unsigned char *p = (const unsigned char *)&c->display_ops[i];
         for (size_t k = 0; k < sizeof(GlyphOp); ++k)
@@ -3373,4 +3622,22 @@ void khdays_ui_text_init(void)
 {
     khdays_origin_want(); /* SDK font initialization can bypass the named loaders. */
     khdays_ui_register(KHDAYS_UI_TEXT, emit);
+}
+
+void khdays_ui_text_settings_changed(void)
+{
+    for (int i = 0; i <= canvas_count; ++i) {
+        Canvas *c = i < canvas_count ? &canvases[i] : &obtained.canvas;
+        if (!c->dirty || !c->tile_hash)
+            continue;
+        const int mode = khdays_hud_setting(KHDAYS_OPT_FONT) != 0;
+        for (int k = 0; k < c->op_count; ++k)
+            apply_layout(&c->ops[k], mode, 1);
+        for (int k = 0; k < c->display_count; ++k)
+            apply_layout(&c->display_ops[k], mode, 1);
+        memset(c->dirty, 3, (size_t)c->area_w * c->area_h);
+        memset(c->tile_hash, 0, (size_t)c->area_w * c->area_h * sizeof(*c->tile_hash));
+        ++c->version;
+        c->information_scale = 0;
+    }
 }

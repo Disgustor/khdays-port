@@ -43,6 +43,7 @@ class Walk:
     mods: str | None = None  # one mod's folder (from the repository's root) it plays with, alone
     window: bool = False  # in a window (a mission's opening dialogs wait for the window's picture)
     marks: tuple[str, ...] = ()  # what each player's session log must say (KHDAYS_LOG on)
+    env: tuple[tuple[str, str], ...] = ()  # its own NAME=VALUE pairs for the game
 
 
 # The routes: the Mission Mode loop, Story Mode, a mission in play, challenge 07, a save (the camp
@@ -138,6 +139,24 @@ WALKS = [
             "the mod's mission\t3595",
             "missions: test.waves/waves: a spawner made after its region started, running with it",
             "mission end\tcleared",
+        ),
+    ),
+    # a mod's character (port/tests/mods_v2/character, a made-up figure on three of Roxas's bones): offered after
+    # the game's characters, chosen (KHDAYS_TEST_CHARACTER: the walk has no layout for the port's select),
+    # played on Roxas's code from its own folder ba/ch/c16/, its own model drawn; the mission walk's route
+    Walk(
+        "character",
+        250,
+        player_save=False,
+        mods="port/tests/mods_v2/character",
+        script="mission",
+        env=(("KHDAYS_TEST_CHARACTER", "test.character/block"), ("KHDAYS_TRACE_CHARACTERS", "1")),
+        marks=(
+            "characters: test.character/block, number 0x16, plays as roxas, its folder ba/ch/c16/",
+            "characters: seat 0 is test.character/block",
+            "characters: member 0 is test.character/block (0x16), on roxas's code",
+            "rom: the game opened ba/ch/c16/def",
+            "a mod's character",
         ),
     ),
 ]
@@ -374,6 +393,7 @@ def run_walks(args: argparse.Namespace) -> int:
                 script = (WALKS_DIR / f"{script_name}.input").read_text(encoding="utf-8").strip()
                 players.append((works[-1], script, works[-1] / "game.log"))
             env = extra_env_of(args)
+            env.update(dict(walk.env))
             if walk.marks:
                 env["KHDAYS_LOG"] = "1"
             if walk.server is not None:

@@ -15,6 +15,7 @@
 #include "runtime.h"
 #include "session_log.h"
 #include "../movies/scene_trace.h"
+#include "../characters/characters.h"
 #include "../missions/missions.h"
 
 #include <stdio.h>
@@ -43,7 +44,8 @@ int khdays_runtime_init(int argc, char **argv)
     if (!khdays_rom_init()) {
         return 0;
     }
-    khdays_missions_start(); /* the mods' new missions: their files in the ROM before anything reads it */
+    khdays_missions_start();   /* the mods' new missions: their files in the ROM before anything reads it */
+    khdays_characters_start(); /* the mods' characters: their folders in the ROM too */
     khdays_input_init();
     khdays_display_init();
     if (!khdays_host_start()) {
@@ -366,6 +368,7 @@ void khdays_host_frame(void)
     if (scene[2] != logged_scene) {
         khdays_log("scene %d -> %u (argument %u)", logged_scene == ~0u ? -1 : (int)logged_scene, scene[2], scene[4]);
         logged_scene = scene[2];
+        khdays_characters_scene((int)scene[2]);
     }
     khdays_scene_trace_frame(frame);
     trace_player(frame);

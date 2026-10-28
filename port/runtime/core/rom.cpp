@@ -490,7 +490,13 @@ extern "C" int khdays_rom_find(const char *path, u32 *offset, u32 *size)
     }
     const auto it = file_ids.find(path);
     if (it == file_ids.end()) {
-        return 0;
+        const auto more = added.find(lower(path)); // a file a mod adds
+        if (more == added.end()) {
+            return 0;
+        }
+        *offset = more->second.top;
+        *size = more->second.bottom - more->second.top;
+        return 1;
     }
     *offset = le32(fat.data() + 8 * it->second);
     *size = le32(fat.data() + 8 * it->second + 4) - *offset;

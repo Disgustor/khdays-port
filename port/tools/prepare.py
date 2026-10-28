@@ -1406,6 +1406,10 @@ HOOKS = {
     "itcm@01ffb8fc": [
         (  # NNSi_G3dDrawInternal
             "    do {\n        u32 command;\n",
+            # the render object's joint animation first (its anmJnt, +0x10): a mod character's own skeleton
+            # plays its clip for it
+            "    { extern void khdays_models_draw_animation(unsigned animation);\n"
+            "      khdays_models_draw_animation(*(unsigned *)(renderObj->pad08_20 + 8)); }\n"
             "    { extern void khdays_models_draw_begin(const void *model);\n"
             "      khdays_models_draw_begin(renderObj->pResMdl); }\n"
             "    do {\n        u32 command;\n",
@@ -1419,6 +1423,10 @@ HOOKS = {
     "itcm@01ffc164": [
         (  # NNSi_G3dFuncSbc_NODEDESC
             "    if (state->callbackTimings[6] == 3) {\n        state->sbcCallbacks[6](state);\n    }\n",
+            # a mod's character's weapon node first put on its own skeleton's weapon bone, where the node's
+            # callback reads it (the game's weapon follows it)
+            "    { extern void khdays_models_node_placed(unsigned node, int sent);\n"
+            "      khdays_models_node_placed(nodeId, !(state->flags & 0x100)); }\n"
             "    if (state->callbackTimings[6] == 3) {\n        state->sbcCallbacks[6](state);\n    }\n"
             "    { extern void khdays_models_node(unsigned node, int sent);\n"
             "      khdays_models_node(nodeId, !(state->flags & 0x100)); }\n",
@@ -2148,6 +2156,347 @@ HOOKS["main@0200acb0"] = [
         "        if (khdays_rom_added_file(path, khdays_bounds))\n"
         "            return FS_OpenFileDirect(file, data_02046334, khdays_bounds[0], khdays_bounds[1],\n"
         "                                     khdays_bounds[2]);\n"
+        "    }\n",
+    )
+]
+
+
+# Characters of mods (port/runtime/characters, docs/RUNTIME_MAP.md "Characters of mods"): a new character is a
+# number past the game's (0x16 on) in the select's places only; the seats (data_020429c8) and the members
+# (gPartyMembers) get its base's number, so that nothing of the game but the select ever sees the new one, and the
+# port keeps which seat is a new character (khdays_characters_seat). Where the game opens a character's data for a
+# seat's actor, the character's own folder ba/ch/<code>/, which the port serves (its files, else copies of its
+# base's).
+CHARACTER_DECLARATIONS = (
+    "extern int khdays_characters_known(int number);\n"
+    "extern int khdays_characters_of(int slot, int kind);\n"
+    "extern int khdays_characters_base(int number);\n"
+    "extern const char *Port_CharacterCode(int number);\n"
+)
+# the own folders' codes, by number ("c16" ...): in the game's memory, for its paths (a game-side function:
+# prepare.py makes a new global's definition extern, as a split unit's static)
+CHARACTER_CODES = (
+    "static const char sPortCharacterCodes[0x100][4] = {"
+    + ", ".join('""' if n < 0x16 else f'"c{n:02x}"' for n in range(0x100))
+    + "};\n"
+    "const char *Port_CharacterCode(int number)\n{\n    return sPortCharacterCodes[number & 0xff];\n}\n"
+)
+
+
+def character_folder(number: str) -> str:
+    """The data folder of character `number`: its own for a new one."""
+    return f"(khdays_characters_known({number}) ? Port_CharacterCode({number}) : data_02042a70[{number}])"
+
+
+def actor_folder(slot: str, kind: str) -> str:
+    """The data folder of seat `slot`'s character, which plays as `kind`: its own for a new one."""
+    n = f"khdays_characters_of({slot}, {kind})"
+    return f"({n} != ({kind}) ? Port_CharacterCode({n}) : data_02042a70[{kind}])"
+
+
+HOOKS["main@02035730"] = [
+    (  # LevelTable_ReadEntry: the levels of a new character from its own folder
+        "extern char *data_02042a70[];\n",
+        "extern char *data_02042a70[];\n" + CHARACTER_DECLARATIONS + CHARACTER_CODES,
+    ),
+    ("gBaChPath, data_02042a70[kind]);", f"gBaChPath, {character_folder('kind')});"),
+]
+HOOKS["main@02035328"] = [
+    (  # PartyMember_Reset: a seat's new character's levels
+        "void PartyMember_Reset(int slot, int kind, int level)\n",
+        "extern int khdays_characters_of(int slot, int kind);\nvoid PartyMember_Reset(int slot, int kind, int level)\n",
+    ),
+    (
+        "    LevelTable_ReadEntry(kind, level, &e);\n",
+        "    LevelTable_ReadEntry(khdays_characters_of(slot, kind), level, &e);\n",
+    ),
+]
+HOOKS["ov022@0209c5ec"] = [
+    (  # Ov022_BuildActorSlot: its weapons' texts
+        "extern char *data_02042a70[];\n",
+        "extern char *data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    ("data_02042a70[pActor->nKind]", actor_folder("pActor->nId", "pActor->nKind")),
+]
+HOOKS["ov022@020b0720"] = [
+    (  # Ov022_BuildActionTable: its weapon, combos and links
+        "extern char *data_02042a70[];\n",
+        "extern char *data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    (
+        "    Ov002_LoadCharacterWeapon(&pTable->blkMove, nKind, nArg);\n",
+        "    Ov002_LoadCharacterWeapon(&pTable->blkMove, khdays_characters_of(pActor->nId, nKind), nArg);\n",
+    ),
+    ("data_02042a70[nKind]", actor_folder("pActor->nId", "nKind")),
+]
+HOOKS["ov022@020b02d8"] = [
+    (  # Ov022_LoadActionRows: its actions' files
+        "extern char *data_02042a70[];\n",
+        "extern char *data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    ("data_02042a70[nKind]", actor_folder("pTable->nSlotBase", "nKind")),  # the actor's slot (BuildActionTable)
+]
+HOOKS["ov022@0209cda8"] = [
+    (  # Ov022_LoadActorEffects
+        "extern const char *data_02042a70[];\n",
+        "extern const char *data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    ("data_02042a70[pActor->nModelId]", actor_folder("pActor->nId", "pActor->nModelId")),
+]
+HOOKS["ov022@020b1730"] = [
+    (  # Ov022_StartAnimRequest: its animations
+        "extern const char *const data_02042a70[];\n",
+        "extern const char *const data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    ("data_02042a70[pOwner->nModel]", actor_folder("pOwner->nId", "pOwner->nModel")),
+]
+HOOKS["ov022@02096e94"] = [
+    (  # Ov022_ApplyMissionLevelStats: its own levels
+        "extern void LevelTable_ReadEntry(int nCharacterId, int nLevel, struct StatRow *pRow);\n",
+        "extern void LevelTable_ReadEntry(int nCharacterId, int nLevel, struct StatRow *pRow);\n"
+        "extern int khdays_characters_of(int slot, int kind);\n",
+    ),
+    (
+        "LevelTable_ReadEntry(pActor->nCharacterId, ",
+        "LevelTable_ReadEntry(khdays_characters_of(pActor->nId, pActor->nCharacterId), ",
+    ),
+]
+HOOKS["ov023@02085b00"] = [
+    (  # Ov023_CmdSetupPartyActors: a seat's weapons' texts
+        "extern const char *data_02042a70[];                                 /* member names by kind */\n",
+        "extern const char *data_02042a70[];                                 /* member names by kind */\n"
+        + CHARACTER_DECLARATIONS,
+    ),
+    ("data_02042a70[nKind]", actor_folder("i", "nKind")),
+]
+for ov, address in (("002", "020522c8"), ("008", "0208b890")):
+    HOOKS[f"ov{ov}@{address}"] = [
+        (  # Ov00N_LoadCharacterWeapon: its weapon's move block, read as its base's
+            "extern char *data_02042a70[];\n",
+            "extern char *data_02042a70[];\n" + CHARACTER_DECLARATIONS,
+        ),
+        ("data_02042a70[slot]", character_folder("slot")),
+        (
+            f"Ov{ov}_PackTableRow(dst, file, slot, arg);",
+            f"Ov{ov}_PackTableRow(dst, file, khdays_characters_base(slot), arg);",
+        ),
+    ]
+for ov, address in (("006", "0204d610"), ("008", "0207928c")):
+    HOOKS[f"ov{ov}@{address}"] = [
+        (  # Ov00N_MenuEntryToSlot: a new character's place is its base's character
+            f"int Ov{ov}_MenuEntryToSlot(int id) {{\n    int slot = 0;\n",
+            "extern int khdays_characters_known(int number);\n"
+            "extern int khdays_characters_base(int number);\n"
+            f"int Ov{ov}_MenuEntryToSlot(int id) {{\n    int slot = 0;\n"
+            "    if (khdays_characters_known(id & 0xff)) {\n        return khdays_characters_base(id & 0xff);\n    }\n",
+        )
+    ]
+# ... the seats written from the select's places: the port keeps which is a new character's
+_SEAT = "extern void khdays_characters_seat(int seat, int place);\n"
+HOOKS["ov006@0204e8b0"] = [
+    (  # Ov006_UpdateMissionEntrySynchronization
+        "MissionCallback Ov006_UpdateMissionEntrySynchronization(void) {\n",
+        _SEAT + "MissionCallback Ov006_UpdateMissionEntrySynchronization(void) {\n",
+    ),
+    (
+        "CopyToSlotTable8(&slot, entryIndex);",
+        "CopyToSlotTable8(&slot, entryIndex);\n khdays_characters_seat(entryIndex, -1);",
+    ),
+    (
+        "CopyToSlotTable8(&slot, outputIndex);",
+        "CopyToSlotTable8(&slot, outputIndex);\n khdays_characters_seat(outputIndex, entries[entryIndex].characterId);",
+    ),
+]
+HOOKS["ov008@0207a758"] = [
+    (  # Ov008_MissionLobbyPoll (its Ov008_ForwardJoinedSlots)
+        "static inline void Ov008_ForwardJoinedSlots(MissionContext *pCtx)\n",
+        _SEAT + "static inline void Ov008_ForwardJoinedSlots(MissionContext *pCtx)\n",
+    ),
+    ("CopyToSlotTable8(&info, i);", "CopyToSlotTable8(&info, i);\n khdays_characters_seat(i, -1);"),
+    (
+        "CopyToSlotTable8(&info, nSlot);",
+        "CopyToSlotTable8(&info, nSlot);\n khdays_characters_seat(nSlot, pPacket[i].characterId);",
+    ),
+]
+# ... the camp's places, made from the seats: a new character's seat's place on its own number
+HOOKS["ov008@0207a424"] = [
+    (  # Ov008_MissionLobbyStartTransfer (its Ov008_BuildGroupMessage)
+        "static inline void Ov008_BuildGroupMessage(MissionContext *pCtx)\n",
+        "extern int khdays_characters_place(int seat, int entry);\n"
+        "static inline void Ov008_BuildGroupMessage(MissionContext *pCtx)\n",
+    ),
+    (
+        "pPacket[i].characterId = Ov008_MenuSlotToEntry(pInfo->nMemberKind);",
+        "pPacket[i].characterId = khdays_characters_place(i, Ov008_MenuSlotToEntry(pInfo->nMemberKind));",
+    ),
+]
+# ... Mission Mode's camp: the chosen character's model (member 0's) and weapon texts from its own folder
+HOOKS["ov008@0205a3dc"] = [
+    (  # Ov008_Menu_InitSceneObject
+        "extern char gOv008BaChDefHPackPathFmt[];\n",
+        "extern char gOv008BaChDefHPackPathFmt[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    (
+        "    val = *(int *)(val + sceneId * 0x34);\n",
+        "    val = khdays_characters_of(0, sceneId) != sceneId ? (int)Port_CharacterCode(khdays_characters_of(0, sceneId))\n"
+        "                                                  : *(int *)(val + sceneId * 0x34);\n",
+    ),
+]
+HOOKS["ov008@0205a138"] = [
+    (  # Ov008_Menu_LoadSceneText
+        "extern SceneParam data_ov008_0208e9c4[];\n",
+        "extern SceneParam data_ov008_0208e9c4[];\n" + CHARACTER_DECLARATIONS,
+    ),
+    (
+        "    v = data_ov008_0208e9c4[sceneId].f0;\n",
+        "    v = khdays_characters_of(0, sceneId) != sceneId ? (int)Port_CharacterCode(khdays_characters_of(0, sceneId))\n"
+        "                                                : data_ov008_0208e9c4[sceneId].f0;\n",
+    ),
+]
+# ... the game's own select screens (scene 7's, the camp's): what they draw of a place on a new character -- the
+# model's pose, the gauges, the names, the slots -- and whether it may be chosen are its base's place's
+_MENU_ENTRY = "extern int khdays_characters_menu_entry(int id);\n"
+
+
+def _menu(expression: str) -> str:
+    return f"khdays_characters_menu_entry({expression})"
+
+
+HOOKS["ov006@02050fc8"] += [  # Ov006_UpdateMissionMemberMenuScreen
+    (
+        "void *Ov006_UpdateMissionMemberMenuScreen(void)\n{\n",
+        _MENU_ENTRY + "void *Ov006_UpdateMissionMemberMenuScreen(void)\n{\n",
+    ),
+    (
+        "Ov006_ResolveMissionSelection(rows[cursorEntry].memberId)",
+        "Ov006_ResolveMissionSelection(" + _menu("rows[cursorEntry].memberId") + ")",
+    ),
+    (
+        "Ov006_MissionSetModelPose(rows[cursorEntry].memberId)",
+        "Ov006_MissionSetModelPose(" + _menu("rows[cursorEntry].memberId") + ")",
+    ),
+    ("paramSel = rows[cursorEntry].memberId;", "paramSel = " + _menu("rows[cursorEntry].memberId") + ";"),
+    (
+        "Ov006_SetMissionRowSlotValue(visibleSlot, (u16)rowPtr->memberId,",
+        "Ov006_SetMissionRowSlotValue(visibleSlot, (u16)" + _menu("rowPtr->memberId") + ",",
+    ),
+    (
+        "rows[Ov006_MissionGetCursorEntry()].memberId + 0xb",
+        _menu("rows[Ov006_MissionGetCursorEntry()].memberId") + " + 0xb",
+    ),
+    (
+        "rows[Ov006_MissionGetCursorEntry()].memberId + 0x1f",
+        _menu("rows[Ov006_MissionGetCursorEntry()].memberId") + " + 0x1f",
+    ),
+    (
+        "Ov006_ResolveMissionSelection(rows[i].memberId)",
+        "Ov006_ResolveMissionSelection(" + _menu("rows[i].memberId") + ")",
+    ),
+    ("rows[i].memberId + 0xb", _menu("rows[i].memberId") + " + 0xb"),
+]
+HOOKS["ov008@0207ce84"] += [  # Ov008_LobbyStep
+    ("Ov008LobbyStep Ov008_LobbyStep(void)\n{\n", _MENU_ENTRY + "Ov008LobbyStep Ov008_LobbyStep(void)\n{\n"),
+    (
+        "Ov008_ResolveMissionSelection(aRow[nLocal].icon)",
+        "Ov008_ResolveMissionSelection(" + _menu("aRow[nLocal].icon") + ")",
+    ),
+    ("Ov008_MissionSetModelPose(aRow[nLocal].icon)", "Ov008_MissionSetModelPose(" + _menu("aRow[nLocal].icon") + ")"),
+    (
+        "Ov008_MissionApplyParameterRow(nCursor != 0 ? aRow[nLocal].icon : ICON_NONE)",
+        "Ov008_MissionApplyParameterRow(nCursor != 0 ? " + _menu("aRow[nLocal].icon") + " : ICON_NONE)",
+    ),
+    (
+        "Ov008_SetMissionRowSlotValue(nSlot, (u16)aRow[i].icon,",
+        "Ov008_SetMissionRowSlotValue(nSlot, (u16)" + _menu("aRow[i].icon") + ",",
+    ),
+    (
+        "aRow[Ov008_GetLocalPlayerIndex()].icon + TEXT_ICON_BASE",
+        _menu("aRow[Ov008_GetLocalPlayerIndex()].icon") + " + TEXT_ICON_BASE",
+    ),
+    (
+        "aRow[Ov008_GetLocalPlayerIndex()].icon + TEXT_NAME_BASE",
+        _menu("aRow[Ov008_GetLocalPlayerIndex()].icon") + " + TEXT_NAME_BASE",
+    ),
+    ("Ov008_ResolveMissionSelection(aRow[i].icon)", "Ov008_ResolveMissionSelection(" + _menu("aRow[i].icon") + ")"),
+    ("aRow[i].icon + TEXT_ICON_BASE", _menu("aRow[i].icon") + " + TEXT_ICON_BASE"),
+]
+# ... and their input: a place on a new character is looked for on the DS's grid at its base's place, and keeps
+# its own number unless a direction moves it on (A and B would take the grid's, and the screen asks for the
+# place every frame: Ov006_MissionArmCursorRequest)
+for ov, address, cursor, grid in (
+    ("006", "02051b34", "    cursorEntry = Ov006_MissionGetCursorEntry();\n", "data_ov006_02056410"),
+    ("008", "0207d888", "    cursorEntry = Ov008_GetLocalPlayerIndex();\n", "data_ov008_02090c00"),
+):
+    HOOKS[f"ov{ov}@{address}"] = [  # Ov00N_UpdateMissionMemberSelectionInput
+        (
+            cursor,
+            cursor + "    extern int khdays_characters_known(int number);\n"
+            "    extern int khdays_characters_menu_entry(int id);\n"
+            "    int khdays_kept;\n",
+        ),
+        (
+            "    if (members[selectionIndex].icon < 0) {\n",
+            "    khdays_kept = khdays_characters_known(members[selectionIndex].icon & 0xff) ? members[selectionIndex].icon\n"
+            "                                                                                : -1;\n"
+            "    if (khdays_kept >= 0) {\n"
+            "        members[selectionIndex].icon = (s8)khdays_characters_menu_entry(khdays_kept);\n"
+            "    }\n"
+            "    if (members[selectionIndex].icon < 0) {\n",
+        ),
+        (
+            f"    members[selectionIndex].icon =\n        (s8){grid}[gridRow][gridColumn];\n",
+            f"    members[selectionIndex].icon =\n        (s8){grid}[gridRow][gridColumn];\n"
+            "    if (khdays_kept >= 0 && (action == 4 || action == 5)) {\n"
+            "        members[selectionIndex].icon = (s8)khdays_kept;\n"
+            "    }\n",
+        ),
+        (
+            f"Ov{ov}_ResolveMissionSelection((s8)members[selectionIndex].icon)",
+            f"Ov{ov}_ResolveMissionSelection(khdays_characters_menu_entry((s8)members[selectionIndex].icon))",
+        ),
+        (  # no input: the place as it was (its caller asks for it every frame)
+            "    if (action == -1) {\n        return 0;\n    }\n",
+            "    if (action == -1) {\n"
+            "        if (khdays_kept >= 0) {\n"
+            "            members[selectionIndex].icon = (s8)khdays_kept;\n"
+            "        }\n"
+            "        return 0;\n"
+            "    }\n",
+        ),
+    ]
+HOOKS["main@0202b914"] = [
+    (  # TailForwardTrackEntry: a seat's model packs from its new character's own folder (a path under its base's;
+        # never a packed handle, bit 31)
+        "void TailForwardTrackEntry(int param_1, void *pArg2, int param_3, int param_4) {\n"
+        "    int param_2 = (int)pArg2;\n",
+        "extern int khdays_characters_of(int slot, int kind);\n"
+        "extern int khdays_characters_base(int number);\n"
+        "extern const char *const data_02042a70[];\n"
+        "extern const char *Port_CharacterCode(int number);\n"
+        "static char sPortCharacterPath[0x80];\n"
+        "void TailForwardTrackEntry(int param_1, void *pArg2, int param_3, int param_4) {\n"
+        "    int param_2 = (int)pArg2;\n"
+        "    if (param_2 > 0 && param_1 >= 0 && param_1 < 4) {\n"
+        "        int n = khdays_characters_of(param_1, -1);\n"
+        "        if (n >= 0) {\n"
+        "            const char *path = (const char *)pArg2;\n"
+        "            const char *base = data_02042a70[khdays_characters_base(n)];\n"
+        "            const char *code = Port_CharacterCode(n);\n"
+        "            int b = 0, i, k = 0;\n"
+        "            if (path[0] == 'b' && path[1] == 'a' && path[2] == '/' && path[3] == 'c' && path[4] == 'h' &&\n"
+        "                path[5] == '/') {\n"
+        "                while (base[b] != 0 && path[6 + b] == base[b]) b++;\n"
+        "                if (base[b] == 0 && path[6 + b] == '/') {\n"
+        "                    const char *rest = path + 6 + b;\n"
+        "                    for (k = 0; k < 6; k++) sPortCharacterPath[k] = path[k];\n"
+        "                    for (i = 0; code[i] != 0; i++) sPortCharacterPath[k++] = code[i];\n"
+        "                    for (i = 0; rest[i] != 0 && k < (int)sizeof(sPortCharacterPath) - 1; i++)\n"
+        "                        sPortCharacterPath[k++] = rest[i];\n"
+        "                    sPortCharacterPath[k] = 0;\n"
+        "                    param_2 = (int)sPortCharacterPath;\n"
+        "                }\n"
+        "            }\n"
+        "        }\n"
         "    }\n",
     )
 ]

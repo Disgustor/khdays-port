@@ -5193,3 +5193,71 @@ The port adds a mod's missions to the game's own list and plays them as the game
   mark (0001) raised at the end and kept: `test.waves/waves 0 0 4 0 -1 1`. **The emblem**: its pickup is made at its
   point (the field's pickups, id 1 at (0, 0.049, -1.5), by `Ov002_SpawnStateSpots` with the mission's number 3595),
   but in these runs it was neither drawn nor picked up: *open*.
+
+## 30. Characters of mods
+
+Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on the member records and the seats),
+2026-10-28. The port adds a mod's playable characters to Mission Mode (`runtime/characters/`).
+
+- **A player's character** is byte `+3` of its member record, `gPartyMembers` (0x0204c678, four records of 0x104
+  bytes: `+0` the slot, `+1` a kind, `+2` the level, `+3` the character; `PartyMember_Reset` writes the header, the
+  level row `LevelTable_ReadEntry(character, level)` into `+8` and the character's signature skill from
+  `data_02042160`, a table of 22: characters 0x00-0x15). Its numbers are the data folders' (`data_02042a70`, 20
+  codes under `ba/ch/`): 0 ro, 1 ax, 2 xi, 3 sa, 4 xa, 5 so, 6 de, 7 la, 8 le, 9 lu, 10 ma, 11 ri, 12 ve, 13 xe,
+  14 xo, 15 ze, 16 mi, 17 do, 18 go, 19 r2. The game maps three past those onto others itself: 0x13 and 0x14 onto
+  0, 0x15 onto 0xe (`PartyMember_RebuildDerived`'s growth row; `Ov022_FillSelectorStates` and
+  `LevelTable_ReadEntry` 0x14 and 0x15).
+- **From the select to the field** (seen, the walk `mission`, Roxas): the select's places keep the select's own
+  numbers (`+2`, a signed byte: `Ov006_GetMissionRowInfo`), 0-18 in its order (the Organization's thirteen from
+  Xemnas to Roxas, then Xion, the king, Sora, Riku, Donald, Goofy); `Ov006_MenuEntryToSlot` turns one into the
+  folders' number (0 -> 0xd ... 12 -> 0, 13 -> 0xe, 14 -> 0x10, 15 -> 5, 16 -> 0xb, 17 -> 0x11, 18 -> 0x12) as
+  `Ov006_UpdateMissionEntrySynchronization` writes the seats, `data_020429c8` (four of 8 bytes: a word set when
+  taken, the character's word; `Slot4_GetIfOccupied`), VBlank 2405. The camp (`Ov008_CommitSelectedPage`) resets
+  member 0 with its seat's character (`Ov008_ResetPartyMemberAndLayout` -> `PartyMember_ResetWithKind(0, 0, c, 0)`),
+  VBlank 2480; the field rewrites the header (`Ov002_UpdatePartyEntries`, VBlank 5565). In multiplayer the camp
+  copies the host's four records whole (`Ov008_CommitSynchronizedSnapshotState`): byte `+3` travels with them.
+- **A player becomes an actor**: `Ov022_FillSelectorStates` loads the overlay of the group named by the character
+  for the player's slot (`Ov029_AcquireOverlaySlot(slot, character)`, `data_ov029_020b30b0[20][4]`: ov030-048 the
+  first player's, ov049 the dual-wielding Roxas, ov050-104 the others'), whose constructor (`Ov030_CreateActor` for
+  Roxas) sets the actor's `+9` (the member's slot) and `+0xc` (a constant of the overlay: its character), loads its
+  body's pack by a literal path (`ba/ch/ro/def.p.z`, `def_hb`, `def_hho`) through `TailForwardTrackEntry(slot, path,
+  1, slot + 7)` -- called by the 74 player overlays' constructors and by `Ov023_CmdSetupPartyActors` /
+  `Ov023_CmdSeatMembers` (there with packed handles, bit 31 set) -- and finds its bones by name (`roxas_tg`,
+  `ro_w_tg_R/L`, `roxas_R`, `Bip01`).
+- **The folder's readers** by the actor's `+0xc` or a character: `LevelTable_ReadEntry` (`lv.b.z`),
+  `Ov022_BuildActorSlot` (`w_.p2`), `Ov022_BuildActionTable` (`ci.b.z`, `cm.b.z`, and the weapon's move block
+  through `Ov002_LoadCharacterWeapon`, `wp.b.z`, read Xigbar's way for character 2), `Ov022_LoadActionRows`
+  (`am.p2`), `Ov022_LoadActorEffects`, `Ov022_StartAnimRequest` (`gl`, `rg`, `as`, `ma0`, `ma2`, `it` `.p.z`,
+  `eta<n>.p.z`), `Ov023_CmdSetupPartyActors`, `Ov008_LoadCharacterWeapon`, and Mission Mode's camp model
+  (`Ov008_Menu_InitSceneObject`: records of 0x34 by character at `data_ov008_0208e9c4`, the first word its code;
+  `def_hb` for 0, `def` for 5 and 0x10-0x12, `def_h` for the rest; `Ov008_Menu_LoadSceneText` its weapons' texts,
+  Roxas's for Xion).
+- **The port's characters**: a mod's `characters/<key>/character.ini` ([CHARACTERS.md](CHARACTERS.md)) gives a
+  character a number from 0x16 (their identities' order; 0x7f the last, the places' signed byte). Only the
+  select's places hold it: the seats and the members get its base's number (`Ov006_MenuEntryToSlot` /
+  `Ov008_MenuEntryToSlot` joined), so that the game's tables of characters -- the results', the camp's, the
+  shop's, the saves -- never see one they do not have, and the port keeps which seat is a new character's (the
+  joins at the seats' writes, `Ov006_UpdateMissionEntrySynchronization`, `Ov008_MissionLobbyPoll`; forgotten at
+  the title). The base's overlay plays it. Where the game opens a seat's character's data, the joins
+  (`port/tools/prepare.py`, "Characters of mods") give the character's own folder `ba/ch/c<number>/`, which the
+  port serves at the start (the mod's `data/` files, else copies of the base's: their own places in the ROM, so
+  that a model loaded from there is known as the character's and drawn as its model). The game's own select
+  screens draw a place on one as its base's place (`Ov006_UpdateMissionMemberMenuScreen`, `Ov008_LobbyStep`:
+  their gauges, model pose, names and slots index tables of 19, which a new number would run past: seen,
+  `Ov006_MissionApplyParameterRow` stopped the game reading row 0x16). Their input
+  (`Ov00N_UpdateMissionMemberSelectionInput`) looks for the place on the DS's grid (clamped to 18 there) and,
+  on any button, writes back the grid's character -- -1 for one it does not hold -- and the screen asks for
+  its place every frame (`Ov006_MissionArmCursorRequest`, seen with a watch): joined to keep the place's own
+  number unless a direction moves it.
+- **Its animations** (`skeleton = own`, seen 2026-10-28 with the maintainer's character on Roxas, the walk
+  `missions_waves`): each draw's render object carries the joint animation the game plays (`anmJnt`, its
+  frame and its BCA0 resource). Roxas's: standing `b_ro_A000` (39 frames), running `b_ro_A001` (18), the
+  ground combo `b_ro_B009`, `b_ro_B008`, `b_ro_B015`, then `b_ro_A004`; his folder's packs hold `b_ro_A000`-
+  `A011` (`def*.p.z`), `b_ro_e000`-`E010` (`etc.p.z`), `b_ro_D000` (`it.p.z`), `b_ro_D001`-`D003` (`ma0`-`ma2`),
+  `b_ro_L000`/`L001` (`li.p.z`), `b_ro_E011`/`E013`/`E014` (`eta*.p.z`); the B-series comes from elsewhere
+  (not found in his folder as text). The port draws the character's skeleton from the clip its description
+  gives each name, at the game's animation's point.
+- **Its weapon**: the game puts the weapon on the base model's `*_w_tg_R` node, read during the body's draw
+  by the node's callback (`NNS_G3dGetCurrentMtx` at `NODEDESC`, timing 3: the camp's
+  `Ov008_RefreshMatchingMatrices`; the field's actor finds the node by name in `Ov030_CreateActor`). The
+  port loads the character's own weapon bone's matrix there first, so the game's weapon follows it.

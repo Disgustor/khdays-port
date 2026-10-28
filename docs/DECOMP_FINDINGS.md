@@ -309,6 +309,17 @@ Taken up (for the record of what the old names were):
   - `Ov002_SpawnStateSpots` takes the emblems' set by the field's key (the mission's file) but their bits at
     `0x92b + 4 x data_0204c23c`, the mission's number; an `evi` row's bit is 0, 1 or 3 (the list's kinds 1, 2
     and 4), its s16 at +2 is 1 for the bit-3 ones.
+- The characters (spec 034, 2026-10-28):
+  - `NNSi_G3dDrawInternal.c`'s `NNSG3dRenderObj` leaves +0x08..+0x20 as `pad08_20`: they are `anmMat`,
+    `funcBlendMat`, `anmJnt` (+0x10, the joint animations: an `NNSG3dAnmObj` list -- frame in 20.12 at +0,
+    its `NNSG3dResJntAnm` at +8, whose u16 at +4 is its frames), `funcBlendJnt`, `anmVis`, `funcBlendVis`, as
+    `include/nnsys/g3d.h` and `NNSi_G3dFuncSbc_NODEDESC.c` name them.
+  - `Ov006_MenuEntryToSlot` / `Ov008_MenuEntryToSlot` turn a select's place (its own order, 0-18) into the
+    data folders' character number; `Ov006_MenuSlotToEntry` / `Ov008_MenuSlotToEntry` the other way. The
+    places keep it in a signed byte (`Ov006_GetMissionRowInfo`'s `icon`).
+  - `Ov008_Menu_InitSceneObject`'s `*param_2` ("sceneId") is the camp's character (member 0's): its model
+    pack, camera turn and texts by it; `data_ov008_0208e9c4`'s 0x34-byte records by character (the folder
+    code, then the weapon nodes' names `Ov008_Menu_BindScenePanels` looks up).
 
 ### 1.5 What agrees with the ROM only in the DS's frame or names
 

@@ -156,6 +156,17 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
             const int mission =
                 (p->mission_panel_state & 1u) && panel[KSI_ANCHORED] && panel[KSI_OUTPUT] == r[KE_IMAGE];
             if (information || mission) {
+                const float factor = khdays_composition_hud_factor(), scale = 0.766667f * factor;
+                if (mission && panel[KSI_PANEL_ANCHOR] >= 1 && panel[KSI_PANEL_ANCHOR] <= 9) {
+                    const unsigned anchor = panel[KSI_PANEL_ANCHOR] - 1;
+                    const float ax = (float)(anchor % 3) * .5f, ay = (float)(anchor / 3) * .5f;
+                    Picture *picture = &pictures[count++];
+                    picture->owner = -1;
+                    image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0,
+                                (float)khdays_composition_columns() * ax + (x - 256 * ax) * scale,
+                                192 * ay + (y - 192 * ay) * scale, w * scale, h * scale);
+                    continue;
+                }
                 if (mission) {
                     float native_y;
                     memcpy(&native_y, panel + KSI_ANCHOR_Y, 4);
@@ -165,7 +176,6 @@ void khdays_onescreen_images(const KhdaysFramePackage *p, const KhdaysSituation 
                     continue;
                 /* Match the player/party gauge's composition scale, with one root for both native engines.
                  * The element already contains gauge.json's offsets and the entire animation. */
-                const float factor = khdays_composition_hud_factor(), scale = 0.766667f * factor;
                 Picture *picture = &pictures[count++];
                 picture->owner = information ? -2 : -1;
                 image_shape(&picture->shape, r, e != p->upper ? KOF_LOWER : 0, x * scale,

@@ -1173,6 +1173,19 @@ panel tiles remain suppressed during gameplay and the heart counter returns to
 its usual top-left position. The panel is drawn while paused without freezing on
 an invisible entrance frame. A missing/disabled replacement retains native behavior.
 
+Optional `mission_panel.anchor` and `pause_anchor` accept `top-left`, `top`,
+`top-right`, `middle-left`, `middle`, `middle-right`, `bottom-left`, `bottom`,
+and `bottom-right`. `pause_anchor` inherits `anchor` when omitted. An omitted
+`anchor` (or `native`) retains the existing placement. Use `pause_anchor: "bottom"`
+with zero pause offsets to center the paused panel against the bottom edge.
+Offsets add to the selected position: positive X moves right and positive Y moves
+down; negative Y adds space above the bottom edge. Normal offsets still apply
+while paused, with pause offsets added. Explicit anchors align the resting
+background artwork, excluding transparent canvas padding, and preserve animation
+motion. Single-screen placement uses the current viewport and HUD size; on two
+screens it uses the native lower screen. Anchoring overrides the implicit top
+inset, independently of `align_hud_to_edges`. No anchor preserves legacy layout.
+
 `pause_mission_target` adds the native TARGET artwork between the PAUSE header and
 the buttons in an ordinary gameplay pause. It uses a 0.65 scale and moves the menu
 pieces to make room. A world-only panel, cutscene pause, or unavailable resource

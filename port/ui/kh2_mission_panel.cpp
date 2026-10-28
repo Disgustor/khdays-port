@@ -549,7 +549,8 @@ void draw(const Status &s)
     auto frame = seq::evaluate_sequence(d, player.clip(), player.frame());
     if (!frame.active)
         throw std::runtime_error("background lost its active parent");
-    auto rest = seq::evaluate_sequence(d, config.intro, float(seq::sequence_frame_count(d, config.intro) - 1)).active;
+    const auto resting = seq::evaluate_sequence(d, config.intro, float(seq::sequence_frame_count(d, config.intro) - 1));
+    auto rest = resting.active;
     if (!rest)
         throw std::runtime_error("background has no resting anchor");
     const float dx = float(frame.active->x - rest->x), dy = float(frame.active->y - rest->y);
@@ -718,6 +719,16 @@ void draw(const Status &s)
                       float(width),
                       float(height),
                       image};
+    const unsigned anchor = context.pause_mode ? config.pause_anchor : config.anchor;
+    if (anchor) {
+        const auto b = frame_bounds(resting);
+        if (b.x1 <= b.x0 || b.y1 <= b.y0)
+            throw std::runtime_error("anchored background has no resting bounds");
+        const float ax = float((anchor - 1) % 3) * .5f, ay = float((anchor - 1) / 3) * .5f;
+        e.x += 256 * ax - (std::lerp(b.x0, b.x1, ax) - config.source_origin_x) * config.scale;
+        e.y += 192 * ay - 152 - (std::lerp(b.y0, b.y1, ay) - config.source_origin_y) * config.scale;
+        w[KSI_PANEL_ANCHOR] = anchor;
+    }
     khdays_ui_emit(KHDAYS_UI_HUD, &e);
 }
 } // namespace

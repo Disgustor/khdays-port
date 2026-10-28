@@ -106,9 +106,21 @@ void tests()
     check(custom.description_x == 12 && custom.tally_x == 249 && custom.icon_gap == 7 && custom.counters_scale == 1.5f,
           "JSON anchors/row scale ignored");
     check(ui::load_hp_gauge_config(test_config).scale == .65f, "mission settings broke gauge loader");
+    const char *anchors[] = {"top-left",     "top",         "top-right", "middle-left", "middle",
+                             "middle-right", "bottom-left", "bottom",    "bottom-right"};
+    for (unsigned i = 0; i < 9; ++i) {
+        std::ofstream(test_config) << "{\"mission_panel\":{\"anchor\":\"" << anchors[i] << "\"}}";
+        const auto anchored = ui::load_mission_panel_config(test_config);
+        check(anchored.anchor == i + 1 && anchored.pause_anchor == i + 1, "anchor parsing/inheritance");
+    }
+    std::ofstream(test_config) << R"({"mission_panel":{"anchor":"top-right","pause_anchor":"bottom"}})";
+    const auto anchored = ui::load_mission_panel_config(test_config);
+    check(anchored.anchor == 3 && anchored.pause_anchor == 8, "pause anchor override");
+    check(config.anchor == 0 && config.pause_anchor == 0, "legacy panel placement changed");
     for (const char *bad : {R"({"mission_panel":{"scale":0}})", R"({"mission_panel":{"archive":"../bad"}})",
                             R"({"mission_panel":{"bar_start_x":25,"bar_end_x":10}})",
-                            R"({"mission_panel":{"unknown":1}})", R"({"mission_panel":{"counters_scale":0}})"}) {
+                            R"({"mission_panel":{"unknown":1}})", R"({"mission_panel":{"counters_scale":0}})",
+                            R"({"mission_panel":{"anchor":"invalid"}})", R"({"mission_panel":{"pause_anchor":4}})"}) {
         std::ofstream(test_config) << bad;
         bool rejected = false;
         try {
@@ -136,6 +148,31 @@ void tests()
     step();
     check(test_uploads == uploads, "unchanged panel text uploaded every frame");
     Status st;
+    const auto resting = frame_bounds(seq::evaluate_sequence(asset->sequence, config.intro, 9));
+    const auto original_config = config;
+    config.offset_x = 7;
+    config.offset_y = -9;
+    config.pause_offset_x = 13;
+    config.pause_offset_y = -11;
+    for (unsigned anchor = 1; anchor <= 9; ++anchor) {
+        config.anchor = anchor;
+        config.pause_anchor = 10 - anchor;
+        for (int paused = 0; paused < 2; ++paused) {
+            test_context.pause_mode = context.pause_mode = paused;
+            draw(st);
+            const unsigned chosen = paused ? config.pause_anchor : anchor;
+            const float ax = float((chosen - 1) % 3) * .5f, ay = float((chosen - 1) / 3) * .5f;
+            const float px = (std::lerp(resting.x0, resting.x1, ax) - config.source_origin_x) * config.scale - left;
+            const float py = (std::lerp(resting.y0, resting.y1, ay) - config.source_origin_y) * config.scale - top;
+            check(program.words[KSI_PANEL_ANCHOR] == chosen, "panel anchor metadata");
+            check(std::abs(test_element.x + px - (256 * ax + 7 + paused * 13)) < .001f,
+                  "dual-screen horizontal anchor/offset");
+            check(std::abs(test_element.y + py - (192 * ay - 9 - paused * 11)) < .001f,
+                  "dual-screen vertical anchor/offset");
+        }
+    }
+    config = original_config;
+    test_context.pause_mode = context.pause_mode = 0;
     st.description = u"Objective";
     st.chest_found = 11;
     st.chest_total = 127;

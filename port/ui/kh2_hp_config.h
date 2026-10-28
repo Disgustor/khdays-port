@@ -112,6 +112,7 @@ HeartPointsConfig load_heart_points_config(const std::filesystem::path &path);
 struct MissionPanelConfig final {
     bool enabled = false;
     bool pause_only = false;
+    unsigned anchor = 0, pause_anchor = 0;
     float pause_offset_x = 0, pause_offset_y = 0;
     std::string archive = "mission.2dd", texture = "mission.png", entry = "miss";
     int reference = 0, intro = 1, outro = 2, track = 3, fill = 4, ready_fill = 5, full_fill = 6;

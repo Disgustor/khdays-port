@@ -575,6 +575,17 @@ MissionPanelConfig load_mission_panel_config(const std::filesystem::path &path)
     c.pause_only = get(o, "pause_only", false);
     c.pause_offset_x = float(number(o, "pause_offset_x", 0, -4096, 4096));
     c.pause_offset_y = float(number(o, "pause_offset_y", 0, -4096, 4096));
+    const std::array<std::string, 10> anchors{"native", "top-left",     "top",         "top-right", "middle-left",
+                                              "middle", "middle-right", "bottom-left", "bottom",    "bottom-right"};
+    auto anchor = [&](const char *key, unsigned fallback) {
+        const auto value = get(o, key, anchors[fallback]);
+        const auto found = std::find(anchors.begin(), anchors.end(), value);
+        if (found == anchors.end())
+            throw std::runtime_error(std::string("gauge JSON: invalid mission panel ") + key + ": " + value);
+        return unsigned(found - anchors.begin());
+    };
+    c.anchor = anchor("anchor", 0);
+    c.pause_anchor = anchor("pause_anchor", c.anchor);
     for (auto [key, field] : {std::pair{"archive", &c.archive}, {"texture", &c.texture}, {"entry", &c.entry}}) {
         *field = get(o, key, *field);
         if (field->empty() || field->find_first_of("/\\:") != std::string::npos || *field == "..")

@@ -334,6 +334,8 @@ class GaugeImport(unittest.TestCase):
                 "description_x": 33,
                 "tally_x": 249,
                 "counter_gap": 9,
+                "anchor": "top-left",
+                "pause_anchor": "bottom",
             }
             (folder / "gauge.json").write_text(json.dumps({"mission_panel": panel}))
             (folder / "mine.2dd").write_bytes(b"custom authored sequence")

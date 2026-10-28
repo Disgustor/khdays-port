@@ -1686,6 +1686,43 @@ static void test_mission_panel_image(void)
         if ((c.shapes[i].words[KO_FLAGS] & KOF_IMAGE) && c.shapes[i].words[KO_KEYS] == 73)
             ++backdrop;
     CHECK(backdrop == 1);
+    // Anchors follow the viewport after HUD scaling, using resting artwork rather than canvas extents.
+    p->elements[1].count = 1;
+    const int columns[] = {256, 308, 342, 460, 768};
+    for (int size = 1; size <= 8; ++size) {
+        khdays_composition_set_hud_size(size);
+        const float scale = .766667f * khdays_composition_hud_factor();
+        for (unsigned a = 1; a <= 9; ++a) {
+            const float ax = (float)((a - 1) % 3) * .5f, ay = (float)((a - 1) / 3) * .5f;
+            p->mission_panel_image.words[KSI_PANEL_ANCHOR] = a;
+            put_float(records, KE_X, 256 * ax - (20 + 100 * ax) + 7);
+            put_float(records, KE_Y, 192 * ay - (10 + 20 * ay) - 9);
+            for (unsigned col = 0; col < sizeof(columns) / sizeof(columns[0]); ++col)
+                for (int aligned = 0; aligned < 2; ++aligned) {
+                    p->hud_options = aligned ? KHDAYS_HUD_ALIGN_EDGES : 0;
+                    khdays_composition_for(&s, columns[col], &c);
+                    khdays_onescreen_images(p, &s, &c);
+                    int found = 0;
+                    for (int j = 0; j < c.shape_count; ++j) {
+                        const uint32_t *shape = c.shapes[j].words;
+                        if (!(shape[KO_FLAGS] & KOF_IMAGE) || shape[KO_KEYS] != 71)
+                            continue;
+                        ++found;
+                        CHECK(fabsf(word_float(shape, KO_DST_X1) + (20 + 100 * ax) * scale -
+                                    (columns[col] * ax + 7 * scale)) < .001f);
+                        CHECK(fabsf(word_float(shape, KO_DST_Y1) + (10 + 20 * ay) * scale - (192 * ay - 9 * scale)) <
+                              .001f);
+                        CHECK(fabsf(word_float(shape, KO_DST_X2) - word_float(shape, KO_DST_X1) - 200 * scale) < .001f);
+                    }
+                    CHECK(found == 1);
+                }
+        }
+    }
+    khdays_composition_set_hud_size(4);
+    p->hud_options = 0;
+    p->mission_panel_image.words[KSI_PANEL_ANCHOR] = 0;
+    put_float(records, KE_X, -2);
+    put_float(records, KE_Y, 152 - 3);
     // With native INFORMATION, its crop still covers the independent mission panel.
     p->information_state = 0;
     p->elements[1].count = 1;

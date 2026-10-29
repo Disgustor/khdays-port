@@ -50,10 +50,13 @@ static char *joined(const char *a, const char *b)
 
 static void clear(void)
 {
+#pragma warning(push)
+#pragma warning(disable : 6001) /* each of the first `count` mods was written whole by add() */
     for (int i = 0; i < count; ++i) {
         free(mods[i].folder);
         free(mods[i].path);
     }
+#pragma warning(pop)
     free(mods);
     mods = NULL;
     count = capacity = 0;

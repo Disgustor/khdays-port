@@ -8,7 +8,8 @@ AI, cameras -- and get the port's interfaces through the **KH Mod SDK** (`sdk/`)
 ## For players: turning native code on
 
 A plugin can do anything a program on your computer can: read and write your files, crash the game, damage its
-saves. The port does not isolate it. So the game loads no plugin until you turn native code on, in the settings
+saves. The port does not isolate it. So the game loads no plugin until you turn native code on: in the settings
+menu (Esc), on the Mods page, **Native code** -- its description says what it lets run -- or in the settings
 file's `[mods]`:
 
 ```ini
@@ -16,8 +17,10 @@ file's `[mods]`:
 native_code = on
 ```
 
-Only turn it on for mods you trust, from people you trust. The mods' log (`saves/logs/mods.log`) names each plugin
-with its mod and the author its mod declares, and says why one is not loaded. The game never downloads a plugin.
+It is read as the game starts: a change counts from the next start. Only turn it on for mods you trust, from people
+you trust. The Mods page lists each plugin with its mod, version and declared author, and what became of it as the
+game started (running, waiting for native code or safe mode, not loaded and why); the mods' log
+(`saves/logs/mods.log`) says the same as it happens. The game never downloads a plugin.
 
 **Safe mode**: start the game with `--safe-mode` (or `KHDAYS_SAFE_MODE=1` in the environment) and no plugin is
 loaded whatever the setting -- for when a plugin keeps the game from starting.

@@ -10,6 +10,7 @@
 #include "../runtime/plugins/actors.h"
 #include "../runtime/plugins/interfaces.h"
 #include "../runtime/plugins/plugins.h"
+#include "../runtime/plugins/shown.h"
 #include "../runtime/scripts/enemies_link.h"
 #include "../runtime/scripts/game_link.h"
 
@@ -562,6 +563,21 @@ static int SDLCALL quit_thread(void *unused)
     return 0;
 }
 
+/* What the settings menu's Mods page is shown: the plugins' own views, as they are now (shown.h). */
+static void check_shown(int safe_mode)
+{
+    KhdaysPluginsShown shown;
+    memset(&shown, 0, sizeof(shown));
+    CHECK(khdays_plugins_shown(&shown) && shown.count == khdays_plugins_count() && shown.safe_mode == safe_mode);
+    for (int i = 0; i < shown.count; ++i) {
+        const KhdaysPluginView *v = khdays_plugins_at(i);
+        CHECK(shown.plugins[i].state == v->state && strcmp(shown.plugins[i].name, v->name) == 0 &&
+              strcmp(shown.plugins[i].author, v->author) == 0 && strcmp(shown.plugins[i].why, v->why) == 0);
+    }
+    CHECK(!khdays_plugins_shown(&shown)); /* nothing newer */
+    khdays_plugins_shown_free(&shown);
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "on";
@@ -572,6 +588,7 @@ int main(int argc, char **argv)
     khdays_plugins_set_safe_mode(strcmp(mode, "safe") == 0);
     khdays_plugins_start("plugins_test_mods", heard);
     CHECK(khdays_plugins_count() == 12); /* I has no plugin */
+    check_shown(strcmp(mode, "safe") == 0);
     if (strcmp(mode, "on") != 0) {
         CHECK(state("example.hello-world") == KHDAYS_PLUGIN_WAITING);
         CHECK(state("test.counting") == KHDAYS_PLUGIN_WAITING);
@@ -651,6 +668,7 @@ int main(int argc, char **argv)
         CHECK(strstr(said, "test.static: plugin built in, stopped") != NULL);
         CHECK(!khdays_hook_on(0) && !khdays_plugins_listening()); /* their hooks and subscriptions gone */
         khdays_plugins_stop();                                    /* again: nothing left to stop */
+        check_shown(0);
         CHECK(strstr(strstr(said, "Goodbye") + 1, "Goodbye") == NULL);
     }
     if (failures != 0) {

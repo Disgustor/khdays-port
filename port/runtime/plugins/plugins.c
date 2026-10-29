@@ -2,6 +2,7 @@
 #include "plugins.h"
 #include "interfaces.h"
 #include "parameters.h"
+#include "shown.h"
 
 #include "../core/sha256.h"
 #include "../net/net_session.h"
@@ -633,10 +634,28 @@ static void load(Plugin *p)
     set_why(p, KHDAYS_PLUGIN_STARTED, "");
 }
 
-void khdays_plugins_start(const char *mods, KhdaysPluginsLog log)
+/* The plugins' states for the settings menu's Mods page (shown.h). */
+static void publish(void)
 {
-    say = log;
-    khdays_plugins_mark_game_thread();
+    KhdaysPluginsShown now;
+    memset(&now, 0, sizeof(now));
+    now.safe_mode = safe_mode;
+    now.plugins = plugin_count > 0 ? calloc((size_t)plugin_count, sizeof(*now.plugins)) : NULL;
+    now.count = now.plugins != NULL ? plugin_count : 0;
+    for (int i = 0; i < now.count; ++i) {
+        const KhdaysPluginView *v = &plugins[i]->view;
+        now.plugins[i].name = (char *)v->name;
+        now.plugins[i].version = (char *)v->version;
+        now.plugins[i].author = (char *)v->author;
+        now.plugins[i].why = (char *)v->why;
+        now.plugins[i].state = v->state;
+    }
+    khdays_plugins_shown_set(&now); /* copies the strings */
+    free(now.plugins);
+}
+
+static void start_them(const char *mods)
+{
     khdays_folders_list(mods, found, (void *)mods);
     if (plugin_count == 0) {
         return;
@@ -684,6 +703,14 @@ void khdays_plugins_start(const char *mods, KhdaysPluginsLog log)
     }
 }
 
+void khdays_plugins_start(const char *mods, KhdaysPluginsLog log)
+{
+    say = log;
+    khdays_plugins_mark_game_thread();
+    start_them(mods);
+    publish();
+}
+
 void khdays_plugins_stop(void)
 {
     for (int order = started_count - 1; order >= 0; --order) {
@@ -706,6 +733,7 @@ void khdays_plugins_stop(void)
         }
     }
     started_count = 0;
+    publish();
 }
 
 void khdays_plugins_frame(void)

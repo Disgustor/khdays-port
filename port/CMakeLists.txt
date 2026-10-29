@@ -308,7 +308,8 @@ add_library(khdays-host-input STATIC
     host/screens/ui_font.cpp
     host/screens/ui_text.c
     runtime/scripts/queue.c          # the Mods page: what it asks of the mods,
-    runtime/scripts/view.c           # and what it shows of them
+    runtime/scripts/view.c           # and what it shows of them,
+    runtime/plugins/shown.c          # and of the native plugins
     host/render/png_io.c
     host/app/instance_win.c          # the player's slot on the PC
     runtime/input/analog.c
@@ -827,7 +828,7 @@ endforeach()
 add_executable(khdays-plugins-test tests/plugins_test.c runtime/plugins/plugins.c runtime/plugins/interfaces.c
                runtime/plugins/engine.c runtime/plugins/actors.c runtime/plugins/characters.c
                runtime/plugins/combat.c runtime/plugins/input.c runtime/plugins/parameters.c
-               tests/plugins/static_plugin.c
+               runtime/plugins/shown.c tests/plugins/static_plugin.c
                runtime/scripts/manifest.c runtime/scripts/folders.cpp runtime/core/sha256.c)
 target_include_directories(khdays-plugins-test PRIVATE ../sdk/include)
 target_link_libraries(khdays-plugins-test PRIVATE SDL3::SDL3)

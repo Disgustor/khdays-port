@@ -737,8 +737,9 @@ as `mods-examples/`) has examples to copy into `mods/`; khdays-studio's Console 
 mods print and reloads them while the game runs.
 
 For what scripts cannot do, a mod can carry a native plugin: C++ built for the player's computer
-against the KH Mod SDK (`sdk/`), loaded only once the player has turned native code on (it runs
-inside the game, unisolated). `docs/MODDING_NATIVE.md` describes it.
+against the KH Mod SDK (`sdk/`), loaded only once the player has turned native code on (the
+settings menu's Mods page, read at the next start; it runs inside the game, unisolated).
+`docs/MODDING_NATIVE.md` describes it.
 
 ## Multiplayer
 

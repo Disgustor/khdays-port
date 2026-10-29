@@ -59,6 +59,8 @@ cmake --build build/sdk
 `build/sdk/examples/HelloWorld/hello_world.dll` is the Hello World plugin: copy it into
 `mods/HelloWorld/native/windows-x64/` beside `sdk/examples/HelloWorld/mod.ini`, turn native code on, start the game:
 the mods' log says hello at the start and goodbye when the game closes. `sdk/docs/README.md` explains the interface.
+Installed with KH Studio, the game's folder has the SDK in `sdk/` and the examples ready to copy into `mods/` (their
+plugins built) in `mods-examples/`.
 
 **Linux** (`native.linux-x64`, `native.linux-arm64`: `.so`) builds the same on Linux with gcc or clang, or from
 another system with `sdk/cmake/toolchain-linux-x64-clang.cmake` (clang and lld; a Linux system's files as its

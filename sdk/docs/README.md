@@ -52,7 +52,9 @@ extern "C" KH_PLUGIN_EXPORT const KhPluginDescriptor *kh_plugin_query(void)
 | `examples/CustomLimit` | a character's Limit of its own: the game's skipped at `Ov022_ActorSetState`, the buttons hidden (`kh.input`), its own clips played (`kh.characters`), its spins' hits dealt through the game's routine (`kh.combat`); `make_files.py` makes its made-up character |
 | `examples/CustomEnemy` | the Shadows given a behaviour of their own: they blink away and split, after `Ov107_AiState_ApplyHit`'s hook (`kh.actors`' `set_position`, `make_enemy`) |
 
-Each is a mod folder: copy it to the game's `mods/` with its built library in `native/<platform>/`.
+Each is a mod folder: copy it to the game's `mods/` with its built library in `native/<platform>/`. The installer
+brings them with KH Studio: this SDK in the game's `sdk/`, and each example ready to copy, its Windows plugin built,
+in `mods-examples/`.
 
 A mod may describe its plugin's parameters in `parameters.ini` (`examples/CustomLimit` does): KH Studio shows and
 saves them without loading the plugin, which reads them through `kh.parameters` (docs/MODDING_NATIVE.md in the

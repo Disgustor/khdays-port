@@ -368,6 +368,18 @@ is chosen). It changes at once and is kept in the settings.
     show -- stays as written. Another character chosen, or the studio closed,
     with changes not saved asks first.
 
+13. **Missions.** "Missions" (top right) holds the chosen mod's own missions
+    (docs/STUDIO.md, "New missions"): **New mission** makes one from a folder
+    name, a world and a room. Each mission's **Places on the map** shows its
+    room from above with its floor: choose what to add -- the players' start,
+    enemies, a chest, an emblem -- and click the floor; drag a place to move
+    it; click it to change it on the right (its wave and enemies by name, how
+    many, its facing, a chest's contents, an emblem's badge) or remove it.
+    **Save the places** writes them all at once when the mission builds as the
+    game will build it. **Words and settings** holds its name, objective and
+    description in each language, its world, room, level, time and when it
+    opens.
+
 Sound loops and old-format mods come next.
 
 ## Native plugins' examples

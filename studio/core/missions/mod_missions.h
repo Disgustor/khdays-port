@@ -3,8 +3,10 @@
 // docs/STUDIO.md, "New missions".
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace studio {
@@ -59,6 +61,33 @@ bool clear_mod_mission_lines(const std::filesystem::path& mod_dir, const std::st
 bool check_mod_mission_build(const std::filesystem::path& nitrofs, const std::filesystem::path& mod_dir,
                              const std::string& key, bool* has_waves, std::vector<std::string>* off_floor,
                              std::string* why);
+
+// A place of a mission's, as its block writes it: where the players start, a spawner of a wave with its enemies,
+// a chest, an emblem. Places in the game's units (1 = 4096 in 20.12).
+struct MissionSpot {
+    enum class Kind { start, spawner, chest, emblem };
+    Kind kind = Kind::spawner;
+    std::array<double, 3> at{};
+    int heading = 0;                           // the start's facing, a chest's heading (degrees)
+    int wave = 1;                              // a spawner's (1-255)
+    std::vector<std::pair<int, int>> enemies;  // a spawner's: (class, count)
+    int contents = 0;                          // a chest's: an item of the game's
+    int emblem = 0;                            // an emblem's: which of the mission's three badges (0-2)
+};
+
+// Mission `key`'s places as the port reads them (its start first, when it has one); empty when it does not read
+// (*why).
+std::vector<MissionSpot> mod_mission_spots(const std::filesystem::path& mod_dir, const std::string& key,
+                                           std::string* why);
+
+// A place as its block's line: its setting (start, wave <n>, chest, emblem) and value.
+std::pair<std::string, std::string> mission_spot_line(const MissionSpot& s);
+
+// Mission `key`'s start, waves, chests and emblems made `spots` at once: its block's lines of those replaced, in the
+// place of the first of them (else at its end), written when the mission reads as the port reads it and builds as
+// the port builds it; else left as it was. False with the reason.
+bool set_mod_mission_spots(const std::filesystem::path& nitrofs, const std::filesystem::path& mod_dir,
+                           const std::string& key, const std::vector<MissionSpot>& spots, std::string* why);
 
 // Every mission of the mod checked as the port takes them: the descriptions, each one's file (its own or its
 // template's), its world and room. One line each, problems first said "problem:". True with none.

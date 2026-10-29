@@ -188,6 +188,7 @@ add_executable(khdays-studio
     app/main.cpp
     app/views/map_view.cpp
     app/views/mission_view.cpp
+    app/views/mission_map.cpp
     app/views/movie_view.cpp
     app/views/text_view.cpp
     app/views/mod_panel.cpp

@@ -64,7 +64,7 @@ void draw_notices(App& app);  // below
 
 // The windows over the studio's page, open or not.
 struct Windows {
-    bool settings = false, themes = false, console = false, plugin = false, characters = false;
+    bool settings = false, themes = false, console = false, plugin = false, characters = false, missions = false;
 };
 
 void draw_frame(App& app, Windows& open) {
@@ -80,14 +80,18 @@ void draw_frame(App& app, Windows& open) {
     // the themes and the settings at the right end of the same row
     const ImGuiStyle& style = ImGui::GetStyle();
     const float buttons =
+        ImGui::CalcTextSize(tr(app.language, S::mw_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::chars_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::plugin_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::console)).x + ImGui::CalcTextSize(tr(app.language, S::themes)).x +
-        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 10 + style.ItemSpacing.x * 4;
+        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 12 + style.ItemSpacing.x * 5;
     ImGui::SameLine();
     const float room = ImGui::GetContentRegionAvail().x;
     if (room > buttons)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + room - buttons);
+    if (ImGui::Button(tr(app.language, S::mw_button)))
+        open.missions = true;
+    ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::chars_button)))
         open.characters = true;
     ImGui::SameLine();
@@ -130,6 +134,8 @@ void draw_frame(App& app, Windows& open) {
         draw_plugin_parameters(app, &open.plugin);
     if (open.characters)
         draw_characters(app, &open.characters);
+    if (open.missions)
+        draw_mod_missions(app, &open.missions);
 }
 
 // The results a person must see (App::tell), over the window: a success in

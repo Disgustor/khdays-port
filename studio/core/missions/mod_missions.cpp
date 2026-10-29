@@ -400,6 +400,129 @@ bool clear_mod_mission_lines(const fs::path& mod_dir, const std::string& key, co
 
 namespace {
 
+// A number as a line writes it: up to three decimals, no trailing zeros.
+std::string number_text(double v) {
+    char text[32];
+    std::snprintf(text, sizeof(text), "%.3f", v);
+    std::string s = text;
+    while (!s.empty() && s.back() == '0')
+        s.pop_back();
+    if (!s.empty() && s.back() == '.')
+        s.pop_back();
+    return s == "-0" ? "0" : s;
+}
+
+std::string at_text(const std::array<double, 3>& at) {
+    return number_text(at[0]) + " " + number_text(at[1]) + " " + number_text(at[2]);
+}
+
+}  // namespace
+
+std::vector<MissionSpot> mod_mission_spots(const fs::path& mod_dir, const std::string& key, std::string* why) {
+    std::vector<MissionSpot> out;
+    KhdaysMissions r{};
+    Reports reports;
+    read_registry(read_text(missions_txt(mod_dir)), &r, &reports);
+    const KhdaysMission* m = nullptr;
+    for (int i = 0; i < r.count; ++i)
+        if (key == r.list[i].key)
+            m = &r.list[i];
+    if (m == nullptr) {
+        fail_with(why, "the mod has no mission " + key + " that reads");
+    } else {
+        if (m->has_start) {
+            MissionSpot s;
+            s.kind = MissionSpot::Kind::start;
+            s.at = {m->start[0], m->start[1], m->start[2]};
+            s.heading = m->facing;
+            out.push_back(s);
+        }
+        for (int i = 0; i < m->spawner_count; ++i) {
+            MissionSpot s;
+            s.kind = MissionSpot::Kind::spawner;
+            s.at = {m->spawners[i].at[0], m->spawners[i].at[1], m->spawners[i].at[2]};
+            s.wave = m->spawners[i].wave;
+            for (int e = 0; e < m->spawners[i].enemy_count; ++e)
+                s.enemies.emplace_back(m->spawners[i].enemies[e].enemy_class, m->spawners[i].enemies[e].count);
+            out.push_back(s);
+        }
+        for (int i = 0; i < m->chest_count; ++i) {
+            MissionSpot s;
+            s.kind = MissionSpot::Kind::chest;
+            s.at = {m->chests[i].at[0], m->chests[i].at[1], m->chests[i].at[2]};
+            s.contents = m->chests[i].item;
+            s.heading = m->chests[i].heading;
+            out.push_back(s);
+        }
+        for (int i = 0; i < m->emblem_count; ++i) {
+            MissionSpot s;
+            s.kind = MissionSpot::Kind::emblem;
+            s.at = {m->emblems[i].at[0], m->emblems[i].at[1], m->emblems[i].at[2]};
+            s.emblem = m->emblems[i].kind;
+            out.push_back(s);
+        }
+    }
+    khdays_missions_free(&r);
+    return out;
+}
+
+std::pair<std::string, std::string> mission_spot_line(const MissionSpot& s) {
+    switch (s.kind) {
+    case MissionSpot::Kind::start: return {"start", at_text(s.at) + " " + std::to_string(s.heading)};
+    case MissionSpot::Kind::spawner: {
+        std::string enemies;
+        for (const auto& [enemy_class, count] : s.enemies)
+            enemies += std::to_string(enemy_class) + "x" + std::to_string(count) + " ";
+        return {"wave " + std::to_string(s.wave), enemies + "at " + at_text(s.at)};
+    }
+    case MissionSpot::Kind::chest:
+        return {"chest", std::to_string(s.contents) + " at " + at_text(s.at) + " " + std::to_string(s.heading)};
+    case MissionSpot::Kind::emblem: return {"emblem", std::to_string(s.emblem) + " at " + at_text(s.at)};
+    }
+    return {};
+}
+
+bool set_mod_mission_spots(const fs::path& nitrofs, const fs::path& mod_dir, const std::string& key,
+                           const std::vector<MissionSpot>& spots, std::string* why) {
+    const std::string before = read_text(missions_txt(mod_dir));
+    std::vector<std::string> lines = lines_of(before);
+    std::size_t start, end;
+    if (!block_of(lines, key, &start, &end))
+        return fail_with(why, "the mod has no mission " + key);
+    // the block's places taken out, the new ones where the first was
+    std::size_t at = 0;
+    for (std::size_t i = end; i-- > start + 1;) {
+        const std::string s = setting_of(lines[i]);
+        if (s == "start" || s == "chest" || s == "emblem" || s.rfind("wave ", 0) == 0) {
+            lines.erase(lines.begin() + static_cast<std::ptrdiff_t>(i));
+            at = i;
+            --end;
+        }
+    }
+    if (at == 0)
+        at = block_append_at(lines, start, end);
+    std::vector<std::string> added;
+    for (const MissionSpot& s : spots) {
+        const auto [setting, value] = mission_spot_line(s);
+        added.push_back(setting + " = " + value);
+    }
+    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(at), added.begin(), added.end());
+    if (!write_checked(mod_dir, lines, key, "its places", why))
+        return false;
+    // built as the port builds it, else put back as it was
+    bool has_waves = false;
+    std::string built_why;
+    if (!check_mod_mission_build(nitrofs, mod_dir, key, &has_waves, nullptr, &built_why)) {
+        std::vector<std::string> back = lines_of(before);
+        std::string ignored;
+        write_checked(mod_dir, back, key, "its places", &ignored);
+        return fail_with(why, "it would not build: " + built_why);
+    }
+    return true;
+}
+
+namespace {
+
 // The places of mission `m` over no floor of its room, said: its start, its spawners, chests and emblems.
 std::vector<std::string> off_the_floor(const fs::path& nitrofs, const KhdaysMission& m) {
     std::vector<std::string> out;

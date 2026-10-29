@@ -11,6 +11,7 @@
 #include "core/missions/missions.h"
 #include "core/missions/mod_missions.h"
 
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -794,4 +795,53 @@ TEST(a_new_missions_waves_chests_and_emblems_added_and_taken_away) {
     CHECK(text.find("wave 1 =") == std::string::npos && text.find("wave 2 =") == std::string::npos &&
           text.find("emblem") == std::string::npos && text.find("chest = 257") != std::string::npos &&
           text.find("[mission other]") != std::string::npos);
+}
+
+TEST(a_new_missions_places_read_and_saved_at_once) {
+    const auto root = studio_test::scratch("mission_places");
+    const auto mod = root / "mods" / "M";
+    const auto txt = mod / "missions" / "missions.txt";
+    studio_test::write(txt, "[mission map]\nname en = W\nobjective en = O\nworld = eh\nroom = 2\n"
+                            "start = 1 0.049 -2 90\nwave 1 = 0x2 32x1 at 0 0.049 1.5\nchest = 257 at 1.25 0 -2 180\n"
+                            "emblem = 1 at -1 0 2\nlevel = 5\n\n[mission other]\nname en = X\nobjective en = Y\n"
+                            "world = tt\n");
+    std::string why;
+    using Kind = studio::MissionSpot::Kind;
+    auto spots = studio::mod_mission_spots(mod, "map", &why);
+    CHECK(spots.size() == 4 && spots[0].kind == Kind::start && spots[0].heading == 90);
+    CHECK(spots[1].kind == Kind::spawner && spots[1].wave == 1 && spots[1].enemies.size() == 2 &&
+          spots[1].enemies[1] == std::make_pair(32, 1) && std::fabs(spots[1].at[2] - 1.5) < 1e-9);
+    CHECK(spots[2].kind == Kind::chest && spots[2].contents == 257 && spots[2].heading == 180);
+    CHECK(spots[3].kind == Kind::emblem && spots[3].emblem == 1);
+    CHECK(studio::mission_spot_line(spots[1]) ==
+          std::make_pair(std::string("wave 1"), std::string("0x2 32x1 at 0 0.049 1.5")));
+    CHECK(studio::mission_spot_line(spots[2]) ==
+          std::make_pair(std::string("chest"), std::string("257 at 1.25 0 -2 180")));
+    CHECK(studio::mod_mission_spots(mod, "nothing", &why).empty() && !why.empty());
+
+    // the places made others at once: where the first one was, the block's other lines kept
+    spots[0].at = {3.5, 0.049, 4};
+    spots[3].emblem = 2;
+    spots.erase(spots.begin() + 1);  // no wave: nothing to build
+    studio::MissionSpot chest;
+    chest.kind = Kind::chest;
+    chest.at = {-2, 0, 0.125};
+    chest.contents = 3;
+    spots.push_back(chest);
+    const auto nitrofs = root / "nitrofs";  // no game: a mission with waves would not build
+    CHECK(studio::set_mod_mission_spots(nitrofs, mod, "map", spots, &why));
+    const Bytes after = file_bytes(txt);
+    const std::string text(after.begin(), after.end());
+    CHECK(text.find("start = 3.5 0.049 4 90\nchest = 257 at 1.25 0 -2 180\nemblem = 2 at -1 0 2\n"
+                    "chest = 3 at -2 0 0.125 0\nlevel = 5\n") != std::string::npos);
+    CHECK(text.find("wave") == std::string::npos && text.find("[mission other]") != std::string::npos);
+    CHECK(studio::mod_mission_spots(mod, "map", &why).size() == 4);
+
+    // a wave that does not build (here: no game files) leaves the file as it was
+    studio::MissionSpot wave;
+    wave.kind = Kind::spawner;
+    wave.enemies = {{0, 1}};
+    spots.push_back(wave);
+    CHECK(!studio::set_mod_mission_spots(nitrofs, mod, "map", spots, &why) && why.find("build") != std::string::npos);
+    CHECK(file_bytes(txt) == after);
 }

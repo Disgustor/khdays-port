@@ -445,12 +445,18 @@ void draw_preview(App& app, const Mod& m, ImVec2 size) {
     }
 
     SDL_GPUTexture* texture = p.finish();
+    const ImVec2 at = ImGui::GetCursorScreenPos();
     if (texture != nullptr)
         ImGui::Image(ImTextureRef(static_cast<ImTextureID>(reinterpret_cast<intptr_t>(texture))),
                      ImVec2(static_cast<float>(w), static_cast<float>(h)));
     else
         ImGui::Dummy(ImVec2(static_cast<float>(w), static_cast<float>(h)));
-    const bool hovered = ImGui::IsItemHovered();
+    // the mouse the picture's own (a drag on it never moves the window)
+    ImGui::SetCursorScreenPos(at);
+    ImGui::InvisibleButton("##preview", ImVec2(static_cast<float>(w), static_cast<float>(h)),
+                           ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
+                               ImGuiButtonFlags_MouseButtonMiddle);
+    const bool hovered = ImGui::IsItemHovered() || ImGui::IsItemActive();
     if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         const ImVec2 d = ImGui::GetIO().MouseDelta;
         v.yaw -= d.x * 0.4f;

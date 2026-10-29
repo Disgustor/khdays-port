@@ -1027,82 +1027,55 @@ void language_text(const char* label, std::vector<std::string>& texts, bool line
         ImGui::InputText(id.c_str(), &t);
 }
 
-// The enemy classes the game's missions have rows of (what a wave may use), read once.
-const std::vector<int>& buildable_classes() {
-    static const std::vector<int> classes = buildable_enemy_classes(extracted_game_files(nitrofs()));
-    return classes;
-}
-
-// Its waves, chests and emblems: each line as written, added or taken away in the mod at once; the start among
-// the settings saved with the others.
-void draw_new_mission_spots(App& app, const Mod& m, ModMission& e) {
+// A new mission: its key, its world and room (the world's rooms counted when it is chosen), the game mission it
+// starts from; made in the mod and chosen.
+void draw_new_mission_form(App& app, const Mod& m) {
     const auto lang = app.language;
-    ImGui::TextUnformatted(tr(lang, S::new_missions_spots));
-    ImGui::PushTextWrapPos(0);
-    ImGui::TextDisabled("%s", tr(lang, S::new_missions_spots_note));
-    ImGui::PopTextWrapPos();
-    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
-    ImGui::InputText(tr(lang, S::new_missions_start), &e.start);
-    for (const auto& [setting, value] : e.lines)
-        ImGui::BulletText("%s = %s", setting.c_str(), value.c_str());
-    // a line added: a wave's (its number), a chest's or an emblem's
-    static int kind = 0, wave = 1;
-    static std::string value;
-    static const char* const kinds[] = {"wave", "chest", "emblem"};
-    static const char* const hints[] = {"0x2 32x1 at 0 0.049 1.5", "2 at 1.5 0.049 0 90", "2 at -1.5 0.049 0"};
+    static std::string key;
+    static std::string world = "tt";
+    static int room = 0, rooms = 0;
+    static std::string rooms_for;
+    static int template_file = 0;
+    if (rooms_for != world) {
+        World w;
+        std::string why;
+        rooms = load_world(nitrofs(), world, &w, &why) ? static_cast<int>(w.rooms.size()) : 0;
+        rooms_for = world;
+    }
+    if (template_file == 0) {
+        const auto numbers = mission_numbers(nitrofs());
+        template_file = numbers.empty() ? 0 : numbers.front();
+    }
+    ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
+    ImGui::InputTextWithHint("##newmissionkey", tr(lang, S::mw_new_key), &key);
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(6 * ImGui::GetFontSize());
-    ImGui::Combo("##spotkind", &kind, kinds, 3);
-    if (kind == 0) {
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(5 * ImGui::GetFontSize());
-        ImGui::InputInt("##wave", &wave);
-        wave = std::clamp(wave, 1, 255);
+    if (ImGui::BeginCombo(tr(lang, S::mw_new_world), world.c_str())) {
+        for (const char* w : {"tt", "aw", "he", "al", "eh", "nm", "zz", "pp", "bb", "tw"})
+            if (ImGui::Selectable(w, world == w))
+                world = w;
+        ImGui::EndCombo();
     }
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(18 * ImGui::GetFontSize());
-    ImGui::InputTextWithHint("##spotvalue", hints[kind], &value);
-    const std::string setting = kind == 0 ? "wave " + std::to_string(wave) : kinds[kind];
+    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
+    ImGui::SliderInt(tr(lang, S::mw_new_room), &room, 0, std::max(0, rooms - 1));
+    room = std::clamp(room, 0, std::max(0, rooms - 1));
     ImGui::SameLine();
-    ImGui::BeginDisabled(value.empty());
-    if (ImGui::Button(tr(lang, S::new_missions_add))) {
+    ImGui::BeginDisabled(key.empty() || rooms == 0 || template_file == 0);
+    if (ImGui::Button(tr(lang, S::mw_new_create))) {
         std::string why;
-        const bool ok = add_mod_mission_line(m.dir, e.key, setting, value, &why);
-        app.tell(ok ? fmt(lang, S::new_missions_added, {e.key, setting, value}) + "  " + tr(lang, S::restart_note)
-                    : fmt(lang, S::save_failed, {why}),
-                 ok);
-        nm.stale = ok;
-        if (ok)
-            value.clear();
+        if (new_mod_mission(nitrofs(), m.dir, key, template_file, world, room, &why)) {
+            app.tell(fmt(lang, S::mw_new_created, {key}), true);
+            read_new_missions(&m);
+            for (std::size_t i = 0; i < nm.missions.size(); ++i)
+                if (nm.missions[i].key == key)
+                    choose_new_mission(static_cast<int>(i));
+            key.clear();
+        } else {
+            app.tell(fmt(lang, S::save_failed, {why}), false);
+        }
     }
     ImGui::EndDisabled();
-    // every line of the chosen kind (a wave's: that wave's) taken away
-    ImGui::SameLine();
-    if (ImGui::Button((std::string(tr(lang, S::new_missions_clear)) + ": " + setting).c_str())) {
-        std::string why;
-        int removed = 0;
-        const bool ok = clear_mod_mission_lines(m.dir, e.key, setting, &removed, &why);
-        app.tell(ok ? fmt(lang, S::new_missions_cleared, {e.key, std::to_string(removed), setting})
-                    : fmt(lang, S::save_failed, {why}),
-                 ok);
-        nm.stale = ok;
-    }
-    if (ImGui::Button(tr(lang, S::new_missions_check))) {
-        std::string why;
-        bool has_waves = false;
-        std::vector<std::string> off_floor;
-        const bool ok = check_mod_mission_build(nitrofs(), m.dir, e.key, &has_waves, &off_floor, &why);
-        std::string said = !ok         ? fmt(lang, S::save_failed, {why})
-                           : has_waves ? fmt(lang, S::new_missions_builds, {e.key})
-                                       : fmt(lang, S::new_missions_no_waves, {e.key});
-        for (const std::string& w : off_floor)
-            said += "\n" + w;
-        app.tell(said, ok && off_floor.empty());
-    }
-    if (ImGui::TreeNode(tr(lang, S::new_missions_classes))) {
-        for (const int c : buildable_classes())
-            ImGui::Text("%d: %s", c, enemy_name(c));
-        ImGui::TreePop();
-    }
 }
 
 void draw_new_missions(App& app) {
@@ -1122,6 +1095,9 @@ void draw_new_missions(App& app) {
         for (const std::string& p : nm.problems)
             ImGui::BulletText("%s", p.c_str());
     }
+    // a new one, any time; the only thing shown while the mod has none
+    if (ImGui::CollapsingHeader(tr(lang, S::mw_new), nm.missions.empty() ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        draw_new_mission_form(app, *m);
     if (nm.missions.empty()) {
         ImGui::PushTextWrapPos(0);
         ImGui::TextUnformatted(tr(lang, S::new_missions_none));
@@ -1135,7 +1111,7 @@ void draw_new_missions(App& app) {
         for (std::size_t i = 0; i < nm.missions.size(); ++i) {
             if (ImGui::Selectable(nm.missions[i].key.c_str(), static_cast<int>(i) == nm.chosen) &&
                 static_cast<int>(i) != nm.chosen) {
-                if (changes.empty())
+                if (changes.empty() && !mission_map_unsaved())
                     choose_new_mission(static_cast<int>(i));
                 else
                     nm.wanted = static_cast<int>(i);
@@ -1146,7 +1122,7 @@ void draw_new_missions(App& app) {
     if (nm.wanted != -2)
         ImGui::OpenPopup("###unsavedmission");
     if (ImGui::BeginPopupModal("###unsavedmission", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextUnformatted(fmt(lang, S::new_missions_unsaved, {nm.edit.key}).c_str());
+        ImGui::TextUnformatted(fmt(lang, S::new_missions_unsaved, {nm.edit.key}).c_str());  // its map's places too
         if (ImGui::Button(tr(lang, S::new_missions_drop))) {
             choose_new_mission(nm.wanted);
             nm.wanted = -2;
@@ -1185,7 +1161,17 @@ void draw_new_missions(App& app) {
         if (ImGui::Button(tr(lang, S::mission_undo)))
             choose_new_mission(nm.chosen);
     }
-    ImGui::Separator();
+    // its places on its room's map, and its words and settings
+    if (!ImGui::BeginTabBar("##newmissiontabs"))
+        return;
+    if (ImGui::BeginTabItem(tr(lang, S::mmap_tab))) {
+        draw_mission_map(app, *m, e.key, e.world, e.room);
+        ImGui::EndTabItem();
+    }
+    if (!ImGui::BeginTabItem(tr(lang, S::mw_tab_settings))) {
+        ImGui::EndTabBar();
+        return;
+    }
     // its words, a language at a time (empty: the English one)
     const auto& languages = mission_languages();
     ImGui::SetNextItemWidth(6 * ImGui::GetFontSize());
@@ -1225,14 +1211,22 @@ void draw_new_missions(App& app) {
     e.time_ms = std::max(e.time_ms, 0);
     ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
     ImGui::InputText("unlock", &e.unlock);
-    ImGui::Separator();
-    draw_new_mission_spots(app, *m, e);
+    ImGui::EndTabItem();
+    ImGui::EndTabBar();
 }
 
 }  // namespace
 
 bool new_missions_unsaved() {
-    return !new_mission_changes().empty();
+    return !new_mission_changes().empty() || mission_map_unsaved();
+}
+
+void draw_mod_missions(App& app, bool* open) {
+    const float em = ImGui::GetFontSize();
+    ImGui::SetNextWindowSize(ImVec2(72 * em, 46 * em), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin(tr(app.language, S::mw_title), open))
+        draw_new_missions(app);
+    ImGui::End();
 }
 
 bool draw_unsaved_quit(App& app) {

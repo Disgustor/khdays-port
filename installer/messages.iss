@@ -200,11 +200,11 @@ es.SteamCancelled=El port no se ha añadido a Steam. Puedes añadirlo más tarde
 fr.SteamCancelled=Le portage n'a pas été ajouté à Steam. Vous pourrez l'ajouter plus tard en relançant l'installateur.
 de.SteamCancelled=Die Portierung wurde nicht zu Steam hinzugefügt. Du kannst sie später hinzufügen, indem du das Installationsprogramm erneut ausführst.
 it.SteamCancelled=Il port non è stato aggiunto a Steam. Puoi aggiungerlo più tardi eseguendo di nuovo l'installazione.
-en.StudioTask=Also install KH Studio (the mod authoring tool)
-es.StudioTask=Instalar también KH Studio (la herramienta para crear mods)
-fr.StudioTask=Installer aussi KH Studio (l'outil de création de mods)
-de.StudioTask=Auch KH Studio installieren (das Werkzeug zum Erstellen von Mods)
-it.StudioTask=Installa anche KH Studio (lo strumento per creare mod)
+en.StudioTask=Also install KH Studio (the mod authoring tool), with the native mod SDK and its examples
+es.StudioTask=Instalar también KH Studio (la herramienta para crear mods), con el SDK de mods nativos y sus ejemplos
+fr.StudioTask=Installer aussi KH Studio (l'outil de création de mods), avec le SDK de mods natifs et ses exemples
+de.StudioTask=Auch KH Studio installieren (das Werkzeug zum Erstellen von Mods), mit dem SDK für native Mods und seinen Beispielen
+it.StudioTask=Installa anche KH Studio (lo strumento per creare mod), con l'SDK per mod nativi e i suoi esempi
 
 en.SteamUnderProton=This installer is running under Proton or Wine (a Steam Deck, Linux), where it cannot reach this computer's Steam. After installing, add the game to Steam by hand from Desktop Mode: a non-Steam game pointing to khdays-native.exe in the install folder, with Proton forced in its Compatibility properties.
 es.SteamUnderProton=Este instalador se está ejecutando en Proton o Wine (Steam Deck, Linux), donde no llega al Steam de este equipo. Después de instalar, añade el juego a Steam a mano desde el Modo Escritorio: un juego ajeno a Steam que apunte a khdays-native.exe en la carpeta de instalación, con Proton forzado en sus propiedades de Compatibilidad.

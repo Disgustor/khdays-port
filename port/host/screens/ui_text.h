@@ -334,6 +334,15 @@ enum {
     TXT_ENH_MOUSE_NOTE,
     TXT_MOUSE_SPEED,
     TXT_MOD_CHOOSE, /* a mod's screens: its list's A */
+    /* The Mods section's native code (runtime/plugins/shown.h) */
+    TXT_NATIVE_CODE,
+    TXT_NATIVE_CODE_NOTE,
+    TXT_PLUGIN_RUNNING,
+    TXT_PLUGIN_WAITING,
+    TXT_PLUGIN_SAFE_MODE,
+    TXT_PLUGIN_REFUSED,
+    TXT_PLUGIN_FAILED,
+    TXT_PLUGIN_STOPPED,
     TXT_COUNT
 };
 

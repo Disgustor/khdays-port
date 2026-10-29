@@ -46,6 +46,12 @@ who wants to host their own; the game's default server is the maintainer's.
 The example gameplay mods (`port/mods_examples`) and their interface (`docs/SCRIPTING.md`) go to
 `mods-examples/`, outside `mods/`: none runs until the player copies its folder into `mods/`.
 
+The studio's task (off by default) brings the native mods' tools with it: the KH Mod SDK as the
+repository has it (`sdk/`: its headers, CMake, docs and the examples' sources) and each of its
+examples as a mod ready to copy, its plugin built (`mods-examples/HelloWorld`, `CustomCharacter`,
+`CustomLimit`, `CustomEnemy`, `AdvancedNativeMod`). The build builds the SDK alone into
+`build/sdk` (with `--no-build`, the one already there).
+
 ## The HD pieces
 
 Optional, from the player's own copies, on the HD page: **HD menus and HUD** (both KINGDOM HEARTS

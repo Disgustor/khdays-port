@@ -28,6 +28,7 @@ extern KhdaysRef NNSi_FndAllocFromDefaultExpHeap(unsigned int size);
 extern void NNSi_FndFreeFromDefaultHeap(KhdaysRef block);
 extern void Ov002_ShowNoticeText(KhdaysRef text);
 extern void Ov022_ActorSetHp(KhdaysRef pEnt, int nValue); /* the game's pointers are references (window.h) */
+extern int Ov022_ComputeStrengthDamage(KhdaysRef pActor, int nScale);
 extern void Ov002_PauseMissionScene(void);
 extern int GetLanguage(void);
 extern void Ov000_TickMenuLoop(void);
@@ -55,10 +56,14 @@ int khdays_overlay_loaded(int id); /* runtime/core/overlays.c */
 #define PLAYERS 0x020b2e7cu   /* *: the field's players, 0xc bytes each; +4 a record whose +0x20 is the actor */
 #define BATTLE 0x020b2e60u    /* data_ov022_020b2e60: the battle's context, set as it begins (Ov022_BeginScene) */
 #define ACTOR_POSITION 0x48cu
-#define ENT_HP 0x12u /* Ov022_ActorSetHp's entity: nHp, and nHpMax +0x16 */
+#define ACTOR_KIND 0xcu /* its character: its overlay's constant */
+#define SEATS 4         /* the game's (data_020429c8) */
+#define ENT_HP 0x12u    /* Ov022_ActorSetHp's entity: nHp, and nHpMax +0x16 */
 #define ENT_HP_MAX 0x16u
 #define OV_GAME_OVER 27
 #define FIELD_ROOT 0x0207fa00u /* data_ov002_0207fa00: the field's root */
+#define PANEL 0x0207f614u      /* data_ov002_0207f614: the field's panel, 0 until it is set up */
+#define GAUGES 0x0207f618u     /* data_ov002_0207f618: its gauges (Ov002_SetGaugeValue's), 0 until they are made */
 #define ROOT_STOPPING 0x8b64u  /* bits 0-1: the field stopping or stopped (Ov002_PauseMissionScene) */
 #define GIVE_UP_FIELD 0x20efu  /* the game field the pause's Give Up sets as it confirms */
 #define ENEMY_KIND 0x19cu
@@ -172,15 +177,42 @@ int khdays_link_mission(void)
     return *(const volatile unsigned short *)KHDAYS_W(KHDAYS_DS_data_0204c23c);
 }
 
+unsigned khdays_link_seat_actor(int seat)
+{
+    unsigned actor;
+    if (seat < 0 || seat >= SEATS || !khdays_overlay_loaded(OV_BATTLE) || !khdays_game_ram(rd32(PLAYERS))) {
+        return 0;
+    }
+    actor = (unsigned)GetEntryField20ByIndex(seat);
+    return khdays_game_ram(actor) ? actor : 0;
+}
+
+int khdays_link_local_seat(void)
+{
+    return (int)Session_GetLocalPlayerIndex();
+}
+
 /* The local player's battle actor, 0 without one. */
 static unsigned player_actor(void)
 {
-    unsigned actor;
-    if (!khdays_overlay_loaded(OV_BATTLE) || !khdays_game_ram(rd32(PLAYERS))) {
-        return 0;
+    return khdays_link_seat_actor(khdays_link_local_seat());
+}
+
+void khdays_link_actor_position(unsigned actor, float at[3])
+{
+    for (int i = 0; i < 3; ++i) {
+        at[i] = (float)(int)rd32(actor + ACTOR_POSITION + 4u * (unsigned)i) / 4096.0f;
     }
-    actor = (unsigned)GetEntryField20ByIndex((int)Session_GetLocalPlayerIndex());
-    return khdays_game_ram(actor) ? actor : 0;
+}
+
+int khdays_link_actor_kind(unsigned actor)
+{
+    return (int)rd32(actor + ACTOR_KIND);
+}
+
+int khdays_link_strength_damage(unsigned actor, int scale)
+{
+    return khdays_overlay_loaded(OV_BATTLE) && khdays_game_ram(actor) ? Ov022_ComputeStrengthDamage(actor, scale) : -1;
 }
 
 int khdays_link_position(float at[3])
@@ -189,16 +221,19 @@ int khdays_link_position(float at[3])
     if (actor == 0) {
         return 0;
     }
-    for (int i = 0; i < 3; ++i) {
-        at[i] = (float)(int)rd32(actor + ACTOR_POSITION + 4u * (unsigned)i) / 4096.0f;
-    }
+    khdays_link_actor_position(actor, at);
     return 1;
 }
 
 const char *khdays_link_set_position(const float at[3])
 {
+    return khdays_link_place_seat(khdays_link_local_seat(), at);
+}
+
+const char *khdays_link_place_seat(int seat, const float at[3])
+{
     KhdaysRef vec;
-    if (player_actor() == 0) {
+    if (khdays_link_seat_actor(seat) == 0) {
         return "no player";
     }
     if (rd32(BATTLE) == 0) {
@@ -214,7 +249,7 @@ const char *khdays_link_set_position(const float at[3])
                                                                   : v > 2147483647.0 ? 2147483647.0
                                                                                      : v);
     }
-    func_ov022_02088218((int)Session_GetLocalPlayerIndex(), vec);
+    func_ov022_02088218(seat, vec);
     NNSi_FndFreeFromDefaultHeap(vec);
     return NULL;
 }
@@ -229,14 +264,23 @@ int khdays_link_player_hp(int *hp, int *max)
     return 1;
 }
 
-int khdays_link_set_player_hp(int hp)
+const char *khdays_link_set_player_hp(int hp)
 {
-    const unsigned actor = player_actor();
+    return khdays_link_set_actor_hp(player_actor(), hp);
+}
+
+const char *khdays_link_set_actor_hp(unsigned actor, int hp)
+{
     if (actor == 0) {
-        return 0;
+        return "no player";
+    }
+    /* Ov022_ActorSetHp shows the HP on the player's gauge (Ov002_GetPanelWord0220), which the field's panel and
+     * its gauges have only once they are set up: while the field loads the actor is there before them */
+    if (!khdays_overlay_loaded(OV_FIELD) || !khdays_game_ram(rd32(PANEL)) || !khdays_game_ram(rd32(GAUGES))) {
+        return "not now";
     }
     Ov022_ActorSetHp(actor, hp);
-    return 1;
+    return NULL;
 }
 
 void khdays_link_entity_hp(const void *entity, int *hp, int *max)

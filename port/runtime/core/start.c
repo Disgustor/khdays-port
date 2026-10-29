@@ -13,7 +13,12 @@
 #include "threads.h"
 #include "khdays_data_area.h" /* the data area's bounds (build/port/gen-x64) */
 #include "../sound/sound_dump.h"
+#include "../mods/list.h"
 #include "../mods/names.h"
+#include "../characters/characters.h"
+#include "../plugins/plugins.h"
+#include "../scripts/mods_log.h"
+#include "../missions/missions.h"
 #include "session_log.h"
 #include "window.h"
 
@@ -24,6 +29,7 @@
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 #ifdef _WIN32
@@ -181,6 +187,29 @@ static void attach_parent_console(void)
     }
 }
 
+/* A native plugin's line (runtime/plugins/plugins.h): in the mods' log, which also writes it to the session log. */
+static void plugin_said(const char *mod_id, const char *text)
+{
+    static int opened;
+    if (!opened) {
+        opened = 1;
+        khdays_mods_log_open(khdays_host_user_folder());
+    }
+    khdays_mods_log(mod_id, "native", NULL, 0, text);
+}
+
+/* Safe mode: the game started without the mods' native plugins (KHDAYS_SAFE_MODE=1 or --safe-mode). */
+static int safe_mode(int argc, char **argv)
+{
+    const char *knob = getenv("KHDAYS_SAFE_MODE");
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--safe-mode") == 0) {
+            return 1;
+        }
+    }
+    return knob != NULL && strcmp(knob, "0") != 0;
+}
+
 int main(int argc, char **argv)
 {
     /* first: claim the DS's address ranges before anything else (the symbol handler, SDL) allocates
@@ -220,6 +249,11 @@ int main(int argc, char **argv)
     }
     khdays_log_open();
     khdays_log("%s", working_folder_note);
+    khdays_missions_report();
+    khdays_characters_report();
+    khdays_plugins_set_safe_mode(safe_mode(argc, argv));
+    khdays_plugins_mods_on(khdays_mods_started_has);
+    khdays_plugins_start("mods", plugin_said);
     khdays_log("the game's memory at %p (its references from there)", (void *)khdays_window);
     {
         /* The game runs on a context whose stack is in its memory (memory.c), so its locals are reached

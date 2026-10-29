@@ -606,6 +606,12 @@ def _inputs_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--kh2-gauge", type=Path, help="kh2_fifth.hed_out (default: beside --kh2)")
     p.add_argument("--movies", type=Path, required=True, help="<1.5+2.5>/STEAM/Mare/MOVIE/Days/dt (or EPIC/.../en)")
     p.add_argument("--data", type=Path, default=HERE.parent / "data" / "extracted", help="the game's extracted data")
+    p.add_argument(
+        "--native",
+        type=Path,
+        default=HERE.parent / "build" / "port" / "obj-release-x64" / "khdays-native.exe",
+        help="a built khdays-native.exe (heart_points.py converts the heart's model with it)",
+    )
     p.add_argument("--out", type=Path, default=INPUTS_FILE)
 
 
@@ -674,6 +680,11 @@ def trace_inputs(args: argparse.Namespace) -> dict[str, Any]:
                 ]
                 if (tool, template) in HD_MENU_TOOLS:
                     command_line += ["--mod", "trace"]
+                # as build-hd runs them: the extraction, and the executable the heart's model is converted with
+                if tool in DATA_TOOLS:
+                    command_line += ["--data", str(data_folder(root))]
+                if tool == "heart_points.py":
+                    command_line += ["--native", str(args.native.resolve())]
                 subprocess.run(command_line, cwd=root, check=True, env={**os.environ, "KHDAYS_TRACE_LOG": str(log)})
             for line in log.read_text(encoding="utf-8").splitlines():
                 kind, _, raw = line.partition("\t")

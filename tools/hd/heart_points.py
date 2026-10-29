@@ -8,12 +8,14 @@ import struct
 import math
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 from PIL import Image
 
-from save_screen import p2_entry
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from save_screen import p2_entry  # noqa: E402
 
 NAMES = [
     *(f"digit_{i}" for i in range(10)),

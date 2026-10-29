@@ -13,6 +13,7 @@
 #include "threads.h"
 #include "khdays_data_area.h" /* the data area's bounds (build/port/gen-x64) */
 #include "../sound/sound_dump.h"
+#include "../mods/list.h"
 #include "../mods/names.h"
 #include "../characters/characters.h"
 #include "../plugins/plugins.h"
@@ -282,6 +283,7 @@ int main(int argc, char **argv)
     khdays_missions_report();
     khdays_characters_report();
     khdays_plugins_set_safe_mode(safe_mode(argc, argv));
+    khdays_plugins_mods_on(khdays_mods_started_has);
     khdays_plugins_start("mods", plugin_said);
     khdays_log("the game's memory at %p (its references from there)", (void *)khdays_window);
     {

@@ -8,6 +8,7 @@
 #include "../core/session_log.h"
 #include "../core/sha256.h"
 #include "../core/window.h"
+#include "../mods/list.h"
 #include "../plugins/actors.h"
 #include "../scripts/folders.h"
 #include "../scripts/manifest.h"
@@ -120,6 +121,9 @@ static void read_character(const char *key, void *context)
 static void read_mod(const char *name, void *context)
 {
     (void)context;
+    if (!khdays_mods_started_has(name)) {
+        return; /* off on the Mods page as the game started (runtime/mods/list.h) */
+    }
     char *folder = joined(MODS, name), *characters = folder != NULL ? joined(folder, "characters") : NULL;
     if (characters != NULL) {
         char *id = mod_id(folder, name);

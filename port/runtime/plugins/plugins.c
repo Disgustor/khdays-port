@@ -49,6 +49,7 @@ static Plugin **plugins;
 static int plugin_count, plugin_room, started_count;
 static Plugin *calling; /* the plugin whose function the port is calling, NULL none */
 static int native_code, safe_mode;
+static int (*mod_on)(const char *folder); /* khdays_plugins_mods_on's; NULL: every folder */
 static KhdaysPluginsLog say;
 static SDL_AtomicInt stop_asked;
 static SDL_Semaphore *stopped; /* signalled once the game's thread has stopped them for khdays_plugins_quit */
@@ -88,6 +89,11 @@ const char *khdays_plugins_platform(void)
 void khdays_plugins_set_native_code(int on)
 {
     native_code = on != 0;
+}
+
+void khdays_plugins_mods_on(int (*on)(const char *folder))
+{
+    mod_on = on;
 }
 
 void khdays_plugins_set_safe_mode(int on)
@@ -340,7 +346,7 @@ static void found(const char *folder_name, void *context)
     char key[64], *sdk = NULL, *library = NULL;
     size_t size = 0;
     Plugin *p = NULL;
-    if (ini == NULL || (text = khdays_folders_read(ini, &size)) == NULL ||
+    if ((mod_on != NULL && !mod_on(folder_name)) || ini == NULL || (text = khdays_folders_read(ini, &size)) == NULL ||
         (sdk = khdays_manifest_value(text, size, "sdk")) == NULL) {
         goto done; /* no mod.ini, or no plugin */
     }
@@ -509,7 +515,7 @@ static void seek(const char *folder_name, void *context)
     Seek *s = context;
     char *folder = joined(s->mods, folder_name), *ini = folder != NULL ? joined(folder, "mod.ini") : NULL, *text;
     size_t size = 0;
-    if (ini != NULL && (text = khdays_folders_read(ini, &size)) != NULL) {
+    if ((mod_on == NULL || mod_on(folder_name)) && ini != NULL && (text = khdays_folders_read(ini, &size)) != NULL) {
         char *id = khdays_manifest_value(text, size, "id");
         s->found |= strcmp(id != NULL ? id : folder_name, s->want) == 0;
         free(id);
@@ -555,7 +561,7 @@ static int requirements(const char *mods, const Plugin *p, char *why, size_t why
             Seek s = {mods, one, 0};
             khdays_folders_list(mods, seek, &s);
             if (!s.found) {
-                snprintf(why, why_size, "requires %.100s, which is not in mods/", one);
+                snprintf(why, why_size, "requires %.100s, which is not in mods/ or is off", one);
                 result = -1;
             }
         }

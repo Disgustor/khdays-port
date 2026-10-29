@@ -953,11 +953,21 @@ static const char *const texts[TXT_COUNT][5] = {
     [TXT_MOD_PAUSED] = {"Paused: %s", "En pause : %s", "Pausiert: %s", "In pausa: %s", "En pausa: %s"},
     [TXT_MOD_REFUSED] = {"Not loaded: %s", "Non chargé : %s", "Nicht geladen: %s", "Non caricato: %s",
                          "No cargado: %s"},
-    [TXT_MOD_ORDER_NOTE] = {"Mods later in the list run after the earlier ones: their changes stand.",
-                            "Les mods plus bas dans la liste passent après les autres : leurs changements l'emportent.",
-                            "Spätere Mods der Liste laufen nach den früheren: ihre Änderungen gelten.",
-                            "I mod più in basso nell'elenco vengono dopo gli altri: valgono le loro modifiche.",
-                            "Los mods más abajo en la lista van después de los demás: sus cambios prevalecen."},
+    [TXT_MOD_ORDER_NOTE] = {"Mods later in the list run after the earlier ones: their changes stand. A file two "
+                            "mods both replace comes from the earlier one; the files follow the order the next "
+                            "time the game starts.",
+                            "Les mods plus bas dans la liste passent après les autres : leurs changements "
+                            "l'emportent. Un fichier remplacé par deux mods vient du premier ; les fichiers "
+                            "suivent l'ordre au prochain lancement du jeu.",
+                            "Spätere Mods der Liste laufen nach den früheren: ihre Änderungen gelten. Eine Datei, "
+                            "die zwei Mods ersetzen, kommt vom früheren; die Dateien folgen der Reihenfolge beim "
+                            "nächsten Spielstart.",
+                            "I mod più in basso nell'elenco vengono dopo gli altri: valgono le loro modifiche. Un "
+                            "file sostituito da due mod viene dal primo; i file seguono l'ordine al prossimo avvio "
+                            "del gioco.",
+                            "Los mods más abajo en la lista van después de los demás: sus cambios prevalecen. Un "
+                            "archivo que dos mods reemplazan viene del primero; los archivos siguen el orden la "
+                            "próxima vez que se inicie el juego."},
     [TXT_ROOM_NEEDS_MODS] = {"This room plays with these mods: %s", "Ce salon joue avec ces mods : %s",
                              "Dieser Raum spielt mit diesen Mods: %s", "Questa stanza gioca con questi mod: %s",
                              "Esta sala juega con estos mods: %s"},
@@ -966,6 +976,18 @@ static const char *const texts[TXT_COUNT][5] = {
                            "In einem Raum gelten die Optionen des Hosts.",
                            "In una stanza contano le opzioni dell'host.",
                            "En una sala cuentan las opciones del anfitrión."},
+    [TXT_MOD_FILES_ON] = {"On: its files replace the game's.", "Activé : ses fichiers remplacent ceux du jeu.",
+                          "An: seine Dateien ersetzen die des Spiels.",
+                          "Attivo: i suoi file sostituiscono quelli del gioco.",
+                          "Activado: sus archivos reemplazan los del juego."},
+    [TXT_MOD_FILES_OFF] = {"Off: the game's own files play.", "Désactivé : les fichiers du jeu sont utilisés.",
+                           "Aus: die eigenen Dateien des Spiels gelten.", "Disattivato: valgono i file del gioco.",
+                           "Desactivado: valen los archivos del juego."},
+    [TXT_MOD_IGNORED] = {"Off by hand: a .ignore file in its folder, or its name begins with a dot.",
+                         "Désactivé à la main : un fichier .ignore dans son dossier, ou son nom commence par un point.",
+                         "Von Hand aus: eine Datei .ignore in seinem Ordner, oder sein Name beginnt mit einem Punkt.",
+                         "Disattivato a mano: un file .ignore nella sua cartella, o il nome inizia con un punto.",
+                         "Desactivado a mano: un archivo .ignore en su carpeta, o su nombre empieza por un punto."},
     [TXT_MOD_WRITES_MEMORY] = {"Writes in the game's memory: a mistake of its own can stop the game or reach a save.",
                                "Écrit dans la mémoire du jeu : une erreur de sa part peut arrêter le jeu ou "
                                "atteindre une sauvegarde.",

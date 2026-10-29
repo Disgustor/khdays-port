@@ -739,7 +739,12 @@ mods print and reloads them while the game runs.
 For what scripts cannot do, a mod can carry a native plugin: C++ built for the player's computer
 against the KH Mod SDK (`sdk/`), loaded only once the player has turned native code on (the
 settings menu's Mods page, read at the next start; it runs inside the game, unisolated).
-`docs/MODDING_NATIVE.md` describes it.
+`docs/MODDING_NATIVE.md` describes it. **Examples:** installed with KH Studio (the installer's
+choice), `mods-examples/` has five mods with a native plugin ready to copy into `mods/`, their
+plugins built -- `HelloWorld`, `CustomCharacter` (a character of its own), `CustomLimit` (a
+character with a Limit of its own), `CustomEnemy` (Shadows that blink away and split) and
+`AdvancedNativeMod` (hooks at the game's routines) -- and `sdk/` the KH Mod SDK to build your own
+(`sdk/examples/` in the repository).
 
 ## Multiplayer
 

@@ -338,7 +338,31 @@ is chosen). It changes at once and is kept in the settings.
     (`parameters.values.ini`), which the game reads as it starts. The plugin
     itself is never loaded: what shows is the description's.
 
+    To try one, `mods-examples/CustomLimit` is a mod with parameters (its
+    Limit's spins, damage, reach and status).
+
 Sound loops and old-format mods come next.
+
+## Native plugins' examples
+
+The installer brings them with the studio (its "KH Studio" choice; without it,
+none is installed), beside the game:
+
+- `mods-examples/`: five mods with a native plugin, each ready to copy into
+  `mods/`, its Windows plugin built -- `HelloWorld` (a plugin's start, its
+  lines in the mods' log, its stop), `CustomCharacter` (a character of its own,
+  Block, whose attacks heal and hit twice as hard), `CustomLimit` (Spinner, a
+  character whose Limit is the plugin's: its own clips, its spins' hits; its
+  parameters in the Plugin window), `CustomEnemy` (the Shadows blink away and
+  split in two) and `AdvancedNativeMod` (hooks at the game's routines, a
+  routine and a datum by name).
+- `sdk/`: the KH Mod SDK they are built with -- its headers, CMake, docs
+  (`sdk/docs/README.md`) and the examples' sources -- to build plugins of your
+  own.
+
+A plugin runs only once the player turns native code on (the game's settings
+menu, Mods page, **Native code**: read at the next start). What a plugin may
+do, and its risks: docs/MODDING_NATIVE.md.
 
 ## Command line
 

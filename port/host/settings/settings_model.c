@@ -509,6 +509,15 @@ static void mods_rebuild(void)
         } else {
             snprintf(mod_heads[i], sizeof(mod_heads[i]), "%s %s", name, v->version != NULL ? v->version : "");
         }
+        if (v->ignored) {
+            snprintf(mod_lines[i], sizeof(mod_lines[i]), "%s", khdays_text(TXT_MOD_IGNORED));
+            continue;
+        }
+        if (v->content) {
+            snprintf(mod_lines[i], sizeof(mod_lines[i]), "%s",
+                     khdays_text(v->state == KHDAYS_MOD_LOADED ? TXT_MOD_FILES_ON : TXT_MOD_FILES_OFF));
+            continue;
+        }
         switch (v->state) {
         case KHDAYS_MOD_LOADED: snprintf(mod_lines[i], sizeof(mod_lines[i]), "%s", khdays_text(TXT_MOD_RUNNING)); break;
         case KHDAYS_MOD_OFF: snprintf(mod_lines[i], sizeof(mod_lines[i]), "%s", khdays_text(TXT_MOD_OFF)); break;
@@ -622,13 +631,16 @@ static void build_mods(Builder *b, KhdaysProfile *w)
             r = add(b, KHDAYS_ROW_LINE, KHDAYS_SET_MOD_STATE, khdays_text(TXT_MOD_WRITES_MEMORY));
             r->layer = i;
         }
-        r = add(b, KHDAYS_ROW_SWITCH, KHDAYS_SET_MOD_ENABLED, khdays_text(TXT_MOD_ENABLED));
-        r->value = &mod_enabled[i];
-        r->high = 1;
-        r->layer = i;
-        r->note = v->description;
-        r->apply = KHDAYS_APPLY_RESUME;
-        r->takes = TXT_TAKES_RESUME;
+        if (!v->ignored) { /* a mod turned off by hand is turned on by hand */
+            r = add(b, KHDAYS_ROW_SWITCH, KHDAYS_SET_MOD_ENABLED, khdays_text(TXT_MOD_ENABLED));
+            r->value = &mod_enabled[i];
+            r->high = 1;
+            r->layer = i;
+            r->note = v->description;
+            /* a content mod's files are the ones on as the game started (runtime/mods/list.h) until it starts again */
+            r->apply = v->content ? KHDAYS_APPLY_NEXT : KHDAYS_APPLY_RESUME;
+            r->takes = v->content ? TXT_TAKES_NEXT_START : TXT_TAKES_RESUME;
+        }
         if (i > 0) {
             r = add(b, KHDAYS_ROW_COMMAND, KHDAYS_SET_MOD_EARLIER, khdays_text(TXT_MOD_EARLIER));
             r->layer = i;

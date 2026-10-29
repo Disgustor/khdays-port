@@ -11,6 +11,7 @@
 #include "../core/rom.h"
 #include "../core/session_log.h"
 #include "../core/window.h"
+#include "../mods/list.h"
 #include "../menus/savelist.h"
 #include "../menus/saveslots.h"
 #include "../scripts/folders.h"
@@ -101,6 +102,9 @@ static char *mod_id(const char *folder, const char *name)
 static void read_mod(const char *name, void *context)
 {
     (void)context;
+    if (!khdays_mods_started_has(name)) {
+        return; /* off on the Mods page as the game started (runtime/mods/list.h) */
+    }
     char *folder = joined(MODS, name), *path = folder != NULL ? joined(folder, "missions/missions.txt") : NULL;
     size_t size = 0;
     char *text = path != NULL ? khdays_folders_read(path, &size) : NULL;

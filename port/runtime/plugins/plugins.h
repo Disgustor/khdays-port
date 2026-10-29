@@ -39,6 +39,10 @@ const char *khdays_plugins_platform(void);
 /* Whether native code may run this time: the setting ([mods] native_code), before khdays_plugins_start. */
 void khdays_plugins_set_native_code(int on);
 
+/* Which mod folders count, by their names, before khdays_plugins_start: a mod off on the Mods page has no plugin (the
+ * game's: runtime/mods/list.h's mods on as it started). Not set, every folder. */
+void khdays_plugins_mods_on(int (*on)(const char *folder));
+
 /* Safe mode (KHDAYS_SAFE_MODE=1 or --safe-mode): no plugin is loaded whatever the setting. */
 void khdays_plugins_set_safe_mode(int on);
 

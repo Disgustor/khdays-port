@@ -5,7 +5,9 @@
 #include "text_patches.h"
 
 extern "C" {
-#include "../../host/app/host.h" // khdays_host_tell_no_data
+#include "../../host/app/host.h"     // khdays_host_tell_no_data
+#include "../../host/app/instance.h" // khdays_host_user_folder
+#include "../mods/list.h"
 #include "origin.h"
 #include "session_log.h"
 }
@@ -240,8 +242,23 @@ void read_region(KhdaysRomReader &reader, const Region &r, u32 offset, u8 *out, 
 
 } // namespace
 
+// The VFS reads the mods on as the game started, in the list's order (runtime/mods/list.h).
+static void give_vfs_the_mods()
+{
+    std::vector<fs::path> active;
+    for (int i = 0; i < khdays_mods_started_count(); ++i) {
+        if (const char *path = khdays_mods_started_path(i)) {
+            active.push_back(utf8_path(path));
+        }
+    }
+    khdays::vfs::set_mods(std::move(active));
+}
+
 extern "C" int khdays_rom_init(void)
 {
+    khdays_mods_scan("mods", khdays_host_user_folder()); // the VFS's mods root, beside the game
+    khdays_mods_start();
+    give_vfs_the_mods();
     if (!khdays::vfs::autodetect_data_root()) {
         std::error_code ec;
         const fs::path searched = fs::absolute("data/extracted", ec);

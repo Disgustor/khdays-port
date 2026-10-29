@@ -76,6 +76,8 @@ std::string folder_meaning(App& app, const TreeNode& node) {
         for (const auto& base : character_bases())
             if (character_base_code(base) == name)
                 return character_display_name(base);
+        if (name == "r2")  // the folders' 20th (data_02042a70), ov049's: not a base a new character plays as
+            return tr(app.language, S::folder_dual_roxas);
     }
     return {};
 }

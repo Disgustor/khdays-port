@@ -668,6 +668,7 @@ enum class S {
     mission_description_field,
     chars_moves_like,
     chars_moves_like_help,
+    folder_dual_roxas,
     count
 };
 

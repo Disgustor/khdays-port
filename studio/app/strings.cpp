@@ -2593,6 +2593,12 @@ constexpr Row rows[] =
           "Ein neuer Charakter, nach denen des Spiels zur Auswahl hinzugefügt: er übernimmt Bewegungen, Kampf und Limit dieses Charakters. Der Charakter des Spiels bleibt, wie er ist.",
           "Un nuovo personaggio, aggiunto alla selezione dopo quelli del gioco: prende movimenti, combattimento e Limite di questo personaggio. Il personaggio del gioco resta com'è.",
           "Un personaje nuevo, que se añade a la selección después de los del juego: toma los movimientos, el combate y el Límite de este personaje. El personaje del juego se queda como está."}},
+        {S::folder_dual_roxas,
+         {"Roxas (dual wield)",
+          "Roxas (deux Keyblades)",
+          "Roxas (zwei Schlüsselschwerter)",
+          "Roxas (due Keyblade)",
+          "Roxas (dos Llaves Espada)"}},
 };
 static_assert(sizeof(rows) / sizeof(rows[0]) == static_cast<std::size_t>(S::count), "one row per word");
 constexpr bool rows_in_order() {

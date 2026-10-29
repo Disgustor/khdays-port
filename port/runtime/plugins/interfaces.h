@@ -33,6 +33,28 @@ const void *khdays_plugins_actors(void);
 KhActor khdays_actors_player(int seat);
 void khdays_actors_frame(void);
 
+/* The plugin whose function the port calls now (set around each call of one: its start and stop, its events, hooks
+ * and listeners), the one before returned; whether a plugin (NULL: the one being called) may change the game now --
+ * outside a room, or its mod made for rooms (mod.ini's `multiplayer = yes`). */
+KhPlugin *khdays_plugins_calling(KhPlugin *plugin);
+int khdays_plugins_may_change(KhPlugin *plugin);
+
+/* A plugin's message (kh.net) heard: delivered as the event `name` ("<mod id>.<name>"), its version in `a`. */
+void khdays_plugins_deliver(const char *name, uint32_t version, const void *data, uint32_t size);
+
+/* kh.net (plugins.c): its table. */
+const void *khdays_plugins_net(void);
+
+/* kh.parameters (plugins.c): its table. */
+const void *khdays_plugins_parameters(void);
+
+/* kh.combat (combat.c): its table. */
+const void *khdays_plugins_combat(void);
+
+/* kh.input (input.c): its table; a plugin's hidden buttons dropped. */
+const void *khdays_plugins_input(void);
+void khdays_plugins_input_forget(KhPlugin *plugin);
+
 /* kh.characters (characters.c): its table; once a frame, the seats' actors looked at and their listeners called;
  * a plugin's listeners dropped. */
 const void *khdays_plugins_characters(void);

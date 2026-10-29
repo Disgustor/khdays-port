@@ -4,12 +4,16 @@
  * it by 1, the handle refused once it has left) in the log, which the test reads. */
 #include <kh/kh_actors.h>
 #include <kh/kh_characters.h>
+#include <kh/kh_events.h>
+#include <kh/kh_net.h>
+#include <kh/kh_parameters.h>
 
 #include <stdio.h>
 
 static const KhHost *host;
 static const KhActors *actors;
 static const KhCharacters *characters;
+static const KhNet *net;
 static int frames;
 
 static void say(const char *text)
@@ -56,6 +60,23 @@ static void attack(KhActor actor, int32_t which, void *user)
     snprintf(text, sizeof(text), "attack %d, healed: %s", (int)which,
              actors->set_hp(actor, hp + 1) == KH_OK ? "yes" : "no");
     say(text);
+    if (net->in_room()) {
+        snprintf(text, sizeof(text), "sent struck: %d", (int)net->send(host->plugin, "struck", 3, &which, 4));
+        say(text);
+    }
+}
+
+/* the message test.fighter.struck, from the host's copy */
+static void struck(const KhEvent *event, void *user)
+{
+    char text[100];
+    int32_t which = -1;
+    (void)user;
+    if (event->data_size == 4) {
+        which = *(const int32_t *)event->data;
+    }
+    snprintf(text, sizeof(text), "heard struck v%d: %d", (int)event->a, (int)which);
+    say(text);
 }
 
 static void left(KhActor actor, void *user)
@@ -78,9 +99,12 @@ static KhResult start(const KhHost *given)
     host = given;
     actors = host->find(host->plugin, KH_ACTORS, KH_ACTORS_VERSION);
     characters = host->find(host->plugin, KH_CHARACTERS, KH_CHARACTERS_VERSION);
-    if (actors == NULL || characters == NULL) {
+    net = host->find(host->plugin, KH_NET, KH_NET_VERSION);
+    if (actors == NULL || characters == NULL || net == NULL) {
         return KH_ERROR;
     }
+    ((const KhEvents *)host->find(host->plugin, KH_EVENTS, KH_EVENTS_VERSION))
+        ->subscribe(host->plugin, "test.fighter.struck", struck, NULL);
     block = characters->find(host->plugin, "block");
     characters->info(characters->count() - 1, &info);
     snprintf(text, sizeof(text), "block %d, roxas %d, by identity %d, nobody %d; %d characters, the last %s (%s) on %d",
@@ -89,6 +113,15 @@ static KhResult start(const KhHost *given)
              (int)characters->count(), info.identity, info.name, (int)info.base);
     say(text);
     say(characters->listen(host->plugin, 999, &calls, NULL) == 0 ? "999 refused" : "999 listened");
+    {
+        const KhParameters *p = host->find(host->plugin, KH_PARAMETERS, KH_PARAMETERS_VERSION);
+        snprintf(text, sizeof(text), "parameters: spins %d, damage %.2f, loud %d, sound %s (%d), name %s, missing %d",
+                 (int)p->integer(host->plugin, "spins", -1), p->number(host->plugin, "damage", -1.0),
+                 (int)p->integer(host->plugin, "loud", -1), p->text(host->plugin, "sound", "?"),
+                 (int)p->integer(host->plugin, "sound", -1), p->text(host->plugin, "name", "?"),
+                 (int)p->integer(host->plugin, "nothing", -7));
+        say(text);
+    }
     return characters->listen(host->plugin, block, &calls, NULL) != 0 ? KH_OK : KH_ERROR;
 }
 

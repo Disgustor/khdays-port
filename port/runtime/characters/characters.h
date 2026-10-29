@@ -83,6 +83,14 @@ int khdays_characters_speaker_sound(const char *game, char *path, int size, char
 int khdays_characters_have_sounds(void);
 int khdays_characters_sound_file(int index, char *path, int size, char *name, int name_size);
 
+/* A native plugin's clip (kh.characters' play, runtime/plugins/characters.c): numbered character `number` (one with
+ * its own skeleton) drawn playing its [actions] clip `action` from vblank `now`, looped or once; 0 when it has no
+ * own skeleton or no such action. Its clip stopped. For the models: the clip played on `c`, NULL none, from when and
+ * whether looped. */
+int khdays_characters_play(int number, const char *action, int loop, unsigned now);
+void khdays_characters_play_none(int number);
+const KhdaysCharacterAction *khdays_characters_played(const KhdaysCharacter *c, unsigned *since, int *loop);
+
 /* For the models (runtime/mods/models.cpp): the model file drawn for the game model `name` ("ba/ch/c16/def.p.z/
  * mdl/roxas_b"), a model of a character's own folder, into `path`; 0 for any other. */
 int khdays_characters_model(const char *name, char *path, int size);

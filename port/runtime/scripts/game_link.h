@@ -69,6 +69,9 @@ void khdays_link_actor_position(unsigned actor, float at[3]);
 int khdays_link_actor_kind(unsigned actor);
 const char *khdays_link_place_seat(int seat, const float at[3]);
 const char *khdays_link_set_actor_hp(unsigned actor, int hp);
+/* The damage of a player actor's hit of factor `scale` (fx32) as its combo's hits get it (Ov022_ComputeStrengthDamage:
+ * its strength, bonuses and abilities); -1 without the battle. */
+int khdays_link_strength_damage(unsigned actor, int scale);
 
 /* An entity Ov022_ActorSetHp was given: its HP and maximum (nHp +0x12, nHpMax +0x16). */
 void khdays_link_entity_hp(const void *entity, int *hp, int *max);

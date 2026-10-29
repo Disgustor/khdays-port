@@ -13,6 +13,7 @@
 
 #include <kh/kh_actors.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -249,8 +250,11 @@ static KhResult set_position(KhActor actor, const float at[3])
     if (e == NULL || at == NULL) {
         return KH_ERROR;
     }
-    if (e->kind != KH_ACTOR_PLAYER) {
+    if (!khdays_plugins_may_change(NULL)) {
         return KH_UNSUPPORTED;
+    }
+    if (e->kind != KH_ACTOR_PLAYER) {
+        return khdays_enemies_move(e->actor, at) ? KH_OK : KH_ERROR;
     }
     return khdays_link_place_seat(e->seat, at) == NULL ? KH_OK : KH_UNSUPPORTED;
 }
@@ -261,14 +265,36 @@ static KhResult set_hp(KhActor actor, int32_t value)
     if (e == NULL) {
         return KH_ERROR;
     }
+    if (!khdays_plugins_may_change(NULL)) {
+        return KH_UNSUPPORTED;
+    }
     if (e->kind != KH_ACTOR_PLAYER) {
         return KH_UNSUPPORTED;
     }
     return khdays_link_set_actor_hp(e->actor, value) == NULL ? KH_OK : KH_UNSUPPORTED;
 }
 
-static const KhActors actors_table = {sizeof(KhActors), player,   local_seat, enemies,      of,    kind, ref, seat,
-                                      character,        position, hp,         set_position, set_hp};
+static KhActor make_enemy(KhPlugin *plugin, int32_t kind_of, const float at[3], int32_t level, float hp_times,
+                          float strength)
+{
+    const char *why = NULL;
+    unsigned actor;
+    char text[160];
+    if (at == NULL || !khdays_plugins_may_change(plugin)) {
+        return 0;
+    }
+    actor = khdays_enemies_make(kind_of, at, level, hp_times, strength, &why);
+    if (actor == 0) {
+        snprintf(text, sizeof(text), "no enemy of kind %d made: %s", (int)kind_of, why != NULL ? why : "not made");
+        khdays_plugins_tell(plugin, text);
+        return 0;
+    }
+    return meet(actor, KH_ACTOR_ENEMY, -1);
+}
+
+static const KhActors actors_table = {
+    sizeof(KhActors), player,   local_seat, enemies,      of,     kind,      ref, seat,
+    character,        position, hp,         set_position, set_hp, make_enemy};
 
 const void *khdays_plugins_actors(void)
 {

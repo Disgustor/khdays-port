@@ -54,6 +54,9 @@ typedef struct KhCharacterCalls {
 /* A listener: 0 is none. */
 typedef uint64_t KhCharacterListener;
 
+/* Flags of play(). */
+#define KH_PLAY_LOOP 1u /* again from its start at its end, until stop_playing() */
+
 typedef struct KhCharacters {
     uint32_t size;
 
@@ -69,6 +72,15 @@ typedef struct KhCharacters {
      * Removed by unlisten() or when the plugin stops. */
     KhCharacterListener (*listen)(KhPlugin *plugin, int32_t number, const KhCharacterCalls *calls, void *user);
     void (*unlisten)(KhPlugin *plugin, KhCharacterListener listener);
+
+    /* The picture of a mod's character with its own skeleton (`skeleton = own`): its actor drawn playing its clip
+     * `action` -- a name of its [actions], one of its base's animations or a name of its own -- from the clip's
+     * start at its own speed, instead of what the game plays, until stop_playing() or (without KH_PLAY_LOOP) the
+     * clip's end. Only the picture: the game moves, times and hits the actor as before (a plugin's own move hides the
+     * buttons the game would act on, kh_input.h). Every actor playing the character shows it. KH_UNSUPPORTED for
+     * another character or an action it has not got; a plugin's clips stop with it and as the field is left. */
+    KhResult (*play)(KhPlugin *plugin, KhActor actor, const char *action, uint32_t flags);
+    void (*stop_playing)(KhPlugin *plugin, KhActor actor);
 } KhCharacters;
 
 #ifdef __cplusplus

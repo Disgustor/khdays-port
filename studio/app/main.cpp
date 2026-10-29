@@ -62,7 +62,7 @@ void take_dialog_files(App& app) {
 
 void draw_notices(App& app);  // below
 
-void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_open) {
+void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_open, bool* plugin_open) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
@@ -75,12 +75,16 @@ void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_
     // the themes and the settings at the right end of the same row
     const ImGuiStyle& style = ImGui::GetStyle();
     const float buttons =
+        ImGui::CalcTextSize(tr(app.language, S::plugin_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::console)).x + ImGui::CalcTextSize(tr(app.language, S::themes)).x +
-        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 6 + style.ItemSpacing.x * 2;
+        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 8 + style.ItemSpacing.x * 3;
     ImGui::SameLine();
     const float room = ImGui::GetContentRegionAvail().x;
     if (room > buttons)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + room - buttons);
+    if (ImGui::Button(tr(app.language, S::plugin_button)))
+        *plugin_open = true;
+    ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::console)))
         *console_open = true;
     ImGui::SameLine();
@@ -113,6 +117,8 @@ void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_
         draw_themes(app, themes_open);
     if (*console_open)
         draw_mods_console(app, console_open);
+    if (*plugin_open)
+        draw_plugin_parameters(app, plugin_open);
 }
 
 // The results a person must see (App::tell), over the window: a success in
@@ -208,6 +214,7 @@ int run_window(App& app) {
     bool settings_open = false;
     bool themes_open = false;
     bool console_open = false;
+    bool plugin_open = false;
     bool done = false;
     while (!done) {
         SDL_Event event;
@@ -233,7 +240,7 @@ int run_window(App& app) {
         ImGui_ImplSDLGPU3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        draw_frame(app, &settings_open, &themes_open, &console_open);
+        draw_frame(app, &settings_open, &themes_open, &console_open, &plugin_open);
         done = draw_unsaved_quit(app) || done;
         ImGui::Render();
 

@@ -913,16 +913,28 @@ constexpr u32 kStillVblanks = 4;
 
 // The own skeleton's nodes' places for this draw: the clip given to the animation the game plays, at its own speed
 // while the game's animation moves (looped once the game's is seen to loop), or with `time game` at the same point
-// of the game's (stretched to the clip's length); blended from the pose shown when the game's animation changes;
-// its root's travel the game's (unless the action keeps the clip's).
+// of the game's (stretched to the clip's length); a native plugin's clip instead while it plays one (kh.characters'
+// play: from when it began, at its own speed); blended from the pose shown when the animation changes; its root's
+// travel the game's (unless the action keeps the clip's).
 std::vector<Mat> own_pose(Model &m)
 {
     OwnSkeleton &o = *m.own;
-    const GameAnimation g = game_animation(drawn_animation);
-    const KhdaysCharacterAction *action = khdays_characters_action(o.character, g.name.c_str());
+    unsigned since = 0;
+    int loop = 0;
+    const KhdaysCharacterAction *played = khdays_characters_played(o.character, &since, &loop);
+    const GameAnimation g = played != nullptr ? GameAnimation{played->game} : game_animation(drawn_animation);
+    const KhdaysCharacterAction *action =
+        played != nullptr ? played : khdays_characters_action(o.character, g.name.c_str());
     const char *file = action != nullptr ? action->clip : o.character->fallback;
     const u32 now = khdays_events_vblank_count();
-    if (g.name != o.playing) {
+    if (played != nullptr) {
+        o.clock = static_cast<double>(now - since) / 60.0;
+        o.clock_vblank = o.moved_vblank = now;
+        if (loop)
+            o.looping.insert(g.name);
+        else
+            o.looping.erase(g.name);
+    } else if (g.name != o.playing) {
         o.clock = 0.0;
         o.clock_vblank = o.moved_vblank = now;
         o.last_frame = g.frame;
@@ -941,7 +953,9 @@ std::vector<Mat> own_pose(Model &m)
     if (file != nullptr) {
         const Clip &chosen = clip_of(o, m.nodes, file);
         const float length = chosen.animation.duration;
-        if (chosen.ok && action != nullptr && action->game_time) {
+        if (played != nullptr && !loop && (!chosen.ok || o.clock >= length))
+            khdays_characters_play_none(o.character->number); // played once: the game's again from the next draw
+        if (chosen.ok && action != nullptr && action->game_time && played == nullptr) {
             apply_clip(chosen, g.phase * length, pose);
         } else if (chosen.ok) {
             const auto t = static_cast<float>(o.clock);

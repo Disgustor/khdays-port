@@ -531,6 +531,16 @@ enum class S {
     console_reload_asked,
     console_no_log,
     console_quiet,
+    plugin_button,
+    plugin_title,
+    plugin_no_mod,
+    plugin_none,
+    plugin_save,
+    plugin_saved,
+    plugin_reload,
+    plugin_default,
+    plugin_problems,
+    plugin_unsaved,
     count
 };
 

@@ -329,6 +329,15 @@ is chosen). It changes at once and is kept in the settings.
     game's movies set to HD. A mod holds one of the two per movie (an
     `.mpg` would win over an `.mp4`).
 
+11. **A plugin's parameters.** "Plugin" (top right) opens the chosen mod's
+    native plugin's parameters, as the mod describes them in its
+    `parameters.ini` (docs/MODDING_NATIVE.md, "Its parameters"): a slider for
+    a number within its bounds, a box for a flag, a list for its choices, a
+    field for a text, each with its label and help in the tool's language and
+    its default. "Save the values" writes them beside the description
+    (`parameters.values.ini`), which the game reads as it starts. The plugin
+    itself is never loaded: what shows is the description's.
+
 Sound loops and old-format mods come next.
 
 ## Command line
@@ -486,6 +495,14 @@ rebuilds every mission world with nothing changed, writes every room's
 collision back from what was read, checks the game's trees and rebuilds them
 from their faces, and computes the faces' planes as the game does (under a
 second).
+
+```powershell
+.\build\studio\release\khdays-studio.exe --plugin-parameters <Mod>
+.\build\studio\release\khdays-studio.exe --set-plugin-parameter <Mod> <name> <value>
+```
+
+print a mod's native plugin's parameters with the values chosen (and what is
+wrong in its files), or choose one and save it, as the Plugin window does.
 
 Exit code 0, 1 on a problem, 2 on bad arguments.
 

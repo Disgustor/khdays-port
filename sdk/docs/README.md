@@ -49,8 +49,14 @@ extern "C" KH_PLUGIN_EXPORT const KhPluginDescriptor *kh_plugin_query(void)
 | `examples/HelloWorld` | the descriptor, `start` and `stop`, the log, an interface the port has not got |
 | `examples/AdvancedNativeMod` | `kh.hooks` (the player's HP, the enemies' hits, sounds), `kh.events` (scenes), `kh.engine` (a routine and a datum by name), `kh.actors` |
 | `examples/CustomCharacter` | a mod's own character (its `characters/block/`) given behaviour by `kh.characters`: told of its attacks, 1 HP back for each, its hits doubled through a hook and `kh.actors` |
+| `examples/CustomLimit` | a character's Limit of its own: the game's skipped at `Ov022_ActorSetState`, the buttons hidden (`kh.input`), its own clips played (`kh.characters`), its spins' hits dealt through the game's routine (`kh.combat`); `make_files.py` makes its made-up character |
+| `examples/CustomEnemy` | the Shadows given a behaviour of their own: they blink away and split, after `Ov107_AiState_ApplyHit`'s hook (`kh.actors`' `set_position`, `make_enemy`) |
 
 Each is a mod folder: copy it to the game's `mods/` with its built library in `native/<platform>/`.
+
+A mod may describe its plugin's parameters in `parameters.ini` (`examples/CustomLimit` does): KH Studio shows and
+saves them without loading the plugin, which reads them through `kh.parameters` (docs/MODDING_NATIVE.md in the
+port's repository, "Its parameters").
 
 ## The rules of the boundary (`include/kh/kh_mod.h`)
 
@@ -66,10 +72,23 @@ Each is a mod folder: copy it to the game's `mods/` with its built library in `n
   the port undoes (it drops your registrations), free what you allocated.
 - A plugin is not isolated from the game: a fault in it is a fault of the game.
 
+## Checking a plugin without the port
+
+`tests/load_plugin.py <library>` (Python 3, nothing else) loads a plugin as the port's loader does: it resolves
+`kh_plugin_query`, checks the descriptor's SDK and size, starts it with a host table whose `log` prints and whose
+`find` answers none, and stops it. `tests/abi_check.c` is a plugin with no C library for it, which builds for Linux on
+any machine:
+
+```bash
+cmake -S sdk -B build/sdk-linux -G Ninja -DCMAKE_TOOLCHAIN_FILE=sdk/cmake/toolchain-linux-x64-clang.cmake
+cmake --build build/sdk-linux
+python3 sdk/tests/load_plugin.py build/sdk-linux/abi_check.so   # on Linux
+```
+
 ## Platforms
 
 | Platform | Library | State |
 |---|---|---|
 | Windows x64 | `.dll` (MSVC or clang-cl; the C/C++ runtime linked in by `kh_add_plugin`) | built and run |
-| Linux x64, arm64 (Steam Deck) | `.so` (gcc or clang) | the build files support it; untested until the port runs on Linux |
-| Platforms without dynamic loading | the same source registered at the port's build | planned |
+| Linux x64, arm64 (Steam Deck) | `.so` (gcc or clang on Linux; `cmake/toolchain-linux-x64-clang.cmake` from another system) | the boundary checked on Linux x64 (`tests/load_plugin.py` loading `tests/abi_check.c`'s `.so`: its one export, its descriptor, its start and stop through a host table); not yet inside the port, which does not build for Linux yet |
+| Platforms without dynamic loading | the same source built into the port (`KHDAYS_STATIC_PLUGINS`: its `kh_plugin_query` renamed, listed by its mod's id) | built in and started by the plugins' test; no such port yet |

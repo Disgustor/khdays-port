@@ -63,9 +63,11 @@ static void tell(int number, Call call, KhActor actor, int value)
     ++delivering;
     for (int i = 0; i < listener_count; ++i) {
         const Listener l = listeners[i];
+        KhPlugin *was;
         if (l.owner == NULL || l.number != number) {
             continue;
         }
+        was = khdays_plugins_calling(l.owner);
         switch (call) {
         case ENTERED:
             if (l.calls.entered != NULL) {
@@ -88,6 +90,7 @@ static void tell(int number, Call call, KhActor actor, int value)
             }
             break;
         }
+        khdays_plugins_calling(was);
     }
     if (--delivering == 0 && listeners_dead) {
         drop_dead_listeners();
@@ -150,10 +153,30 @@ void khdays_plugins_character_attack(unsigned actor, int seat, int attack)
     }
 }
 
+/* The plugins that play a clip on a character (play), by number: theirs stop with them and as the scene changes. */
+typedef struct Player {
+    int number;
+    KhPlugin *owner;
+} Player;
+
+static Player *players;
+static int player_count, player_room;
+
+static void stop_clips(KhPlugin *owner)
+{
+    for (int i = player_count - 1; i >= 0; --i) {
+        if (owner == NULL || players[i].owner == owner) {
+            khdays_characters_play_none(players[i].number);
+            players[i] = players[--player_count];
+        }
+    }
+}
+
 void khdays_plugins_scene(int scene)
 {
     (void)scene; /* any change ends the field's actors */
     khdays_actors_area_left();
+    stop_clips(NULL);
     for (int seat = 0; seat < SEATS; ++seat) {
         if (seats[seat].actor != 0) {
             const KhActor gone = seats[seat].actor;
@@ -267,8 +290,51 @@ static void unlisten(KhPlugin *plugin, KhCharacterListener listener)
     }
 }
 
+static KhResult play(KhPlugin *plugin, KhActor actor, const char *action, uint32_t flags)
+{
+    const KhActors *actors = khdays_plugins_actors();
+    const int number = actors->kind(actor) == KH_ACTOR_PLAYER ? actors->character(actor) : -1;
+    int i = 0;
+    if (plugin == NULL || action == NULL || !khdays_plugins_may_change(plugin) ||
+        !khdays_characters_play(number, action, (flags & KH_PLAY_LOOP) != 0, khdays_events_vblank_count())) {
+        return KH_UNSUPPORTED;
+    }
+    while (i < player_count && players[i].number != number) {
+        ++i;
+    }
+    if (i == player_count) {
+        if (player_count == player_room) {
+            const int room = player_room > 0 ? player_room * 2 : 4;
+            Player *grown = realloc(players, (size_t)room * sizeof(Player));
+            if (grown == NULL) {
+                khdays_characters_play_none(number);
+                return KH_ERROR;
+            }
+            players = grown;
+            player_room = room;
+        }
+        ++player_count;
+    }
+    players[i].number = number;
+    players[i].owner = plugin;
+    return KH_OK;
+}
+
+static void stop_playing(KhPlugin *plugin, KhActor actor)
+{
+    const KhActors *actors = khdays_plugins_actors();
+    const int number = actors->kind(actor) == KH_ACTOR_PLAYER ? actors->character(actor) : -1;
+    for (int i = player_count - 1; i >= 0; --i) {
+        if (players[i].number == number && players[i].owner == plugin) {
+            khdays_characters_play_none(number);
+            players[i] = players[--player_count];
+        }
+    }
+}
+
 void khdays_plugins_characters_forget(KhPlugin *plugin)
 {
+    stop_clips(plugin);
     for (int i = 0; i < listener_count; ++i) {
         if (listeners[i].owner == plugin) {
             forget_listener(i);
@@ -279,7 +345,8 @@ void khdays_plugins_characters_forget(KhPlugin *plugin)
     }
 }
 
-static const KhCharacters characters_table = {sizeof(KhCharacters), count, info, find, listen, unlisten};
+static const KhCharacters characters_table = {sizeof(KhCharacters), count, info, find, listen, unlisten, play,
+                                              stop_playing};
 
 const void *khdays_plugins_characters(void)
 {

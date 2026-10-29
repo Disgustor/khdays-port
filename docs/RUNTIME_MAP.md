@@ -5325,3 +5325,17 @@ Read in the decompilation and traced with the walk `mission` (`KHDAYS_WATCH` on 
   half-word is the attack's id as `[moveset]` names it. Roxas's combo with his own files went 13090, 13080, 13150
   (Ventus's rewritten ones 0, 1, 2), each attack's hits worked out several times as its frames test them
   (`Ov022_ComputeStrengthDamage` 1-6 times an attack).
+- **A player's states** (seen 2026-10-29 with `Ov022_ActorSetState`'s hook point, Roxas's code, `missions_waves`):
+  the routine takes the state's number and answers its routine (the DS address the actor keeps at +0x460, 0 for
+  none), which the caller makes the actor's. The combo is 3 then 14 (`Ov022_StepComboState`, mode 0x27); the Limit 23
+  as it starts (`Ov022_SelectForcedState` when the actor's state block says so: mode 0x2e, its `b_ro_L000`), then at
+  each hit 34 (`Ov030_ArmPlayerTarget`) and 24 at once (the pending action 5: mode 0x2f, ov030's own state
+  routine, `b_ro_L001`), and between the hits 2 and 22 (`Ov022_StepJumpState`, modes 3 and 4: its `A003`/`A004`).
+  A before-function that skips 23, 34 and 24 for an actor (answering 0) keeps the Limit from starting: the actor
+  stays in its state, none of the Limit's animations plays (`sdk/examples/CustomLimit`).
+- **The enemies' manager** also holds actors with no HP: beside the waves mission's Shadows one of kind byte 67
+  (maximum HP 0) stood (+0x60 bit 0x100) and took none of the hits dealt to it; kh.actors leaves them out.
+- **A plugin's hit** (`kh.combat`): the players' packet (`Ov022_SendSweepHit`) built with no part node, so that
+  `Ov107_CalcHitDamage` takes its damage as it is; given to `Ov107_AiState_ApplyHit` with the player's +0x4ec as its
+  source, as the game does. Seen: 241 damage spins took Shadows of 75 and 38 HP to 0 (defeated, rewarded), and a
+  Shadow moved by `Ov107_MoveNodeAndRelayout` after a hit answered it had moved.

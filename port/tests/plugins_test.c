@@ -14,6 +14,9 @@
 #include "../runtime/scripts/game_link.h"
 
 #include <kh/kh_actors.h>
+#include <kh/kh_characters.h>
+#include <kh/kh_combat.h>
+#include <kh/kh_input.h>
 
 #include <SDL3/SDL.h>
 
@@ -62,7 +65,8 @@ unsigned khdays_events_vblank_count(void)
 #define ENEMY_1 0x02000030u
 #define ENEMY_2 0x02000034u
 static unsigned seat_actor[4] = {PLAYER};
-static unsigned standing[2] = {ENEMY_1, ENEMY_2};
+#define MADE 0x02000038u
+static unsigned standing[3] = {ENEMY_1, ENEMY_2};
 static int standing_count = 2;
 static int player_hp = 30;
 unsigned khdays_link_seat_actor(int seat)
@@ -106,6 +110,98 @@ void khdays_link_entity_hp(const void *entity, int *hp, int *max)
 int khdays_link_language(void)
 {
     return 5; /* Spanish */
+}
+static int guest, in_room;
+int khdays_link_guest(void)
+{
+    return guest;
+}
+int khdays_net_in_session(void)
+{
+    return in_room;
+}
+/* the last message the mods shared (the host's, to every guest) */
+static unsigned char shared[256];
+static unsigned shared_size;
+int khdays_net_share(const void *data, unsigned int size)
+{
+    shared_size = size < sizeof(shared) ? size : 0;
+    memcpy(shared, data, shared_size);
+    return 1;
+}
+/* a plugin built into the test as KHDAYS_STATIC_PLUGINS builds one into the port (tests/plugins/static_plugin.c) */
+typedef struct KhdaysStaticPlugin {
+    const char *mod_id;
+    KhPluginQuery query;
+} KhdaysStaticPlugin;
+const KhPluginDescriptor *khdays_test_static_query(void);
+const KhdaysStaticPlugin khdays_static_plugins[] = {{"test.static", khdays_test_static_query}};
+const int khdays_static_plugin_count = 1;
+int khdays_link_strength_damage(unsigned actor, int scale)
+{
+    return actor == PLAYER ? scale * 10 / 4096 : -1; /* strength 10 */
+}
+unsigned khdays_input_game_frames(void)
+{
+    return vblank;
+}
+/* the last hit dealt and enemy moved (kh.combat, kh.actors) */
+static struct {
+    unsigned enemy, attacker;
+    int seat, damage, chance, no_flinch, count;
+    unsigned kinds;
+} dealt;
+static unsigned moved;
+int khdays_enemies_hit(unsigned enemy, unsigned attacker, int seat, int damage, const float at[3], unsigned kinds,
+                       int chance, int no_flinch)
+{
+    (void)at;
+    dealt.enemy = enemy;
+    dealt.attacker = attacker;
+    dealt.seat = seat;
+    dealt.damage = damage;
+    dealt.kinds = kinds;
+    dealt.chance = chance;
+    dealt.no_flinch = no_flinch;
+    ++dealt.count;
+    return 1;
+}
+int khdays_enemies_move(unsigned enemy, const float at[3])
+{
+    (void)at;
+    moved = enemy;
+    return 1;
+}
+unsigned khdays_enemies_make(int kind, const float at[3], int level, double hp, double strength, const char **why)
+{
+    (void)at;
+    (void)level;
+    (void)hp;
+    (void)strength;
+    *why = "test: only kind 3";
+    if (kind != 3) {
+        return 0;
+    }
+    standing[standing_count++] = MADE;
+    return MADE;
+}
+/* the clip a plugin plays (kh.characters' play): character 0x16 has "spin" */
+static int played_number;
+int khdays_characters_play(int number, const char *action, int loop, unsigned now)
+{
+    (void)loop;
+    (void)now;
+    if (number != 0x16 || strcmp(action, "spin") != 0) {
+        return 0;
+    }
+    played_number = number;
+    return 1;
+}
+void khdays_characters_play_none(int number)
+{
+    if (number == played_number) {
+        played_number = 0;
+    }
 }
 int khdays_enemies_list(unsigned *out, int room)
 {
@@ -270,8 +366,22 @@ static void make_mods(void)
     mod("K user",
         "id = test.user\nname = K\nversion = 1\nsdk = 1\nnative.%s = native/plugin.dll\nrequires = test.provider\n",
         KHDAYS_TEST_USER);
-    mod("L fighter", "id = test.fighter\nname = L\nversion = 1\nsdk = 1\nnative.%s = native/plugin.dll\n",
+    mod("L fighter",
+        "id = test.fighter\nname = L\nversion = 1\nsdk = 1\nmultiplayer = yes\nnative.%s = native/plugin.dll\n",
         KHDAYS_TEST_FIGHTER);
+    /* no library for any platform: built in */
+    mod("N static", "id = test.static\nname = N\nversion = 2\nsdk = 1\n# no library for %s\n", NULL);
+    /* its parameters: described (one bad part, one bad default), then some chosen (one out of bounds, one unknown) */
+    write_file("plugins_test_mods/L fighter/parameters.ini",
+               "[spins]\ntype = integer\ndefault = 8\nmin = 1\nmax = 30\nlabel = Spins\nlabel es = Giros\n"
+               "[damage]\ntype = number\ndefault = 1.25\n"
+               "[loud]\ntype = flag\ndefault = yes\n"
+               "[sound]\ntype = choice\nchoices = none, soft, loud\ndefault = soft\n"
+               "[name]\ntype = text\ndefault = Spinner\n"
+               "[broken]\ndefault = 3\n"
+               "[far]\ntype = integer\nmin = 0\nmax = 5\ndefault = 9\n");
+    write_file("plugins_test_mods/L fighter/parameters.values.ini",
+               "spins = 12\ndamage = 2.5\nloud = no\nsound = loud\nname = Peonza\nfar = 99\nwhat = 1\n");
 }
 
 static int count_of(const char *text)
@@ -281,6 +391,102 @@ static int count_of(const char *text)
         ++n;
     }
     return n;
+}
+
+/* kh.input, kh.combat, the enemies made and moved, a clip played: through the tables, for a made-up plugin. */
+static void check_input_and_combat(void)
+{
+    static int made_up;
+    KhPlugin *me = (KhPlugin *)&made_up; /* a plugin's handle is opaque: these calls only keep it */
+    const KhInput *in = khdays_plugins_input();
+    const KhCombat *c = khdays_plugins_combat();
+    const KhActors *a = khdays_plugins_actors();
+    const KhCharacters *ch = khdays_plugins_characters();
+    const float at[3] = {1, 0, 0};
+    KhHit hit = {sizeof(KhHit), 40, {1, 0, 0}, KH_STATUS_BURN, 30, 0};
+    KhActor player, enemy, made;
+
+    /* the buttons: read, hidden from the game while the plugin reads them */
+    CHECK(khdays_plugins_buttons(KH_BUTTON_A | KH_BUTTON_UP) == (KH_BUTTON_A | KH_BUTTON_UP));
+    CHECK(in->held() == (KH_BUTTON_A | KH_BUTTON_UP) && in->pressed() == (KH_BUTTON_A | KH_BUTTON_UP));
+    in->hide(me, KH_BUTTON_A);
+    CHECK(khdays_plugins_buttons(KH_BUTTON_A) == 0 && in->held() == KH_BUTTON_A && in->pressed() == 0);
+    CHECK(in->released() == KH_BUTTON_UP && khdays_plugins_hidden_buttons() == KH_BUTTON_A);
+    in->hide(me, 0);
+    CHECK(khdays_plugins_buttons(KH_BUTTON_A) == KH_BUTTON_A);
+    in->hide(me, KH_BUTTONS_DIRECTIONS);
+    khdays_plugins_input_forget(me); /* as at its stop */
+    CHECK(khdays_plugins_hidden_buttons() == 0);
+
+    /* hits: worked out and dealt through the game's side, a guest's refused */
+    seat_actor[0] = PLAYER;
+    player = a->player(0);
+    enemy = a->of(ENEMY_1);
+    CHECK(c->damage(player, 1.5f) == 15 && c->damage(enemy, 1.0f) == -1);
+    CHECK(c->hit(enemy, player, &hit) == KH_OK && dealt.enemy == ENEMY_1 && dealt.attacker == PLAYER);
+    CHECK(dealt.seat == 0 && dealt.damage == 40 && dealt.kinds == 0x80 && dealt.chance == 30 && !dealt.no_flinch);
+    CHECK(c->hit(player, player, &hit) == KH_ERROR && c->hit(enemy, enemy, &hit) == KH_ERROR);
+    dealt.count = 0;
+    hit.flags = KH_HIT_NO_FLINCH;
+    CHECK(c->hit_around(player, at, 2.0f, &hit) == 2 && dealt.count == 2 && dealt.no_flinch); /* both at 0 0 0 */
+    CHECK(c->hit_around(player, (const float[3]){9, 0, 0}, 2.0f, &hit) == 0);
+    guest = 1;
+    CHECK(c->hit(enemy, player, &hit) == KH_UNSUPPORTED && c->hit_around(player, at, 2.0f, &hit) == 0);
+    guest = 0;
+
+    /* enemies moved and made */
+    CHECK(a->set_position(enemy, at) == KH_OK && moved == ENEMY_1);
+    made = a->make_enemy(me, 3, at, 1, 2.0f, 1.0f);
+    CHECK(made != 0 && a->kind(made) == KH_ACTOR_ENEMY && a->ref(made) == MADE && a->enemies(NULL, 0) == 3);
+    standing_count = 2;
+
+    /* a clip played on the character, refused on an enemy, stopped with its plugin */
+    CHECK(ch->play(me, player, "spin", KH_PLAY_LOOP) == KH_OK && played_number == 0x16);
+    CHECK(ch->play(me, player, "none", 0) == KH_UNSUPPORTED && ch->play(me, enemy, "spin", 0) == KH_UNSUPPORTED);
+    khdays_plugins_characters_forget(me);
+    CHECK(played_number == 0);
+    CHECK(ch->play(me, player, "spin", 0) == KH_OK);
+    ch->stop_playing(me, player);
+    CHECK(played_number == 0);
+}
+
+/* In a room: what a plugin not made for rooms may change, test.fighter's (made for rooms) messages, the plugins in
+ * the rooms' fingerprint; then a guest's copy. */
+static void check_rooms(void)
+{
+    unsigned long long args[2] = {99, 1}, result = 5;
+    unsigned char digest[32];
+    const char *name, *version;
+    int listed = 0, fighter_listed = 0;
+    in_room = 1;
+    /* test.provider and test.user hook TestPoint, neither made for rooms: their hooks are not called */
+    CHECK(!khdays_hook_before(0, args, &result) && args[0] == 99 && args[1] == 1);
+    khdays_hook_after(0, args, &result);
+    CHECK(result == 5);
+    /* test.fighter is: its attack heals, its message goes to the guests and is heard here as there */
+    seat_actor[0] = PLAYER;
+    vblank += 100;
+    khdays_plugins_frame();
+    khdays_plugins_character_attack(PLAYER, 0, 9);
+    CHECK(count_of("plugin attack 9, healed: yes") == 1 && count_of("plugin sent struck: 0") == 1);
+    CHECK(count_of("plugin heard struck v3: 9") == 1 && shared_size > 0);
+    khdays_plugins_shared(shared, shared_size); /* as a guest's copy gets it */
+    CHECK(count_of("plugin heard struck v3: 9") == 2);
+    khdays_plugins_shared((const unsigned char *)"test.lua\0x", 10); /* a Lua mod's: not a plugin's */
+    CHECK(count_of("plugin heard struck") == 2);
+    for (int i = 0; khdays_plugins_room_entry(i, digest, &name, &version); ++i) {
+        ++listed;
+        fighter_listed += strcmp(name, "L") == 0 && strcmp(version, "1") == 0;
+    }
+    CHECK(listed == 6 && fighter_listed == 1); /* the started ones: hello, counting, provider, user, fighter, static */
+    /* a guest's copy sends nothing */
+    guest = 1;
+    vblank += 100;
+    khdays_plugins_frame();
+    khdays_plugins_character_attack(PLAYER, 0, 10);
+    CHECK(count_of("plugin sent struck: -2") == 1);
+    guest = 0;
+    in_room = 0;
 }
 
 /* kh.actors and kh.characters through test.fighter (its lines) and the table itself. */
@@ -294,6 +500,14 @@ static void check_actors_and_characters(void)
                        "test.fighter/block (Bloque) on 0") != NULL);
     CHECK(strstr(said, "test.fighter: not listening: no character 999") != NULL);
     CHECK(strstr(said, "test.fighter: plugin 999 refused") != NULL);
+    /* its parameters: the values chosen, else the defaults; what was wrong told */
+    CHECK(strstr(said, "test.fighter: plugin parameters: spins 12, damage 2.50, loud 0, sound loud (2), name Peonza, "
+                       "missing -7") != NULL);
+    CHECK(strstr(said, "test.fighter: parameters: line 21: [broken]: its type is missing or unknown") != NULL);
+    CHECK(strstr(said, "test.fighter: parameters: line 23: [far]: its default: outside its bounds") != NULL);
+    CHECK(strstr(said, "test.fighter: parameters: line 6: far: outside its bounds") != NULL);
+    CHECK(strstr(said, "test.fighter: parameters: line 7: what: no such parameter") != NULL);
+    CHECK(strstr(said, "test.fighter: parameters: 6, the values chosen read") != NULL);
 
     /* the seat's actor enters, is called each frame, attacks */
     vblank = 100;
@@ -357,7 +571,7 @@ int main(int argc, char **argv)
     khdays_plugins_set_native_code(strcmp(mode, "off") != 0);
     khdays_plugins_set_safe_mode(strcmp(mode, "safe") == 0);
     khdays_plugins_start("plugins_test_mods", heard);
-    CHECK(khdays_plugins_count() == 11); /* I has no plugin */
+    CHECK(khdays_plugins_count() == 12); /* I has no plugin */
     if (strcmp(mode, "on") != 0) {
         CHECK(state("example.hello-world") == KHDAYS_PLUGIN_WAITING);
         CHECK(state("test.counting") == KHDAYS_PLUGIN_WAITING);
@@ -407,6 +621,11 @@ int main(int argc, char **argv)
         }
 
         check_actors_and_characters();
+        check_input_and_combat();
+        check_rooms();
+        CHECK(state("test.static") == KHDAYS_PLUGIN_STARTED);
+        CHECK(strstr(said, "test.static: plugin built in (built into the port, by no one named) starts") != NULL);
+        CHECK(strstr(said, "test.static: plugin built in, started") != NULL);
 
         /* the window's thread asks; this, the game's, stops them at its next frame */
         SDL_Thread *thread = SDL_CreateThread(quit_thread, "quit", NULL);
@@ -429,6 +648,7 @@ int main(int argc, char **argv)
             }
             CHECK(strcmp(text, "stopped once") == 0);
         }
+        CHECK(strstr(said, "test.static: plugin built in, stopped") != NULL);
         CHECK(!khdays_hook_on(0) && !khdays_plugins_listening()); /* their hooks and subscriptions gone */
         khdays_plugins_stop();                                    /* again: nothing left to stop */
         CHECK(strstr(strstr(said, "Goodbye") + 1, "Goodbye") == NULL);

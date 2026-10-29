@@ -62,6 +62,19 @@ void khdays_plugins_stop(void);
 int khdays_plugins_listening(void);
 void khdays_plugins_game_event(const char *name, long long a, long long b, long long c, long long d, const char *text);
 
+/* The game's pad read (runtime/input/input.c), once a game frame, after the port's own screens took their buttons:
+ * the player's buttons (KHDAYS_KEY_*) given to the plugins (kh.input), those they hide taken out. The buttons hidden
+ * now (the analog stick's movement stops while all four directions are). */
+unsigned khdays_plugins_buttons(unsigned buttons);
+unsigned khdays_plugins_hidden_buttons(void);
+
+/* For the multiplayer rooms (runtime/scripts/scripts.c): started plugin `index` (from 0; 0 past the last) -- its part
+ * of the gameplay mods' fingerprint (SHA-256 over its library and its parameters' files), its mod's name and
+ * version. A message the mods share (net_session.h) given to the plugins: one of theirs (kh.net) is heard as an
+ * event, any other left alone. */
+int khdays_plugins_room_entry(int index, unsigned char digest[32], const char **name, const char **version);
+void khdays_plugins_shared(const unsigned char *data, unsigned size);
+
 /* The plugins found, in the order they were found (their folders' names). */
 int khdays_plugins_count(void);
 const KhdaysPluginView *khdays_plugins_at(int index);

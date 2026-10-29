@@ -2569,6 +2569,8 @@ HOOK_POINTS = [
         "uint",
         ("uint", "uint", "ref", "uint"),
     ),
+    # combat and entities: an actor enters a state by its number (an attack, a jump, a stagger, a Limit ...)
+    ("ov022@020a35f4", "int Ov022_ActorSetState(u32 *pActor, int nState)\n{", "int", ("ref", "int")),
     # camera: the field's camera, once a frame
     ("ov002@0204f0a8", "void *Ov002_TickCamera(void)\n{", "ref", ()),
 ]

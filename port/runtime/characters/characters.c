@@ -350,6 +350,49 @@ const KhdaysCharacter *khdays_characters_numbered(int number)
     return index >= 0 && index < numbered_count ? numbered[index] : NULL;
 }
 
+/* The clip a native plugin plays on each numbered character (khdays_characters_play), NULL none. */
+typedef struct Played {
+    const KhdaysCharacterAction *action;
+    unsigned since;
+    int loop;
+} Played;
+
+static Played *played; /* by number - KHDAYS_CHARACTER_FIRST, made as the first is played */
+
+int khdays_characters_play(int number, const char *action, int loop, unsigned now)
+{
+    const KhdaysCharacter *c = khdays_characters_numbered(number);
+    const KhdaysCharacterAction *a = c != NULL && c->own_skeleton ? khdays_characters_action(c, action) : NULL;
+    if (a == NULL) {
+        return 0;
+    }
+    if (played == NULL && (played = calloc((size_t)numbered_count, sizeof(Played))) == NULL) {
+        return 0;
+    }
+    played[number - KHDAYS_CHARACTER_FIRST].action = a;
+    played[number - KHDAYS_CHARACTER_FIRST].since = now;
+    played[number - KHDAYS_CHARACTER_FIRST].loop = loop;
+    return 1;
+}
+
+void khdays_characters_play_none(int number)
+{
+    if (played != NULL && khdays_characters_numbered(number) != NULL) {
+        played[number - KHDAYS_CHARACTER_FIRST].action = NULL;
+    }
+}
+
+const KhdaysCharacterAction *khdays_characters_played(const KhdaysCharacter *c, unsigned *since, int *loop)
+{
+    const Played *p = played != NULL && c != NULL && c->number > 0 ? &played[c->number - KHDAYS_CHARACTER_FIRST] : NULL;
+    if (p == NULL || p->action == NULL) {
+        return NULL;
+    }
+    *since = p->since;
+    *loop = p->loop;
+    return p->action;
+}
+
 int khdays_characters_known(int number)
 {
     return khdays_characters_numbered(number) != NULL;

@@ -5,9 +5,13 @@
 #include "plugins.h"
 
 #include <kh/kh_characters.h>
+#include <kh/kh_combat.h>
 #include <kh/kh_engine.h>
 #include <kh/kh_events.h>
 #include <kh/kh_hooks.h>
+#include <kh/kh_input.h>
+#include <kh/kh_net.h>
+#include <kh/kh_parameters.h>
 #include <kh/kh_services.h>
 
 #include <SDL3/SDL.h>
@@ -163,12 +167,26 @@ static void deliver(const KhEvent *event)
     for (int i = 0; i < count; ++i) {
         /* the list may grow (moved) while a callback runs: read the entry anew each time */
         if (subscriptions[i].function != NULL && strcmp(subscriptions[i].name, event->name) == 0) {
+            KhPlugin *was = khdays_plugins_calling(subscriptions[i].owner);
             subscriptions[i].function(event, subscriptions[i].user);
+            khdays_plugins_calling(was);
         }
     }
     if (--delivering == 0 && subscriptions_dead) {
         drop_dead_subscriptions();
     }
+}
+
+void khdays_plugins_deliver(const char *name, uint32_t version, const void *data, uint32_t size)
+{
+    KhEvent event;
+    memset(&event, 0, sizeof(event));
+    event.size = sizeof(event);
+    event.name = name;
+    event.a = version;
+    event.data = data;
+    event.data_size = size;
+    deliver(&event);
 }
 
 static KhResult raise_event(KhPlugin *plugin, const char *name, const void *data, uint32_t size)
@@ -371,10 +389,15 @@ static void run_hooks(int point, int when, KhHookCall *call)
     const int count = hook_count;
     ++dispatching;
     for (int i = 0; i < count; ++i) {
-        if (hooks[i].point != point || hooks[i].when != when || hooks[i].function == NULL) {
+        KhPlugin *was;
+        /* in a room a plugin not made for rooms changes nothing of the game */
+        if (hooks[i].point != point || hooks[i].when != when || hooks[i].function == NULL ||
+            !khdays_plugins_may_change(hooks[i].owner)) {
             continue;
         }
+        was = khdays_plugins_calling(hooks[i].owner);
         hooks[i].function(call, hooks[i].user);
+        khdays_plugins_calling(was);
         if (when == KH_HOOK_BEFORE && call->skip) {
             break;
         }
@@ -441,6 +464,18 @@ const void *khdays_plugins_interface(KhPlugin *plugin, const char *name, uint32_
     if (strcmp(name, KH_ACTORS) == 0) {
         return version == KH_ACTORS_VERSION ? khdays_plugins_actors() : NULL;
     }
+    if (strcmp(name, KH_NET) == 0) {
+        return version == KH_NET_VERSION ? khdays_plugins_net() : NULL;
+    }
+    if (strcmp(name, KH_PARAMETERS) == 0) {
+        return version == KH_PARAMETERS_VERSION ? khdays_plugins_parameters() : NULL;
+    }
+    if (strcmp(name, KH_COMBAT) == 0) {
+        return version == KH_COMBAT_VERSION ? khdays_plugins_combat() : NULL;
+    }
+    if (strcmp(name, KH_INPUT) == 0) {
+        return version == KH_INPUT_VERSION ? khdays_plugins_input() : NULL;
+    }
     if (strcmp(name, KH_CHARACTERS) == 0) {
         return version == KH_CHARACTERS_VERSION ? khdays_plugins_characters() : NULL;
     }
@@ -485,6 +520,7 @@ void khdays_plugins_forget(KhPlugin *plugin)
         settle_hooks();
     }
     khdays_plugins_characters_forget(plugin);
+    khdays_plugins_input_forget(plugin);
 }
 
 static SDL_ThreadID game_thread;

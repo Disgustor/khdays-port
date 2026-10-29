@@ -57,6 +57,12 @@ cmake --build build/sdk
 `mods/HelloWorld/native/windows-x64/` beside `sdk/examples/HelloWorld/mod.ini`, turn native code on, start the game:
 the mods' log says hello at the start and goodbye when the game closes. `sdk/docs/README.md` explains the interface.
 
+**Linux** (`native.linux-x64`, `native.linux-arm64`: `.so`) builds the same on Linux with gcc or clang, or from
+another system with `sdk/cmake/toolchain-linux-x64-clang.cmake` (clang and lld; a Linux system's files as its
+sysroot for plugins that use the C or C++ library). `sdk/tests/load_plugin.py` loads a plugin as the port does --
+its descriptor, its ABI, its start with a host table, its stop -- on any system Python runs on, so a Linux plugin is
+checked on Linux without the port there.
+
 ### What a plugin may count on
 
 - `kh_plugin_query` is called once; the descriptor's `start` once with the host table, on the game's thread; if it
@@ -88,6 +94,7 @@ and results travel as 64-bit slots, the game's pointers as references. The point
 | `Ov022_ActorSetHp(ref entity, int value)` | combat | a player's HP set: a hit, a cure, a defeat (the enemies' HP goes the next way) |
 | `Ov107_AiState_ApplyHit(ref enemy, ref source, ref hit)` | combat | an enemy takes a hit; its damage is worked out inside |
 | `Ov022_ComputeStrengthDamage(ref attacker, int scale)` | combat | the damage of a player's hit: its strength times the hit's factor |
+| `Ov022_ActorSetState(ref actor, int state)` | combat | a player enters a state by its number (its result: the state's routine, 0 none); on Roxas's code the Limit is 23 as it starts, then 34 and 24 at each hit |
 | `Archive_LoadFile(ref name, uint kind)` | resources | a file of the game loaded whole |
 | `PlaySound(int archive, int entry)` | audio | a sound effect: the menus' |
 | `Slot_Spawn(uint handler, uint entry, ref place, uint flags)` | audio | a positioned sound: the field's, an actor's cues and voices |
@@ -124,13 +131,87 @@ and the character plays by its description whenever native code is off. `sdk/exa
 a made-up character (three boxes on Roxas's code) whose plugin logs each attack and gives 1 HP back for it, and,
 through `Ov022_ComputeStrengthDamage`'s hook and `of`, doubles its hits' damage while everyone else's stays.
 
-In a room every copy of the game calls its plugins for every seat: a plugin that changes the game's state should do
-it on the host's copy alone (`kh.actors`' `local_seat` tells the seats apart; the host is seat 0), until plugins get
-their own multiplayer interface.
+In a room every copy of the game calls its plugins for every seat: a plugin that changes the game's state does it
+on the host's copy (`kh.net`'s `host`, below).
+
+## Moves, Limits and enemies of plugins
+
+| Interface | What it gives |
+|---|---|
+| `kh.input` (`kh_input.h`) | the player's buttons each game frame (held, pressed, let go), and buttons hidden from the game while the plugin still reads them (all four directions: the analog stick's movement too) |
+| `kh.combat` (`kh_combat.h`) | a hit's damage as the game works it out for a player (`Ov022_ComputeStrengthDamage`), and hits of the plugin's own dealt to the standing enemies through the routine the players' attacks reach (`Ov107_AiState_ApplyHit`): one enemy, or all within a reach; a status and its chance, no flinch. The host's in a room |
+| `kh.characters`' `play` | a mod's character with its own skeleton drawn playing one of its clips (any name of its `[actions]`) instead of what the game plays, once or looped |
+| `kh.actors`' `make_enemy`, `set_position` | an enemy of any kind made as the area makes its own, a standing enemy moved as the game moves its own |
+
+**A Limit of its own** (`sdk/examples/CustomLimit`): its made-up character (three boxes on a skeleton of its own, its
+clips made by the example's `make_files.py`) starts its Limit as the game's would -- the button held with the HP in
+danger -- but the plugin skips the Limit's states for its actor at `Ov022_ActorSetState`, hides the buttons and
+directions while its own lasts, plays its clips and makes eight spins whose hits reach the enemies around it. The
+game's Limit never plays for it (none of its `b_ro_L00x` animations), any other character's is the game's.
+
+**An enemy's behaviour** (`sdk/examples/CustomEnemy`): the Shadows blink away once from their attacker at half their
+HP or less and split into two weaker ones when defeated -- after `Ov107_AiState_ApplyHit`'s hook, done at the next
+frame (a hit comes while the game walks its enemies, which an enemy made or moved then would change under it).
+
+## Its parameters
+
+What a plugin's author lets a modder change without code -- a Limit's spins, a damage, a choice of sounds -- the mod
+describes in `parameters.ini` beside its `mod.ini` (or the file `mod.ini`'s `parameters` names), a part a parameter:
+
+```ini
+[spins]                 # its name: letters, digits, _ - .
+type = integer          # integer, number, flag, choice, text
+default = 8
+min = 1                 # integer, number: its bounds (either may be left out)
+max = 30
+label = Spins           # its words, and in a language: label es = Giros
+help = How many times the Limit spins.
+
+[status]
+type = choice
+choices = none, burn, freeze, jolt, toss
+default = none
+```
+
+KH Studio's Plugin window (and `--plugin-parameters`, `--set-plugin-parameter`) shows them as controls, reading this
+file, never the plugin, and saves the values chosen in `parameters.values.ini` beside it (`name = value` lines). The
+port reads both as the plugin starts and answers it through `kh.parameters` (`kh_parameters.h`): an integer, number
+or flag (a choice's index), a text (a choice's name), each with a fallback for a name it does not know. What is wrong
+in either file -- an unknown type, a default or a value out of its bounds, a name not described -- is told in the
+mods' log and left out. `sdk/examples/CustomLimit` reads its spins, their damage, reach and status so.
+
+## In a room
+
+A room plays the host's game: the host's copy works out the actors, the hits and the enemies; each guest's copy shows
+what the host sends and sends the host its player's buttons. So:
+
+- **Every copy plays with the same plugins.** The plugins started are part of the gameplay mods' fingerprint (each
+  one's library and parameters' files, hashed): a copy with other plugins, other versions or other values chosen --
+  or with native code off where the host has it on -- is refused as for other gameplay mods, the host's list of mods
+  shown to it.
+- **A mod says it is made for rooms** with `multiplayer = yes` in its `mod.ini`. In a room the port keeps a plugin
+  whose mod does not say so from changing the game: its hooks are not called; its hits, HP, places, enemies made,
+  buttons hidden and clips played are refused (`KH_UNSUPPORTED`); it still hears the game's events.
+- **`kh.net`** (`kh_net.h`) says whether this copy is in a room and whether it decides the game (the host, or
+  alone), and sends a plugin's own messages -- a name and a version the plugin chooses -- from the host's copy to every
+  guest's (inside the mods' shared messages, marked as no Lua mod's). Every copy's plugins hear one as the event
+  `<mod id>.<name>`, its version in `a`, the host's own as the guests'.
+
+## Built into the port
+
+A platform that loads no library (a console) gets plugins built into the port: the same source, its
+`kh_plugin_query` renamed, listed by its mod's id --
+
+```bash
+cmake ... -DKHDAYS_STATIC_PLUGINS="example.custom-limit=sdk/examples/CustomLimit/custom_limit.cpp"
+```
+
+-- the plugin manager finds the mod as ever (its `mod.ini`, its `sdk`, its parameters) and starts the plugin without a
+library; native code must still be on. Everything of the plugin but `kh_plugin_query` must be its own (static, or in
+an unnamed namespace), as a library's hidden names are. The plugins' test builds one in so.
 
 ## What is next
 
-The SDK grows by parts, each tested before it is called done: more hook points across the game's subsystems;
-combat and Limits from plugins (moves of their own through the game's hit routines, an enemy's behaviour); Linux;
-KH Studio reading plugins' parameters; multiplayer (plugins in the rooms' fingerprint, their messages); plugins
-registered at build time where a platform has no dynamic loading.
+More hook points across the game's subsystems as plugins ask for them (hits on the players from a plugin, an enemy's
+own AI); the port itself on Linux (where plugins then run as on Windows) and on a platform without dynamic loading
+(where they are built in); a guest's messages to the host.

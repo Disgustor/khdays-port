@@ -9,6 +9,7 @@
 #include "core/missions/mission_db.h"
 #include "core/missions/mod_missions.h"
 #include "core/mods/mods.h"
+#include "core/mods/plugin_parameters.h"
 #include "core/files/paths.h"
 #include "core/mods/settings.h"
 #include "core/models/clip_import.h"
@@ -756,6 +757,64 @@ int check_mod_missions_command(const fs::path& root, const std::string& mod) {
     return ok ? 0 : 1;
 }
 
+// The folder of mod `mod` under the port's mods/; empty (told) when there is none.
+fs::path mod_folder(const fs::path& root, const std::string& mod) {
+    const fs::path dir = root / "mods" / path_u8(mod);
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) {
+        std::fprintf(stderr, "khdays-studio: no mod %s in %s\n", mod.c_str(), u8(root / "mods").c_str());
+        return {};
+    }
+    return dir;
+}
+
+void print_plugin_parameters(const PluginParameters& p) {
+    for (int i = 0; i < p.list.count; ++i) {
+        const KhdaysParameter& q = p.list.list[i];
+        static const char* const kinds[] = {"integer", "number", "flag", "choice", "text"};
+        char value[512];
+        khdays_parameters_value_text(&q, value, sizeof(value));
+        std::printf("%s (%s) = %s%s%s\n", q.name, kinds[q.kind], value, q.label != nullptr ? "  -- " : "",
+                    q.label != nullptr ? q.label : "");
+    }
+    for (const std::string& problem : p.problems)
+        std::printf("problem: %s\n", problem.c_str());
+}
+
+// --plugin-parameters <Mod>: the parameters its plugin's mod describes, each with the value chosen (else its default).
+int plugin_parameters_command(const fs::path& root, const std::string& mod) {
+    const fs::path dir = mod_folder(root, mod);
+    PluginParameters p;
+    if (dir.empty())
+        return 1;
+    if (!load_plugin_parameters(dir, p)) {
+        std::printf("%s describes no plugin parameters (%s)\n", mod.c_str(), u8(p.descriptor).c_str());
+        return 1;
+    }
+    print_plugin_parameters(p);
+    return p.problems.empty() ? 0 : 1;
+}
+
+// --set-plugin-parameter <Mod> <name> <value>: one parameter's value chosen and saved beside its description.
+int set_plugin_parameter_command(const fs::path& root, const std::vector<std::string>& args) {
+    const fs::path dir = mod_folder(root, args[1]);
+    PluginParameters p;
+    std::string why;
+    if (dir.empty())
+        return 1;
+    if (!load_plugin_parameters(dir, p)) {
+        std::fprintf(stderr, "khdays-studio: %s describes no plugin parameters\n", args[1].c_str());
+        return 1;
+    }
+    if (!set_plugin_parameter(p, args[2], args[3], why) || !save_plugin_parameters(p, why)) {
+        std::fprintf(stderr, "khdays-studio: %s = %s: %s\n", args[2].c_str(), args[3].c_str(), why.c_str());
+        return 1;
+    }
+    std::printf("saved: %s\n", u8(p.values).c_str());
+    print_plugin_parameters(p);
+    return 0;
+}
+
 // --check-texts: every text file of the game read and written back the same.
 int check_texts(const fs::path& root) {
     const fs::path nitrofs = nitrofs_of(root);
@@ -1457,6 +1516,10 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         return take_back_sheet(root, args);
     if (args.size() == 5 && args[0] == "--replace-animation")
         return replace_animation(root, args);
+    if (args.size() == 2 && args[0] == "--plugin-parameters")
+        return plugin_parameters_command(root, args[1]);
+    if (args.size() == 4 && args[0] == "--set-plugin-parameter")
+        return set_plugin_parameter_command(root, args);
     std::fprintf(
         stderr,
         "usage: khdays-studio [--port <dir>]               the window\n"
@@ -1516,7 +1579,11 @@ int run_command_line(const fs::path& root, const std::vector<std::string>& args)
         "                                                  the arrangements that fit a sheet, best first\n"
         "       khdays-studio [--port <dir>] --take-back <Mod> <sheet> screen:N|cells:N|sheet... [row:N] [palette:N]\n"
         "                                                [colours:own|fit] <edited.png>\n"
-        "                                                  the edited picture into the mod's sheet\n");
+        "                                                  the edited picture into the mod's sheet\n"
+        "       khdays-studio [--port <dir>] --plugin-parameters <Mod>\n"
+        "                                                  its native plugin's parameters and the values chosen\n"
+        "       khdays-studio [--port <dir>] --set-plugin-parameter <Mod> <name> <value>\n"
+        "                                                  one of them chosen and saved\n");
     return 2;
 }
 

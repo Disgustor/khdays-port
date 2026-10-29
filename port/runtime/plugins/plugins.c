@@ -1,11 +1,17 @@
 /* The mods' native plugins (plugins.h). */
 #include "plugins.h"
 #include "interfaces.h"
+#include "parameters.h"
 
+#include "../core/sha256.h"
+#include "../net/net_session.h"
 #include "../scripts/folders.h"
+#include "../scripts/game_link.h"
 #include "../scripts/manifest.h"
 
 #include <kh/kh_mod.h>
+#include <kh/kh_net.h>
+#include <kh/kh_parameters.h>
 
 #include <SDL3/SDL.h>
 
@@ -24,8 +30,13 @@
 struct KhPlugin {
     KhdaysPluginView view;
     char *folder, *mod_id, *name, *version, *author, *library, *why;
-    char *path;     /* its library on disk */
-    char *requires; /* mod.ini's `requires`, NULL none */
+    char *path;                  /* its library on disk */
+    char *requires;              /* mod.ini's `requires`, NULL none */
+    char *parameters_file;       /* its parameters' description on disk (parameters.h), NULL none */
+    KhdaysParameters parameters; /* read as it is loaded, with the values chosen */
+    int multiplayer;             /* mod.ini's `multiplayer = yes`: made for rooms */
+    KhPluginQuery built_in;      /* built into the port (static_plugins.c): no library to load */
+    unsigned char digest[32];    /* what plays: its library and its parameters (the rooms' fingerprint) */
     SDL_SharedObject *object;
     const KhPluginDescriptor *descriptor;
     KhHost host;
@@ -35,10 +46,30 @@ typedef struct KhPlugin Plugin;
 
 static Plugin **plugins;
 static int plugin_count, plugin_room, started_count;
+static Plugin *calling; /* the plugin whose function the port is calling, NULL none */
 static int native_code, safe_mode;
 static KhdaysPluginsLog say;
 static SDL_AtomicInt stop_asked;
 static SDL_Semaphore *stopped; /* signalled once the game's thread has stopped them for khdays_plugins_quit */
+
+/* The plugins built into the port, by their mods' ids (static_plugins.c, generated: none unless the build was asked
+ * for some, KHDAYS_STATIC_PLUGINS): where a platform loads no library, and anywhere a build wants them in. */
+typedef struct KhdaysStaticPlugin {
+    const char *mod_id;
+    KhPluginQuery query;
+} KhdaysStaticPlugin;
+extern const KhdaysStaticPlugin khdays_static_plugins[];
+extern const int khdays_static_plugin_count;
+
+static KhPluginQuery built_in_query(const char *mod_id)
+{
+    for (int i = 0; mod_id != NULL && i < khdays_static_plugin_count; ++i) {
+        if (strcmp(khdays_static_plugins[i].mod_id, mod_id) == 0) {
+            return khdays_static_plugins[i].query;
+        }
+    }
+    return NULL;
+}
 
 const char *khdays_plugins_platform(void)
 {
@@ -136,6 +167,165 @@ void khdays_plugins_tell(KhPlugin *plugin, const char *text)
     tell(plugin, "%s", text);
 }
 
+KhPlugin *khdays_plugins_calling(KhPlugin *plugin)
+{
+    Plugin *was = calling;
+    calling = plugin;
+    return was;
+}
+
+int khdays_plugins_may_change(KhPlugin *plugin)
+{
+    const Plugin *p = plugin != NULL ? plugin : calling;
+    return p == NULL || p->multiplayer || !khdays_net_in_session();
+}
+
+int khdays_plugins_room_entry(int index, unsigned char digest[32], const char **name, const char **version)
+{
+    for (int i = 0, n = 0; i < plugin_count; ++i) {
+        const Plugin *p = plugins[i];
+        if (p->view.state != KHDAYS_PLUGIN_STARTED) {
+            continue;
+        }
+        if (n++ == index) {
+            memcpy(digest, p->digest, 32);
+            *name = p->name;
+            *version = p->version;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* kh.net: a plugin's messages travel inside the mods' shared messages (net_session.h: the host's to every guest),
+ * marked as no Lua mod's: "<mod id>/native", a nul, "KHP1", the version (4 bytes, little-endian), the name and a nul,
+ * then the bytes. */
+#define MESSAGE_MARK "KHP1"
+
+static int32_t net_in_room(void)
+{
+    return khdays_net_in_session() != 0;
+}
+
+static int32_t net_host(void)
+{
+    return !khdays_net_in_session() || !khdays_link_guest();
+}
+
+static KhResult net_send(KhPlugin *plugin, const char *name, uint32_t version, const void *data, uint32_t size)
+{
+    size_t id, n, at = 0;
+    unsigned char *message;
+    char event[300];
+    if (plugin == NULL || name == NULL || (data == NULL && size > 0)) {
+        return KH_ERROR;
+    }
+    if (!plugin->multiplayer || !khdays_net_in_session() || khdays_link_guest()) {
+        return KH_UNSUPPORTED;
+    }
+    id = strlen(plugin->mod_id);
+    n = strlen(name);
+    message = malloc(id + 8 + 4 + 4 + n + 1 + size);
+    if (message == NULL) {
+        return KH_ERROR;
+    }
+    memcpy(message, plugin->mod_id, id);
+    memcpy(message + id, "/native", 8);
+    at = id + 8;
+    memcpy(message + at, MESSAGE_MARK, 4);
+    at += 4;
+    for (int i = 0; i < 4; ++i) {
+        message[at++] = (unsigned char)(version >> (8 * i));
+    }
+    memcpy(message + at, name, n + 1);
+    at += n + 1;
+    if (size > 0) {
+        memcpy(message + at, data, size);
+    }
+    at += size;
+    khdays_net_share(message, (unsigned int)at);
+    free(message);
+    snprintf(event, sizeof(event), "%s.%s", plugin->mod_id, name);
+    khdays_plugins_deliver(event, version, data, size); /* the host's own plugins hear it as the guests' do */
+    return KH_OK;
+}
+
+static const KhNet net_table = {sizeof(KhNet), net_in_room, net_host, net_send};
+
+const void *khdays_plugins_net(void)
+{
+    return &net_table;
+}
+
+void khdays_plugins_shared(const unsigned char *data, unsigned size)
+{
+    const unsigned char *nul = memchr(data, 0, size), *name, *name_end;
+    uint32_t version = 0;
+    size_t at;
+    char event[300];
+    if (nul == NULL || (size_t)(nul - data) < 7 || memcmp(nul - 7, "/native", 7) != 0) {
+        return; /* a Lua mod's */
+    }
+    at = (size_t)(nul - data) + 1;
+    if (size - at < 9 || memcmp(data + at, MESSAGE_MARK, 4) != 0) {
+        return;
+    }
+    at += 4;
+    for (int i = 0; i < 4; ++i) {
+        version |= (uint32_t)data[at++] << (8 * i);
+    }
+    name = data + at;
+    name_end = memchr(name, 0, size - at);
+    if (name_end == NULL) {
+        return;
+    }
+    snprintf(event, sizeof(event), "%.*s.%.*s", (int)(nul - data - 7), (const char *)data, (int)(name_end - name),
+             (const char *)name);
+    at = (size_t)(name_end - data) + 1;
+    khdays_plugins_deliver(event, version, data + at, (uint32_t)(size - at));
+}
+
+/* kh.parameters: the plugin's parameter `name`, NULL none. */
+static const KhdaysParameter *parameter(KhPlugin *plugin, const char *name)
+{
+    return plugin != NULL ? khdays_parameters_find(&plugin->parameters, name) : NULL;
+}
+
+static int32_t parameter_integer(KhPlugin *plugin, const char *name, int32_t fallback)
+{
+    const KhdaysParameter *q = parameter(plugin, name);
+    if (q == NULL || q->kind == KHDAYS_PARAMETER_TEXT || !(q->number >= INT32_MIN && q->number <= INT32_MAX)) {
+        return fallback;
+    }
+    return (int32_t)q->number;
+}
+
+static double parameter_number(KhPlugin *plugin, const char *name, double fallback)
+{
+    const KhdaysParameter *q = parameter(plugin, name);
+    return q != NULL && q->kind != KHDAYS_PARAMETER_TEXT ? q->number : fallback;
+}
+
+static const char *parameter_text(KhPlugin *plugin, const char *name, const char *fallback)
+{
+    const KhdaysParameter *q = parameter(plugin, name);
+    if (q != NULL && q->kind == KHDAYS_PARAMETER_TEXT) {
+        return q->text;
+    }
+    if (q != NULL && q->kind == KHDAYS_PARAMETER_CHOICE && q->number >= 0 && q->number < q->choice_count) {
+        return q->choices[(int)q->number];
+    }
+    return fallback;
+}
+
+static const KhParameters parameters_table = {sizeof(KhParameters), parameter_integer, parameter_number,
+                                              parameter_text};
+
+const void *khdays_plugins_parameters(void)
+{
+    return &parameters_table;
+}
+
 const char *khdays_plugins_mod_id(const KhPlugin *plugin)
 {
     return plugin != NULL && plugin->mod_id != NULL ? plugin->mod_id : "";
@@ -177,10 +367,28 @@ static void found(const char *folder_name, void *context)
         p->version = version != NULL ? version : copy("");
         p->author = author != NULL ? author : copy("");
     }
+    {
+        char *rooms = khdays_manifest_value(text, size, "multiplayer");
+        p->multiplayer = rooms != NULL && strcmp(rooms, "yes") == 0;
+        free(rooms);
+    }
+    p->built_in = built_in_query(p->mod_id);
     snprintf(key, sizeof(key), "native.%s", khdays_plugins_platform());
     library = khdays_manifest_value(text, size, key);
     p->library = copy(library != NULL ? library : "");
     p->requires = khdays_manifest_value(text, size, "requires");
+    {
+        char *named = khdays_manifest_value(text, size, "parameters");
+        if (named != NULL ? inside(named) : 1) {
+            char *file = joined(folder, named != NULL ? named : "parameters.ini");
+            if (file != NULL && khdays_folders_is_file(file)) {
+                p->parameters_file = file;
+            } else {
+                free(file);
+            }
+        }
+        free(named);
+    }
     p->view.folder = p->folder != NULL ? p->folder : "";
     p->view.mod_id = p->mod_id != NULL ? p->mod_id : "";
     p->view.name = p->name != NULL ? p->name : "";
@@ -198,6 +406,8 @@ static void found(const char *folder_name, void *context)
         } else if (major != KH_ABI_MAJOR) {
             snprintf(why, sizeof(why), "built for SDK %ld, this port loads SDK %d", major, KH_ABI_MAJOR);
             set_why(p, KHDAYS_PLUGIN_REFUSED, why);
+        } else if (p->built_in != NULL) {
+            /* built into the port: its library, if the mod has one, is not loaded */
         } else if (library == NULL) {
             snprintf(why, sizeof(why), "no library for %s (mod.ini: %s)", khdays_plugins_platform(), key);
             set_why(p, KHDAYS_PLUGIN_REFUSED, why);
@@ -215,6 +425,64 @@ done:
     free(text);
     free(ini);
     free(folder);
+}
+
+static void parameters_problem(int line, const char *why, void *context)
+{
+    const Plugin *p = context;
+    if (line > 0) {
+        tell(p, "parameters: line %d: %s", line, why);
+    } else {
+        tell(p, "parameters: %s", why);
+    }
+}
+
+/* Its part of the rooms' fingerprint: its library's bytes (or its id, built in) and its parameters' files. */
+static void fingerprint(Plugin *p)
+{
+    KhdaysSha256 sha;
+    const char *files[2] = {p->built_in == NULL ? p->path : NULL, p->parameters_file};
+    char values[1024];
+    khdays_sha256_begin(&sha);
+    khdays_sha256_add(&sha, p->mod_id, strlen(p->mod_id) + 1);
+    khdays_sha256_add(&sha, p->version, strlen(p->version) + 1);
+    for (int i = 0; i < 3; ++i) {
+        const char *file = i < 2 ? files[i] : NULL;
+        size_t size = 0;
+        char *bytes;
+        if (i == 2 && p->parameters_file != NULL) {
+            khdays_parameters_values_name(p->parameters_file, values, sizeof(values));
+            file = values;
+        }
+        if (file != NULL && (bytes = khdays_folders_read(file, &size)) != NULL) {
+            khdays_sha256_add(&sha, bytes, size);
+            free(bytes);
+        }
+        khdays_sha256_add(&sha, "|", 1);
+    }
+    khdays_sha256_end(&sha, p->digest);
+}
+
+/* Its parameters (the description, then the values chosen), read before it starts. */
+static void read_parameters(Plugin *p)
+{
+    char values[1024];
+    size_t size = 0;
+    char *text;
+    int chosen;
+    if (p->parameters_file == NULL || (text = khdays_folders_read(p->parameters_file, &size)) == NULL) {
+        return;
+    }
+    khdays_parameters_read(&p->parameters, text, size, parameters_problem, p);
+    free(text);
+    khdays_parameters_values_name(p->parameters_file, values, sizeof(values));
+    text = khdays_folders_read(values, &size);
+    chosen = text != NULL;
+    if (chosen) {
+        khdays_parameters_values(&p->parameters, text, size, parameters_problem, p);
+        free(text);
+    }
+    tell(p, "parameters: %d, %s", p->parameters.count, chosen ? "the values chosen read" : "their defaults");
 }
 
 /* Whether mod `id`'s plugin has started: 1 yes, 0 not (yet), -1 it has no plugin (whether it is in mods/ is the
@@ -295,19 +563,32 @@ static int requirements(const char *mods, const Plugin *p, char *why, size_t why
     return result;
 }
 
+/* Its library let go (a built-in plugin has none). */
+static void release(Plugin *p)
+{
+    if (p->object != NULL) {
+        SDL_UnloadObject(p->object);
+        p->object = NULL;
+    }
+}
+
 static void load(Plugin *p)
 {
     char why[300];
     KhPluginQuery query;
     const KhPluginDescriptor *d;
     KhResult r;
-    p->object = SDL_LoadObject(p->path);
-    if (p->object == NULL) {
-        snprintf(why, sizeof(why), "its library cannot be loaded (%.200s)", SDL_GetError());
-        set_why(p, KHDAYS_PLUGIN_REFUSED, why);
-        return;
+    if (p->built_in != NULL) {
+        query = p->built_in;
+    } else {
+        p->object = SDL_LoadObject(p->path);
+        if (p->object == NULL) {
+            snprintf(why, sizeof(why), "its library cannot be loaded (%.200s)", SDL_GetError());
+            set_why(p, KHDAYS_PLUGIN_REFUSED, why);
+            return;
+        }
+        query = (KhPluginQuery)SDL_LoadFunction(p->object, KH_PLUGIN_QUERY);
     }
-    query = (KhPluginQuery)SDL_LoadFunction(p->object, KH_PLUGIN_QUERY);
     d = query != NULL ? query() : NULL;
     if (d == NULL || d->size < offsetof(KhPluginDescriptor, stop) + sizeof(d->stop) || d->start == NULL ||
         d->stop == NULL || d->abi_major != KH_ABI_MAJOR || d->abi_minor > KH_ABI_MINOR) {
@@ -319,8 +600,7 @@ static void load(Plugin *p)
         } else {
             snprintf(why, sizeof(why), "its descriptor is not as the SDK's");
         }
-        SDL_UnloadObject(p->object);
-        p->object = NULL;
+        release(p);
         set_why(p, KHDAYS_PLUGIN_REFUSED, why);
         return;
     }
@@ -332,13 +612,18 @@ static void load(Plugin *p)
     p->host.port_version = KHDAYS_VERSION;
     p->host.log = host_log;
     p->host.find = host_find;
-    tell(p, "plugin %.100s (%.100s, by %.100s) starts", d->name != NULL ? d->name : "", p->library,
-         *p->author != '\0' ? p->author : "no one named");
-    r = d->start(&p->host);
+    read_parameters(p);
+    fingerprint(p);
+    tell(p, "plugin %.100s (%.100s, by %.100s) starts", d->name != NULL ? d->name : "",
+         p->built_in != NULL ? "built into the port" : p->library, *p->author != '\0' ? p->author : "no one named");
+    {
+        Plugin *was = khdays_plugins_calling(p);
+        r = d->start(&p->host);
+        khdays_plugins_calling(was);
+    }
     if (r != KH_OK) {
         khdays_plugins_forget(p); /* what it registered before failing */
-        SDL_UnloadObject(p->object);
-        p->object = NULL;
+        release(p);
         p->descriptor = NULL;
         snprintf(why, sizeof(why), "its start failed (%d)", (int)r);
         set_why(p, KHDAYS_PLUGIN_FAILED, why);
@@ -407,11 +692,15 @@ void khdays_plugins_stop(void)
             if (p->view.state != KHDAYS_PLUGIN_STARTED || p->started_order != order || p->descriptor == NULL) {
                 continue;
             }
-            p->descriptor->stop();
+            {
+                Plugin *was = khdays_plugins_calling(p);
+                p->descriptor->stop();
+                khdays_plugins_calling(was);
+            }
             khdays_plugins_forget(p); /* what it left registered */
-            SDL_UnloadObject(p->object);
-            p->object = NULL;
+            release(p);
             p->descriptor = NULL;
+            khdays_parameters_free(&p->parameters);
             set_why(p, KHDAYS_PLUGIN_STOPPED, "");
             tell(p, "plugin stopped and released");
         }

@@ -106,7 +106,8 @@ add_library(khdays-studio-port STATIC
     "${ROOT}/port/runtime/missions/registry.c"       # a mod's new missions, as the port reads them
     "${ROOT}/port/runtime/missions/field_store.c"
     "${ROOT}/port/runtime/missions/tables.c"         # ... and the rows it adds for them
-    "${ROOT}/port/runtime/missions/worlds.c")
+    "${ROOT}/port/runtime/missions/worlds.c"
+    "${ROOT}/port/runtime/plugins/parameters.c")      # a mod's native plugin's parameters, as the port reads them
 target_include_directories(khdays-studio-port PUBLIC "${ROOT}/assets/include")
 target_include_directories(khdays-studio-port PUBLIC "${cgltf_SOURCE_DIR}" "${ufbx_SOURCE_DIR}")
 target_include_directories(khdays-studio-port PRIVATE "${stb_SOURCE_DIR}" "${dr_libs_SOURCE_DIR}")
@@ -134,6 +135,7 @@ add_library(khdays-studio-core STATIC
     core/files/catalog.cpp
     core/files/catalog_tree.cpp
     core/mods/check.cpp
+    core/mods/plugin_parameters.cpp
     core/models/clip_import.cpp
     core/files/containers.cpp
     core/files/file_write.cpp
@@ -186,6 +188,7 @@ add_executable(khdays-studio
     app/views/text_view.cpp
     app/views/mod_panel.cpp
     app/views/mods_console.cpp
+    app/views/plugin_parameters_view.cpp
     app/views/model_view.cpp
     app/preview3d.cpp
     app/save_dialog.cpp
@@ -214,6 +217,7 @@ add_executable(khdays-studio-tests
     tests/test_worlds.cpp
     tests/test_kh2.cpp
     tests/test_mods_log.cpp
+    tests/test_plugin_parameters.cpp
     app/strings.cpp
     tests/test_strings.cpp)
 target_include_directories(khdays-studio-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/app")

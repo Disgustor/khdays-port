@@ -28,6 +28,7 @@ extern KhdaysRef NNSi_FndAllocFromDefaultExpHeap(unsigned int size);
 extern void NNSi_FndFreeFromDefaultHeap(KhdaysRef block);
 extern void Ov002_ShowNoticeText(KhdaysRef text);
 extern void Ov022_ActorSetHp(KhdaysRef pEnt, int nValue); /* the game's pointers are references (window.h) */
+extern int Ov022_ComputeStrengthDamage(KhdaysRef pActor, int nScale);
 extern void Ov002_PauseMissionScene(void);
 extern int GetLanguage(void);
 extern void Ov000_TickMenuLoop(void);
@@ -207,6 +208,11 @@ void khdays_link_actor_position(unsigned actor, float at[3])
 int khdays_link_actor_kind(unsigned actor)
 {
     return (int)rd32(actor + ACTOR_KIND);
+}
+
+int khdays_link_strength_damage(unsigned actor, int scale)
+{
+    return khdays_overlay_loaded(OV_BATTLE) && khdays_game_ram(actor) ? Ov022_ComputeStrengthDamage(actor, scale) : -1;
 }
 
 int khdays_link_position(float at[3])

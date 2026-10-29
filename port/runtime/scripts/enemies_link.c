@@ -24,6 +24,7 @@ extern void Ov107_AiState_LoadResistances(KhdaysRef actor, unsigned profile);
 extern int Ov107_MoveNodeAndRelayout(KhdaysRef node, KhdaysRef at);
 extern void Ov107_SetStatusAndEmit(KhdaysRef node, unsigned char status);
 extern int Ov107_GetActorManager(void);
+extern int Ov107_AiState_ApplyHit(KhdaysRef obj, KhdaysRef source, KhdaysRef packet);
 extern void Ov107_Scene_BuildIdTable(void);
 extern void FreeInstanceMemory(KhdaysRef p);
 extern int Session_IsActive(void);
@@ -96,6 +97,21 @@ const char *khdays_enemy_name(int id); /* enemy_names.c */
 #define ATTACKS 8
 #define REACH (16 * 4096) /* the mission's spawners' (Ov002_ScriptCreateSlotObject's 9th) */
 #define MANAGER_IDS 0x48u /* gOv107ActorManager: an actor by its id (+2), made by Ov107_Scene_BuildIdTable */
+/* A hit as the players' attacks give it (Ov022_SendSweepHit's packet, Ov107_AiState_ApplyHit): u16 flags (4 a
+ * physical hit, 0x80 no flinch), u16 its kinds (0x4000 a physical hit; the statuses' bits 0x80 burn, 0x8 freeze, 0x800
+ * jolt, 0x4 toss), its place (20.12), s16 its damage, s16 an extra, u16 its author's seat, its part node (none: the
+ * damage taken as it is, Ov107_CalcHitDamage), s8 the statuses' chance (0-100), then what the routine answers. */
+#define HIT_BYTES 0x2cu
+#define HIT_FLAGS 0x0u
+#define HIT_KINDS 0x2u
+#define HIT_PLACE 0x4u
+#define HIT_DAMAGE 0x10u
+#define HIT_AUTHOR 0x14u
+#define HIT_CHANCE 0x1cu
+#define HIT_PHYSICAL 0x4u
+#define HIT_NO_FLINCH 0x80u
+#define KIND_PHYSICAL 0x4000u
+#define PLAYER_SUB 0x4ecu /* a player actor's part its hits come from (Ov022_SendSweepHit's source) */
 #define MANAGER_LIST 0x4u /* gOv107ActorManager: its actors' list (List_First): +4 its first node, +0x10 its end */
 #define LIST_FIRST 0x4u
 #define LIST_END 0x10u
@@ -561,8 +577,8 @@ int khdays_enemies_info(unsigned actor, KhdaysEnemyInfo *out)
     return 1;
 }
 
-/* The actor manager's standing actors, walked as List_First and List_Next do but without their cursor (a walk of the
- * game's own may be under way): up to `room` into `out`, how many; with `only`, whether it is one of them. */
+/* The actor manager's standing actors with HP, walked as List_First and List_Next do but without their cursor (a walk
+ * of the game's own may be under way): up to `room` into `out`, how many; with `only`, whether it is one of them. */
 static int standing(unsigned *out, int room, unsigned only)
 {
     const unsigned manager = objects() != 0 ? (unsigned)Ov107_GetActorManager() : 0;
@@ -573,7 +589,8 @@ static int standing(unsigned *out, int room, unsigned only)
     }
     for (unsigned node = rd32(list + LIST_FIRST); node != 0 && node != list + LIST_END; node = rd32(node + NODE_NEXT)) {
         const unsigned actor = rd32(rd32(node + NODE_ITEM));
-        if (actor == 0 || !(rd16(actor + AI_FLAGS) & STANDING)) {
+        /* not the manager's actors with no HP: seen beside the waves mission's Shadows, kind 67, taking no hit */
+        if (actor == 0 || !(rd16(actor + AI_FLAGS) & STANDING) || (short)rd16(actor + AI_HP_MAX) <= 0) {
             continue;
         }
         if (only != 0) {
@@ -588,6 +605,49 @@ static int standing(unsigned *out, int room, unsigned only)
         ++n;
     }
     return n;
+}
+
+int khdays_enemies_hit(unsigned enemy, unsigned attacker, int seat, int damage, const float at[3], unsigned kinds,
+                       int chance, int no_flinch)
+{
+    KhdaysRef hit;
+    int took;
+    if (!khdays_enemies_state(enemy, NULL) || !khdays_game_ram(attacker)) {
+        return 0;
+    }
+    hit = NNSi_FndAllocFromDefaultExpHeap(HIT_BYTES);
+    if (hit == 0) {
+        return 0;
+    }
+    for (unsigned i = 0; i < HIT_BYTES; i += 4) {
+        wr32(hit + i, 0);
+    }
+    wr16(hit + HIT_FLAGS, HIT_PHYSICAL | (no_flinch ? HIT_NO_FLINCH : 0));
+    wr16(hit + HIT_KINDS, KIND_PHYSICAL | kinds);
+    for (int i = 0; i < 3; ++i) {
+        wr32(hit + HIT_PLACE + 4u * (unsigned)i,
+             (unsigned)clamp(llround((double)at[i] * 4096.0), -0x7fffffff, 0x7fffffff));
+    }
+    wr16(hit + HIT_DAMAGE, (unsigned)clamp(damage, 0, 0x7fff));
+    wr16(hit + HIT_AUTHOR, (unsigned)seat);
+    wr8(hit + HIT_CHANCE, (unsigned)clamp(chance, 0, 100));
+    took = Ov107_AiState_ApplyHit(enemy, rd32(attacker + PLAYER_SUB), hit);
+    NNSi_FndFreeFromDefaultHeap(hit);
+    return took != 0;
+}
+
+int khdays_enemies_move(unsigned enemy, const float at[3])
+{
+    KhdaysRef place;
+    if (!khdays_enemies_state(enemy, NULL) || (place = NNSi_FndAllocFromDefaultExpHeap(12)) == 0) {
+        return 0;
+    }
+    for (int i = 0; i < 3; ++i) {
+        wr32(place + 4u * (unsigned)i, (unsigned)clamp(llround((double)at[i] * 4096.0), -0x7fffffff, 0x7fffffff));
+    }
+    Ov107_MoveNodeAndRelayout(enemy, place);
+    NNSi_FndFreeFromDefaultHeap(place);
+    return 1;
 }
 
 int khdays_enemies_list(unsigned *out, int room)

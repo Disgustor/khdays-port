@@ -159,6 +159,8 @@ bool new_missions_unsaved();
 bool draw_unsaved_quit(App& app);
 // The mods' console: the running game's mods' log as it grows, and their reloads.
 void draw_mods_console(App& app, bool* open);
+// The chosen mod's native plugin's parameters, as its mod describes them, and the values saved for the game.
+void draw_plugin_parameters(App& app, bool* open);
 
 // Points a mission puts in a room (its spawners), drawn by the map view
 // over that room when it is shown.

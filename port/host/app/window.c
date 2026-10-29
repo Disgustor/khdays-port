@@ -815,14 +815,15 @@ int khdays_host_start(void)
     }
     if (getenv("KHDAYS_HEADLESS") != NULL) {
         /* No window and no devices: a KHDAYS_INPUT script plays instead. It
-         * uses the enhancements (and their speeds) from the settings file
-         * named by KHDAYS_SETTINGS, if any; the regression walks name none,
-         * so they run with the defaults. */
+         * uses the enhancements (and their speeds) and whether mods' native code
+         * runs from the settings file named by KHDAYS_SETTINGS, if any; the
+         * regression walks name none, so they run with the defaults. */
         const char *path = SDL_getenv("KHDAYS_SETTINGS");
         if (path != NULL) {
             KhdaysProfile profile;
             KhdaysDeviceState nothing;
             khdays_profile_load(&profile, path, notice);
+            khdays_plugins_set_native_code(profile.mods.native_code);
             khdays_bindings_reset(&nothing);
             SDL_LockMutex(input_lock);
             khdays_bindings_resolve(&profile, &nothing, &input);

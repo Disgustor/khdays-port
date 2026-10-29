@@ -294,7 +294,8 @@ void khdays_scripts_start_in(const char *mods_path, const char *user)
     khdays_folders_list(mods_path, found_folder, &found);
     if (found.count == 0) {
         free(found.names);
-        return; /* no scripted mod: nothing made */
+        tell_rooms(); /* no scripted mod, but the mods' characters and native plugins still make the room's mods */
+        return;
     }
     user_folder = copy(user);
     order_path = joined(user, "mods/order.ini");
@@ -479,6 +480,32 @@ static void tell_rooms(void)
         list[size++] = (unsigned char)identity_size;
         memcpy(list + size, identity, identity_size);
         size += identity_size;
+        ++counted;
+    }
+    /* the native plugins started (a copy with native code off has none): their libraries and parameters play */
+    for (int p = 0;; ++p) {
+        unsigned char part[32];
+        const char *name, *version;
+        size_t name_size, version_size;
+        unsigned char *more;
+        if (!khdays_plugins_room_entry(p, part, &name, &version)) {
+            break;
+        }
+        khdays_sha256_add(&sha, "native", 7);
+        khdays_sha256_add(&sha, part, sizeof(part));
+        name_size = strlen(name) < 255 ? strlen(name) : 255;
+        version_size = strlen(version) < 255 ? strlen(version) : 255;
+        more = realloc(list, size + 2 + name_size + version_size);
+        if (more == NULL) {
+            continue;
+        }
+        list = more;
+        list[size++] = (unsigned char)name_size;
+        memcpy(list + size, name, name_size);
+        size += name_size;
+        list[size++] = (unsigned char)version_size;
+        memcpy(list + size, version, version_size);
+        size += version_size;
         ++counted;
     }
     if (counted > 0) {
@@ -722,6 +749,12 @@ void khdays_scripts_frame(void)
     }
     if (count == 0) {
         if (khdays_plugins_listening()) {
+            unsigned char *data;
+            unsigned size;
+            while (khdays_link_shared(&data, &size)) {
+                khdays_plugins_shared(data, size); /* the host's plugins' messages */
+                free(data);
+            }
             khdays_script_events_frame(); /* the native plugins' events */
         }
         return;

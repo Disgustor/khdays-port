@@ -250,6 +250,19 @@ int khdays_plugins_listening(void)
 {
     return 0;
 }
+int khdays_plugins_room_entry(int index, unsigned char digest[32], const char **name, const char **version)
+{
+    (void)index;
+    (void)digest;
+    (void)name;
+    (void)version;
+    return 0; /* no native plugin in these tests */
+}
+void khdays_plugins_shared(const unsigned char *data, unsigned size)
+{
+    (void)data;
+    (void)size;
+}
 void khdays_plugins_game_event(const char *name, long long a, long long b, long long c, long long d, const char *text)
 {
     (void)name;

@@ -54,13 +54,19 @@ typedef struct KhActors {
     KhResult (*position)(KhActor actor, float at[3]);
     KhResult (*hp)(KhActor actor, int32_t *hp, int32_t *max);
 
-    /* A player placed as the game's scripts place one: KH_UNSUPPORTED before its battle has begun, and for an
-     * enemy. */
+    /* An actor moved: a player placed as the game's scripts place one (KH_UNSUPPORTED before its battle has begun),
+     * an enemy as the game moves its own (Ov107_MoveNodeAndRelayout). */
     KhResult (*set_position)(KhActor actor, const float at[3]);
 
     /* A player's HP set through the game's routine (its gauge follows; 0 is its defeat): KH_UNSUPPORTED while the
      * field is still being set up, and for an enemy. */
     KhResult (*set_hp)(KhActor actor, int32_t hp);
+
+    /* An enemy of `kind` made where the area makes its own, at `at`, its level the area's for its kind (the
+     * mission's for a kind the area does not make) plus `level`, its HP and attacks times `hp` and `strength`, and
+     * set going: its handle; 0 when it cannot be (told in the mods' log: not in the field, in a room, no room left
+     * for its kind's code). Its defeat gives the mission nothing. */
+    KhActor (*make_enemy)(KhPlugin *plugin, int32_t kind, const float at[3], int32_t level, float hp, float strength);
 } KhActors;
 
 #ifdef __cplusplus

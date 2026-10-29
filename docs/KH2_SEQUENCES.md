@@ -1302,17 +1302,17 @@ The saved keys in `[enhancements]` are:
 | Key | Default | Scope |
 |---|---|---|
 | `hd_font` | on | Original/HD text artwork and layout, including cached captions |
-| `kh2_minimap` | on | Single-screen radar presentation; icon replacements remain independent |
-| `party_hp_sequence` | on | Player/party gauges, HUD portraits, player labels and LIMIT |
-| `enemy_hp_sequence` | on | Enemy bar and tanks; native enemy names remain |
-| `mission_panel_sequence` | on | Mod-authored mission panel |
-| `information_sequence` | on | INFORMATION background, reveal and closing animation |
-| `target_sequence` | on | Soft/hard lock, interact and optional chain/error reticles |
-| `locked_on_sequence` | on | Top-screen LOCKED ON notice |
-| `notification_sequences` | on | Obtained, Backpack Full and Recon Breakthrough |
-| `heart_points_sequence` | on | Heart total, effects and chain counter |
-| `pause_target` | on | Mission target in ordinary pause menus |
-| `information_hud` | on | Configured HUD/control retention during upper INFORMATION |
+| `kh2_minimap` | off | Single-screen radar presentation; icon replacements remain independent |
+| `party_hp_sequence` | off | Player/party gauges, HUD portraits, player labels and LIMIT |
+| `enemy_hp_sequence` | off | Enemy bar and tanks; native enemy names remain |
+| `mission_panel_sequence` | off | Mod-authored mission panel |
+| `information_sequence` | off | INFORMATION background, reveal and closing animation |
+| `target_sequence` | off | Soft/hard lock, interact and optional chain/error reticles |
+| `locked_on_sequence` | off | Top-screen LOCKED ON notice |
+| `notification_sequences` | off | Obtained, Backpack Full and Recon Breakthrough |
+| `heart_points_sequence` | off | Heart total, effects and chain counter |
+| `pause_target` | off | Mission target in ordinary pause menus |
+| `information_hud` | off | Configured HUD/control retention during upper INFORMATION |
 | `ui_padding` | off | Off removes the single-screen HD presentation inset |
 | `mission_panel_visibility` | 0 | 0: Always; 1: Pause only |
 | `mission_panel_anchor` | 1 | Gameplay anchor, 1..9 |

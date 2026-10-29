@@ -23,12 +23,14 @@ static SDL_AtomicInt live[KHDAYS_OPT_COUNT] = {{1}, {1}, {1}, {1}, {1},  {1},  {
                                                {1}, {1}, {1}, {1}, {-1}, {-1}, {0}, {0}};
 static SDL_AtomicInt generation;
 
+/* The HD fonts on, as before these settings; the KH2 replacements, and the play during INFORMATION, the player's to
+ * turn on. */
 void khdays_hud_settings_default(int values[KHDAYS_OPT_COUNT])
 {
     for (int i = 0; i < KHDAYS_OPT_COUNT; ++i)
-        values[i] = 1;
-    values[KHDAYS_OPT_UI_PADDING] = 0;
-    values[KHDAYS_OPT_MISSION_VISIBILITY] = 0;
+        values[i] = 0;
+    values[KHDAYS_OPT_FONT] = 1;
+    values[KHDAYS_OPT_MISSION_ANCHOR] = 1;
     values[KHDAYS_OPT_MISSION_PAUSE_ANCHOR] = 8;
 }
 void khdays_hud_settings_publish(const int values[KHDAYS_OPT_COUNT])

@@ -245,8 +245,9 @@ of the game:
 
 The same menu has live switches for HD fonts, KH2 minimap presentation, HUD
 sequences, the pause-menu target, and HUD/control during INFORMATION messages.
-These switches require the corresponding enabled mod assets and preserve native
-fallback when an asset is unavailable. Mission-panel visibility and its gameplay
+All but the HD fonts are off until the player turns them on. These switches
+require the corresponding enabled mod assets and preserve native fallback when
+an asset is unavailable. Mission-panel visibility and its gameplay
 and pause anchors are saved here too. **UI padding**, off by default, removes
 the outer inset from an active HD HUD in single-screen mode. Changes use
 `saves/settings.ini`; they never rewrite mod JSON. See the

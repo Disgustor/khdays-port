@@ -166,6 +166,7 @@ void notifications()
     KhdaysSequenceImage result[3]{};
     int preferences[KHDAYS_OPT_COUNT];
     khdays_hud_settings_default(preferences);
+    preferences[KHDAYS_OPT_LOCKED_ON] = 1; /* on (off by default): the notifications' switch must leave it so */
     preferences[KHDAYS_OPT_NOTIFICATIONS] = 0;
     khdays_hud_settings_publish(preferences);
     request[0] = 78;

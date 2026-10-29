@@ -62,7 +62,12 @@ void take_dialog_files(App& app) {
 
 void draw_notices(App& app);  // below
 
-void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_open, bool* plugin_open) {
+// The windows over the studio's page, open or not.
+struct Windows {
+    bool settings = false, themes = false, console = false, plugin = false, characters = false;
+};
+
+void draw_frame(App& app, Windows& open) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
@@ -75,24 +80,28 @@ void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_
     // the themes and the settings at the right end of the same row
     const ImGuiStyle& style = ImGui::GetStyle();
     const float buttons =
+        ImGui::CalcTextSize(tr(app.language, S::chars_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::plugin_button)).x +
         ImGui::CalcTextSize(tr(app.language, S::console)).x + ImGui::CalcTextSize(tr(app.language, S::themes)).x +
-        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 8 + style.ItemSpacing.x * 3;
+        ImGui::CalcTextSize(tr(app.language, S::settings)).x + style.FramePadding.x * 10 + style.ItemSpacing.x * 4;
     ImGui::SameLine();
     const float room = ImGui::GetContentRegionAvail().x;
     if (room > buttons)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + room - buttons);
+    if (ImGui::Button(tr(app.language, S::chars_button)))
+        open.characters = true;
+    ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::plugin_button)))
-        *plugin_open = true;
+        open.plugin = true;
     ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::console)))
-        *console_open = true;
+        open.console = true;
     ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::themes)))
-        *themes_open = true;
+        open.themes = true;
     ImGui::SameLine();
     if (ImGui::Button(tr(app.language, S::settings)))
-        *settings_open = true;
+        open.settings = true;
     ImGui::Separator();
 
     const float status_h = ImGui::GetFrameHeightWithSpacing();
@@ -111,14 +120,16 @@ void draw_frame(App& app, bool* settings_open, bool* themes_open, bool* console_
     ImGui::End();
     draw_notices(app);
 
-    if (*settings_open)
-        draw_settings(app, settings_open);
-    if (*themes_open)
-        draw_themes(app, themes_open);
-    if (*console_open)
-        draw_mods_console(app, console_open);
-    if (*plugin_open)
-        draw_plugin_parameters(app, plugin_open);
+    if (open.settings)
+        draw_settings(app, &open.settings);
+    if (open.themes)
+        draw_themes(app, &open.themes);
+    if (open.console)
+        draw_mods_console(app, &open.console);
+    if (open.plugin)
+        draw_plugin_parameters(app, &open.plugin);
+    if (open.characters)
+        draw_characters(app, &open.characters);
 }
 
 // The results a person must see (App::tell), over the window: a success in
@@ -211,10 +222,7 @@ int run_window(App& app) {
     app.refresh_mods();
     app.start_catalog();
 
-    bool settings_open = false;
-    bool themes_open = false;
-    bool console_open = false;
-    bool plugin_open = false;
+    Windows open;
     bool done = false;
     while (!done) {
         SDL_Event event;
@@ -222,11 +230,12 @@ int run_window(App& app) {
             ImGui_ImplSDL3_ProcessEvent(&event);
             const bool closing = event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                                                                   event.window.windowID == SDL_GetWindowID(app.window));
-            if (closing && new_missions_unsaved())
+            if (closing && (new_missions_unsaved() || characters_unsaved()))
                 app.quit_asked = true;  // asked first (draw_unsaved_quit)
             else if (closing)
                 done = true;
-            if (event.type == SDL_EVENT_DROP_FILE && event.drop.data != nullptr)
+            if (event.type == SDL_EVENT_DROP_FILE && event.drop.data != nullptr &&
+                !(open.characters && characters_take_drop(app, path_u8(event.drop.data))))
                 app.offer(path_u8(event.drop.data));
         }
         if (SDL_GetWindowFlags(app.window) & SDL_WINDOW_MINIMIZED) {
@@ -240,7 +249,7 @@ int run_window(App& app) {
         ImGui_ImplSDLGPU3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        draw_frame(app, &settings_open, &themes_open, &console_open, &plugin_open);
+        draw_frame(app, open);
         done = draw_unsaved_quit(app) || done;
         ImGui::Render();
 

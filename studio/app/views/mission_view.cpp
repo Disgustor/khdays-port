@@ -1241,7 +1241,10 @@ bool draw_unsaved_quit(App& app) {
     bool quit = false;
     ImGui::OpenPopup("###unsavedquit");
     if (ImGui::BeginPopupModal("###unsavedquit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextUnformatted(fmt(app.language, S::new_missions_unsaved, {nm.edit.key}).c_str());
+        if (new_missions_unsaved())
+            ImGui::TextUnformatted(fmt(app.language, S::new_missions_unsaved, {nm.edit.key}).c_str());
+        if (characters_unsaved())
+            ImGui::TextUnformatted(fmt(app.language, S::chars_unsaved, {characters_unsaved_key()}).c_str());
         if (ImGui::Button(tr(app.language, S::new_missions_quit)))
             quit = true;
         ImGui::SameLine();

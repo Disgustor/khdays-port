@@ -341,6 +341,33 @@ is chosen). It changes at once and is kept in the settings.
     To try one, `mods-examples/CustomLimit` is a mod with parameters (its
     Limit's spins, damage, reach and status).
 
+12. **Characters.** "Characters" (top right) lists the chosen mod's playable
+    characters (docs/CHARACTERS.md) and makes new ones: a folder name, a name
+    and the game's character it plays as. Its tabs:
+    - *Character*: its name and its weapon's, for every language or one; the
+      character it plays as; when it is offered; its picture in the character
+      select (any picture: one not in PNG is made one); its own gauges.
+    - *Model*: its model (FBX, glTF or glb, chosen or dropped on the window:
+      copied into `model/` with the files it needs); its own skeleton or its
+      bones paired with its base's; its size, with **As tall as its base**;
+      the bone holding its weapon and how the weapon turns on it.
+    - *Animations*: its clips (**Add clips...**, or dropped: copied into
+      `clips/`) and, for each animation the game plays for its base (read from
+      the game, named where they are known: standing, running, jump, combo,
+      Limit...), the clip shown instead; a row clicked plays the game's
+      animation on the base and the character's clip on the character side by
+      side; below the table, the chosen row's blend, its own step and the
+      game's beat.
+    - *Voice, moves and Limit*: its sounds (a file each, or none), its combos
+      and its Limit's damage.
+
+    **Save the character** writes `character.ini` when the port's own reader
+    (port/runtime/characters/registry.c) takes it and every file it names is
+    in its folder; what the game would refuse is listed above the tabs as it
+    is changed. What the window does not change -- comments, parts it does not
+    show -- stays as written. Another character chosen, or the studio closed,
+    with changes not saved asks first.
+
 Sound loops and old-format mods come next.
 
 ## Native plugins' examples

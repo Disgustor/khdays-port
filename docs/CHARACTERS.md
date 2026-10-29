@@ -8,6 +8,11 @@ replaces one of the game's. How the port does it: [RUNTIME_MAP.md](RUNTIME_MAP.m
 Nothing here needs code or scripts: a folder of files, read when the game starts. Behaviour a description cannot
 give comes from a native plugin of the same mod ([MODDING_NATIVE.md](MODDING_NATIVE.md), "Actors and characters").
 
+KH Studio makes and changes all of it without writing a line by hand: its **Characters** window
+([studio/README.md](../studio/README.md), "Characters") makes a character, copies its model, clips, picture and
+voices into its folder, shows each of its base's animations beside the clip given to it, and saves the description
+once the port's own reader takes it.
+
 ## The folder
 
 ```text
@@ -195,5 +200,5 @@ character loads without the mod, its base standing in.
 - Characters are read from every folder in `mods/`, also one turned off in the Mods page (as the mods'
   missions are): a character is taken out by taking its mod's folder out.
 - Attacks of their own (new kinds of moves, not the base's) and a Limit of their own (its length, its kind of
-  hits: their base's code), the studio's editor (spec 034's later phases); the field's portrait and the results'
+  hits: their base's code); the field's portrait and the results'
   model are still the base's.

@@ -116,6 +116,7 @@ struct App {
     std::vector<std::string> dialog_texture_folders;  // where every 3D texture is exported
     std::vector<std::string> dialog_collections;      // the 1.5+2.5 collection's folder (KH2's rooms)
     std::vector<std::string> dialog_ports;            // the port's executable (the settings)
+    std::vector<std::string> dialog_characters;       // a character's model, clips, picture or sound
 
     std::string status;
 
@@ -157,6 +158,12 @@ void room_export_to(App& app, const std::filesystem::path& file);
 void draw_mission_view(App& app, const Item& item);
 // Whether the mod's new missions have changes not saved; asked when the window closes (true: quit anyway).
 bool new_missions_unsaved();
+// The mod's characters (views/character_view.cpp): the window, a file dropped while the pointer is over it (true
+// when it took it), and its changes not saved.
+void draw_characters(App& app, bool* open);
+bool characters_take_drop(App& app, const std::filesystem::path& file);
+bool characters_unsaved();
+std::string characters_unsaved_key();
 bool draw_unsaved_quit(App& app);
 // The mods' console: the running game's mods' log as it grows, and their reloads.
 void draw_mods_console(App& app, bool* open);

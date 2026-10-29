@@ -264,7 +264,7 @@ void draw_dump_panel(App& app) {
         ImGui::TextWrapped("%s", fmt(app.language, missing, {setting}).c_str());
         if (app.job)
             return;
-        const fs::path exe = resolve(app.settings, app.settings.port);
+        const fs::path exe = port_exe(app.settings);
         std::error_code ec;
         if (app.settings.port.empty() || !fs::is_regular_file(exe, ec)) {
             ImGui::TextWrapped("%s", tr(app.language, S::no_port));

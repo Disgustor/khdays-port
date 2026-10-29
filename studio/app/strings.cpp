@@ -1816,6 +1816,32 @@ constexpr Row rows[] =
         {S::plugin_unsaved,
          {"Changed, not saved yet.", "Modifié, pas encore enregistré.", "Geändert, noch nicht gespeichert.",
           "Modificato, non ancora salvato.", "Cambiado, aún sin guardar."}},
+        {S::port_folder,
+         {"The game's folder: {0}", "Dossier du jeu : {0}", "Ordner des Spiels: {0}", "Cartella del gioco: {0}",
+          "Carpeta del juego: {0}"}},
+        {S::port_folder_none,
+         {"No game in this folder (no data/ nor khdays-native.exe): start the studio from the game's folder, or "
+          "with --port <folder>.",
+          "Aucun jeu dans ce dossier (ni data/ ni khdays-native.exe) : lancez le studio depuis le dossier du jeu, ou "
+          "avec --port <dossier>.",
+          "Kein Spiel in diesem Ordner (weder data/ noch khdays-native.exe): starte das Studio aus dem Ordner des "
+          "Spiels oder mit --port <Ordner>.",
+          "Nessun gioco in questa cartella (né data/ né khdays-native.exe): avvia lo studio dalla cartella del gioco, "
+          "o con --port <cartella>.",
+          "No hay juego en esta carpeta (ni data/ ni khdays-native.exe): abre el estudio desde la carpeta del juego, "
+          "o con --port <carpeta>."}},
+        {S::port_exe_found, {"Found: {0}", "Trouvé : {0}", "Gefunden: {0}", "Trovato: {0}", "Encontrado: {0}"}},
+        {S::port_exe_missing,
+         {"Not found: name the game's khdays-native.exe, or the folder that holds it (a full path, or one from the "
+          "game's folder).",
+          "Introuvable : indiquez le khdays-native.exe du jeu, ou le dossier qui le contient (un chemin complet, ou "
+          "depuis le dossier du jeu).",
+          "Nicht gefunden: gib die khdays-native.exe des Spiels an oder den Ordner, der sie enthält (ein "
+          "vollständiger Pfad oder einer vom Ordner des Spiels aus).",
+          "Non trovato: indica il khdays-native.exe del gioco, o la cartella che lo contiene (un percorso completo, o "
+          "dalla cartella del gioco).",
+          "No encontrado: indica el khdays-native.exe del juego, o la carpeta que lo contiene (una ruta completa, o "
+          "desde la carpeta del juego)."}},
 };
 static_assert(sizeof(rows) / sizeof(rows[0]) == static_cast<std::size_t>(S::count), "one row per word");
 constexpr bool rows_in_order() {

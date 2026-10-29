@@ -289,7 +289,11 @@ int run_window(App& app) {
 int main(int argc, char** argv) {
     using namespace studio;
     attach_parent_console();  // a terminal run still shows the command line's output
-    std::filesystem::path root = std::filesystem::current_path();
+    // the port's folder: --port's, else found from where the tool was started or where it is (beside the game, or in
+    // the repository's build/)
+    const char* base = SDL_GetBasePath();
+    std::filesystem::path root =
+        find_port_root(std::filesystem::current_path(), base != nullptr ? path_u8(base) : std::filesystem::path());
     std::vector<std::string> args;
     for (int i = 1; i < argc; ++i)
         args.emplace_back(argv[i]);

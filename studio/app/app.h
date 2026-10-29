@@ -115,6 +115,7 @@ struct App {
     std::vector<std::string> dialog_texture_exports;  // where a 3D texture is exported
     std::vector<std::string> dialog_texture_folders;  // where every 3D texture is exported
     std::vector<std::string> dialog_collections;      // the 1.5+2.5 collection's folder (KH2's rooms)
+    std::vector<std::string> dialog_ports;            // the port's executable (the settings)
 
     std::string status;
 

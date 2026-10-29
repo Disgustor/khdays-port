@@ -541,6 +541,10 @@ enum class S {
     plugin_default,
     plugin_problems,
     plugin_unsaved,
+    port_folder,
+    port_folder_none,
+    port_exe_found,
+    port_exe_missing,
     count
 };
 

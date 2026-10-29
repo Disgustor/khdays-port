@@ -159,15 +159,9 @@ endif()
 
 # The gamepads' button icons and pictures in the settings menu: Kenney's Input Prompts 1.5, CC0 (THIRD_PARTY_NOTICES.md), the
 # 128-pixel PNGs of the buttons the menu names and of the five gamepads, in
-# the executable as the font is.
-FetchContent_Declare(
-    kenney_input_prompts
-    URL https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip
-    URL_HASH SHA256=ac2fcf599080b0f3ba2d174c9474db6df1a0e96ff0662580e2da79a122ab78a1
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    SOURCE_SUBDIR none
-)
-FetchContent_MakeAvailable(kenney_input_prompts)
+# the executable as the font is. Kept in resources/input_prompts at the archive's own paths: Kenney's
+# site no longer serves the archive at a fixed address.
+set(KHDAYS_PAD_ICONS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources/input_prompts")
 set(KHDAYS_PAD_ICONS
     "Xbox Series:xbox_button_color_a" "Xbox Series:xbox_button_color_b" "Xbox Series:xbox_button_color_x"
     "Xbox Series:xbox_button_color_y" "Xbox Series:xbox_lb" "Xbox Series:xbox_rb" "Xbox Series:xbox_lt"
@@ -226,7 +220,9 @@ foreach(icon IN LISTS KHDAYS_PAD_ICONS)
     string(SUBSTRING "${icon}" 0 ${colon} icon_folder)
     math(EXPR colon "${colon} + 1")
     string(SUBSTRING "${icon}" ${colon} -1 icon_name)
-    file(READ "${kenney_input_prompts_SOURCE_DIR}/${icon_folder}/Double/${icon_name}.png" icon_hex HEX)
+    set(icon_file "${KHDAYS_PAD_ICONS_DIR}/${icon_folder}/Double/${icon_name}.png")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${icon_file}")
+    file(READ "${icon_file}" icon_hex HEX)
     string(LENGTH "${icon_hex}" icon_digits)
     math(EXPR icon_size "${icon_digits} / 2")
     string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," icon_bytes "${icon_hex}")

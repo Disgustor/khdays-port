@@ -243,6 +243,12 @@ typedef struct KhdaysGameplay {
     int stop_magic; /* 1 (the default): Stop's panels, recipes and casts; 0: the game as the DS's */
 } KhdaysGameplay;
 
+/* The mods ([mods] in the settings file): whether their native plugins may run (runtime/plugins/plugins.h),
+ * read as the game starts. */
+typedef struct KhdaysModsSettings {
+    int native_code; /* 0 (the default): no plugin is loaded; 1: they are, the player having been told */
+} KhdaysModsSettings;
+
 typedef struct KhdaysProfile {
     int version;         /* 1 */
     int language;        /* the game's and this screen's language: 0 the system's, else 1..5 (ui_text.h) */
@@ -257,6 +263,7 @@ typedef struct KhdaysProfile {
     KhdaysNetwork network;
     KhdaysSave save;
     KhdaysGameplay gameplay;
+    KhdaysModsSettings mods;
 } KhdaysProfile;
 
 /* The faithful default: today's keyboard layout, the DS layout on the

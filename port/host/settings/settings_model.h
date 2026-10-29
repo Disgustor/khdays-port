@@ -22,7 +22,7 @@ enum KhdaysSection {
     KHDAYS_SECTION_MULTIPLAYER,
     KHDAYS_SECTION_LANGUAGE,
     KHDAYS_SECTION_GENERAL,
-    KHDAYS_SECTION_MODS, /* only while a scripted mod is present (khdays_model_section_shown) */
+    KHDAYS_SECTION_MODS, /* only while a scripted mod or a native plugin is present (khdays_model_section_shown) */
     KHDAYS_SECTION_COUNT
 };
 
@@ -149,6 +149,10 @@ enum KhdaysSettingId {
     KHDAYS_SET_HUD_MISSION_VISIBILITY,
     KHDAYS_SET_HUD_MISSION_ANCHOR,
     KHDAYS_SET_HUD_MISSION_PAUSE_ANCHOR,
+    /* its native code: the switch, then each plugin (`layer` its place among them) */
+    KHDAYS_SET_NATIVE_CODE,
+    KHDAYS_SET_PLUGIN_HEADING,
+    KHDAYS_SET_PLUGIN_STATE,
     KHDAYS_SET_COUNT
 };
 
@@ -219,7 +223,7 @@ int khdays_model_rows(int section, KhdaysProfile *work, const KhdaysModelContext
 int khdays_model_rows_into(int section, KhdaysProfile *work, const KhdaysModelContext *context, KhdaysRow *rows,
                            int room);
 
-/* Whether the menu shows a section: the Mods section only while a scripted mod is present. */
+/* Whether the menu shows a section: the Mods section only while a scripted mod or a native plugin is present. */
 int khdays_model_section_shown(int section);
 
 /* Enter on a command row (a mod's button, its place in the list, Resume, or the profile's commands). */

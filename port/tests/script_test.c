@@ -134,6 +134,7 @@ int khdays_link_position(float at[3])
 }
 
 static int fake_hp = 40, fake_hp_max = 50;
+static int fake_gauge = 1; /* the field's panel set up, its HP gauge there (0 while the field loads) */
 
 static float fake_set_at[3];
 
@@ -150,10 +151,16 @@ int khdays_link_player_hp(int *hp, int *max)
     return fake_scene == 2;
 }
 
-int khdays_link_set_player_hp(int hp)
+const char *khdays_link_set_player_hp(int hp)
 {
+    if (fake_scene != 2) {
+        return "no player";
+    }
+    if (!fake_gauge) {
+        return "not now";
+    }
     fake_hp = hp > fake_hp_max ? fake_hp_max : hp;
-    return fake_scene == 2;
+    return NULL;
 }
 
 void khdays_link_entity_hp(const void *entity, int *hp, int *max)
@@ -236,6 +243,50 @@ void khdays_net_set_mods(unsigned int fingerprint, const unsigned char *list, un
     fake_mods_count = count;
     memset(fake_mods_list, 0, sizeof(fake_mods_list));
     memcpy(fake_mods_list, list, size < sizeof(fake_mods_list) ? size : sizeof(fake_mods_list));
+}
+
+/* no native plugins (runtime/plugins/plugins.h) */
+int khdays_plugins_listening(void)
+{
+    return 0;
+}
+int khdays_plugins_room_entry(int index, unsigned char digest[32], const char **name, const char **version)
+{
+    (void)index;
+    (void)digest;
+    (void)name;
+    (void)version;
+    return 0; /* no native plugin in these tests */
+}
+void khdays_plugins_shared(const unsigned char *data, unsigned size)
+{
+    (void)data;
+    (void)size;
+}
+void khdays_plugins_game_event(const char *name, long long a, long long b, long long c, long long d, const char *text)
+{
+    (void)name;
+    (void)a;
+    (void)b;
+    (void)c;
+    (void)d;
+    (void)text;
+}
+
+/* the mods' characters (runtime/characters/characters.h): `fake_characters` of them, each part filled with
+ * `fake_character_part` */
+static int fake_characters;
+static unsigned char fake_character_part = 1;
+
+int khdays_characters_room_entry(int index, unsigned char digest[32], const char **name, const char **identity)
+{
+    if (index >= fake_characters) {
+        return 0;
+    }
+    memset(digest, fake_character_part, 32);
+    *name = "Wind";
+    *identity = "test.wind/wind";
+    return 1;
 }
 
 const char *khdays_link_play_sound(const char *sequence_archive, const char *entry)
@@ -504,6 +555,9 @@ static void reset_game(void)
     fake_munny = 0;
     fake_guest = 0;
     fake_hp = 40;
+    fake_gauge = 1;
+    fake_characters = 0;
+    fake_character_part = 1;
     fake_sound[0] = fake_notice[0] = 0;
     fake_next_actor = 0;
     fake_removed = 0;
@@ -905,11 +959,17 @@ static void test_player(void)
     mod_folder("Infinite", "test.infinite", "gameplay",
                "mod.on('frame', function()\n"
                "  local hp, max = player.hp, player.max_hp\n"
-               "  if hp ~= nil and hp < max then player.set_hp(max + 100) end\nend)\n");
+               "  if hp ~= nil and hp < max and select(2, player.set_hp(max + 100)) == 'not now' then\n"
+               "    game.set_flag(24, true)\n"
+               "  end\nend)\n");
     start();
     frames(1);
     CHECK(fake_hp == 40); /* the title: no player */
     fake_scene = 2;
+    fake_gauge = 0;
+    frames(1);
+    CHECK(fake_hp == 40 && khdays_link_flag(24)); /* the field loading: not now */
+    fake_gauge = 1;
     frames(1);
     CHECK(fake_hp == 50); /* clamped to the maximum */
     end_case();
@@ -1106,12 +1166,23 @@ static void test_files_and_notices(void)
 
 static void test_room_fingerprint(void)
 {
-    unsigned int first, second;
+    unsigned int first, second, alone;
     begin_case("rooms");
     mod_folder("Look", "test.look", "visual", "print('a visual mod')\n");
     start();
     CHECK(fake_mods_fingerprint == 0 && fake_mods_count == 0); /* visual mods are each player's own */
     khdays_scripts_stop();
+    fake_characters = 1; /* a mod's character counts, its mod without scripts */
+    start();
+    alone = fake_mods_fingerprint;
+    CHECK(alone != 0 && fake_mods_count == 1 && fake_mods_list[0] == 4 && memcmp(fake_mods_list + 1, "Wind", 4) == 0 &&
+          fake_mods_list[5] == 14 && memcmp(fake_mods_list + 6, "test.wind/wind", 14) == 0);
+    khdays_scripts_stop();
+    fake_character_part = 2; /* its description or its data changed */
+    start();
+    CHECK(fake_mods_fingerprint != 0 && fake_mods_fingerprint != alone);
+    khdays_scripts_stop();
+    fake_characters = 0;
     mod_folder("Play", "test.play", "gameplay", "print('a gameplay mod')\n");
     start();
     first = fake_mods_fingerprint;

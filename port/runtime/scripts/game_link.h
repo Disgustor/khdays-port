@@ -71,8 +71,22 @@ struct KhdaysLinkLimitClock {
     int elapsed, outward, start_hp, step;
 };
 int khdays_link_player_limit_clock(struct KhdaysLinkLimitClock *clock);
-/* Through Ov022_ActorSetHp, as the game's own hits and cures do. */
-int khdays_link_set_player_hp(int hp);
+/* Through Ov022_ActorSetHp, as the game's own hits and cures do; NULL when done, else why not ("no player", or
+ * "not now" while the field loads: its panel, whose gauge the routine sets, is not there yet). */
+const char *khdays_link_set_player_hp(int hp);
+
+/* The same for any seat's player (the native plugins' kh.actors): seat `seat`'s battle actor (one of the game's four
+ * seats; 0 without one), the seat this copy plays; a player actor's place, its character (+0xc, the base's for a
+ * mod's character); seat `seat` placed; a player actor's HP set. */
+unsigned khdays_link_seat_actor(int seat);
+int khdays_link_local_seat(void);
+void khdays_link_actor_position(unsigned actor, float at[3]);
+int khdays_link_actor_kind(unsigned actor);
+const char *khdays_link_place_seat(int seat, const float at[3]);
+const char *khdays_link_set_actor_hp(unsigned actor, int hp);
+/* The damage of a player actor's hit of factor `scale` (fx32) as its combo's hits get it (Ov022_ComputeStrengthDamage:
+ * its strength, bonuses and abilities); -1 without the battle. */
+int khdays_link_strength_damage(unsigned actor, int scale);
 
 /* An entity Ov022_ActorSetHp was given: its HP and maximum (nHp +0x12, nHpMax +0x16). */
 void khdays_link_entity_hp(const void *entity, int *hp, int *max);

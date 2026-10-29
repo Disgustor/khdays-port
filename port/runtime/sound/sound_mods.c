@@ -1,5 +1,6 @@
 /* The sounds mods replace (sound_mods.h). */
 #include "sound_mods.h"
+#include "../characters/characters.h"
 #include "../core/window.h"
 #include "../core/rom.h"
 #include "../../sound/categories.h"
@@ -131,8 +132,15 @@ void khdays_sound_mods_trace(int on)
 }
 
 /* mods/<Mod>/sounds, in the folder the mods' order reads (the VFS's mods
- * root, "mods" beside the game). */
+ * root, "mods" beside the game), or a mod's character's [sounds]. */
+static int mods_sounds(void);
+
 int khdays_sound_mods_present(void)
+{
+    return mods_sounds() || khdays_characters_have_sounds();
+}
+
+static int mods_sounds(void)
 {
     static int present = -1;
     if (present < 0) {
@@ -214,6 +222,32 @@ static Entry *entry_for(const char *identifier, const KhdaysOriginalLoop *loop)
     return entry_want(entry_find(identifier), loop);
 }
 
+/* The entry of a character's own file (characters.h), by its path; `name` what the traces call it (never a game
+ * sound's identifier: entry_find never finds it). */
+static Entry *entry_of_file(const char *path, const char *name)
+{
+    Entry *e;
+    for (e = entries; e != NULL; e = e->next) {
+        if (e->state != NO_FILE && strcmp(e->path, path) == 0) {
+            return e;
+        }
+    }
+    e = calloc(1, sizeof(*e));
+    if (e == NULL) {
+        return NULL;
+    }
+    snprintf(e->identifier, sizeof(e->identifier), "%s", name);
+    snprintf(e->path, sizeof(e->path), "%s", path);
+    e->state = LET_GO; /* to decode */
+    e->next = entries;
+    entries = e;
+    return e;
+}
+
+/* What a character's `none` plays in place of the game's sound: nothing, as long as it lasts. Never let go (it is
+ * not among the entries). */
+static Entry silence = {"silence", "none", {0}, READY, {32768, 1, 0, NULL, 0, 0, 0}, 0, 0, NULL};
+
 /* Whether a found file is a folder of its own (not "." or ".."). */
 static int is_folder(const WIN32_FIND_DATAA *found)
 {
@@ -285,6 +319,17 @@ static void decode_entries_ahead(const KhdaysSoundArchive *sdat)
     }
     done = 1;
     decode_voice_streams_ahead(sdat);
+    for (int i = 0;; ++i) {
+        char path[520], name[160];
+        Entry *e;
+        if (!khdays_characters_sound_file(i, path, sizeof(path), name, sizeof(name))) {
+            break;
+        }
+        e = path[0] != '\0' ? entry_of_file(path, name) : NULL;
+        if (e != NULL && e->state == LET_GO) {
+            enqueue(e, 0);
+        }
+    }
     mods = FindFirstFileA("mods\\*", &mod);
     if (mods == INVALID_HANDLE_VALUE) {
         return;
@@ -623,13 +668,18 @@ static void set_entry(Entry **slot, Entry *e)
 void khdays_sound_mods_sequence(const KhdaysSoundArchive *archive, int arm7_player, int kind, int number, int entry,
                                 u32 command_tag)
 {
-    char identifier[160];
+    char identifier[160], path[520], name[160];
+    int own;
     if (!khdays_sound_mods_present() || archive == NULL || arm7_player < 0 || arm7_player > 15 ||
         !khdays_sound_archive_identifier(archive, kind, number, entry, identifier, sizeof(identifier))) {
         return;
     }
     decode_entries_ahead(archive);
-    set_entry(&sequence[arm7_player].entry, entry_for(identifier, NULL));
+    /* a new character's actor's sound: its own file, or silence (characters.h) */
+    own = khdays_characters_speaker_sound(identifier, path, sizeof(path), name, sizeof(name));
+    set_entry(&sequence[arm7_player].entry, own < 0   ? &silence
+                                            : own > 0 ? entry_want(entry_of_file(path, name), NULL)
+                                                      : entry_for(identifier, NULL));
     sequence[arm7_player].state = sequence[arm7_player].entry != NULL ? ARMED : IDLE;
     sequence[arm7_player].tag = command_tag;
     sequence[arm7_player].played = 0;

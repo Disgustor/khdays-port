@@ -975,6 +975,49 @@ static const char *const texts[TXT_COUNT][5] = {
                                "salvataggio.",
                                "Escribe en la memoria del juego: un error suyo puede detener el juego o llegar a una "
                                "partida guardada."},
+    [TXT_NATIVE_CODE] = {"Native code", "Code natif", "Nativer Code", "Codice nativo", "Código nativo"},
+    [TXT_NATIVE_CODE_NOTE] =
+        {"Lets the mods' plugins run: programs built for this computer that a mod carries, which can change how the "
+         "game plays. A plugin can do anything a program can -- crash the game, damage your saves, reach your files "
+         "-- and the game does not isolate it. Turn it on only for mods from people you trust. Off, the rest of each "
+         "mod works without its plugin. If a plugin keeps the game from starting, start it with --safe-mode.",
+         "Permet aux plugins des mods de s'exécuter : des programmes compilés pour cet ordinateur qu'un mod apporte et "
+         "qui peuvent changer la façon de jouer. Un plugin peut faire tout ce que fait un programme -- planter le jeu, "
+         "abîmer vos sauvegardes, atteindre vos fichiers -- et le jeu ne l'isole pas. Ne l'activez que pour des mods "
+         "de personnes de confiance. Désactivé, le reste de chaque mod fonctionne sans son plugin. Si un plugin "
+         "empêche le jeu de démarrer, lancez-le avec --safe-mode.",
+         "Lässt die Plugins der Mods laufen: Programme für diesen Computer, die ein Mod mitbringt und die das Spiel "
+         "verändern können. Ein Plugin kann alles, was ein Programm kann -- das Spiel abstürzen lassen, Spielstände "
+         "beschädigen, auf deine Dateien zugreifen -- und das Spiel schottet es nicht ab. Schalte es nur für Mods von "
+         "Leuten ein, denen du vertraust. Aus, funktioniert der Rest jedes Mods ohne sein Plugin. Lässt ein Plugin "
+         "das Spiel nicht starten, starte es mit --safe-mode.",
+         "Permette ai plugin dei mod di essere eseguiti: programmi compilati per questo computer che un mod porta con "
+         "sé e che possono cambiare il gioco. Un plugin può fare tutto ciò che fa un programma -- bloccare il gioco, "
+         "danneggiare i salvataggi, raggiungere i tuoi file -- e il gioco non lo isola. Attivalo solo per mod di "
+         "persone di cui ti fidi. Disattivato, il resto di ogni mod funziona senza il suo plugin. Se un plugin "
+         "impedisce al gioco di avviarsi, avvialo con --safe-mode.",
+         "Deja que se ejecuten los plugins de los mods: programas compilados para este ordenador que trae un mod y "
+         "que pueden cambiar cómo se juega. Un plugin puede hacer lo mismo que cualquier programa -- cerrar el juego, "
+         "dañar tus partidas, tocar tus archivos -- y el juego no lo aísla. Actívalo solo con mods de gente de "
+         "confianza. Desactivado, el resto de cada mod funciona sin su plugin. Si un plugin no deja arrancar el "
+         "juego, inícialo con --safe-mode."},
+    [TXT_PLUGIN_RUNNING] = {"Plugin running", "Plugin en cours", "Plugin läuft", "Plugin in esecuzione",
+                            "Plugin en marcha"},
+    [TXT_PLUGIN_WAITING] = {"Plugin not loaded: native code is off", "Plugin non chargé : le code natif est désactivé",
+                            "Plugin nicht geladen: nativer Code ist aus",
+                            "Plugin non caricato: il codice nativo è disattivato",
+                            "Plugin no cargado: el código nativo está desactivado"},
+    [TXT_PLUGIN_SAFE_MODE] = {"Plugin not loaded: the game started in safe mode",
+                              "Plugin non chargé : le jeu a démarré en mode sans échec",
+                              "Plugin nicht geladen: das Spiel startete im abgesicherten Modus",
+                              "Plugin non caricato: il gioco è partito in modalità provvisoria",
+                              "Plugin no cargado: el juego arrancó en modo seguro"},
+    [TXT_PLUGIN_REFUSED] = {"Plugin not loaded: %s", "Plugin non chargé : %s", "Plugin nicht geladen: %s",
+                            "Plugin non caricato: %s", "Plugin no cargado: %s"},
+    [TXT_PLUGIN_FAILED] = {"Plugin failed to start: %s", "Le plugin n'a pas démarré : %s",
+                           "Plugin konnte nicht starten: %s", "Il plugin non è partito: %s",
+                           "El plugin no pudo arrancar: %s"},
+    [TXT_PLUGIN_STOPPED] = {"Plugin stopped", "Plugin arrêté", "Plugin gestoppt", "Plugin fermato", "Plugin detenido"},
     [TXT_AUTOSAVE] = {"Autosave", "Sauvegarde auto", "Automatisch speichern", "Salvataggio automatico", "Autoguardado"},
     [TXT_AUTOSAVE_FILE99] = {"In file 99", "Dans le fichier 99", "In Datei 99", "Nel file 99", "En el archivo 99"},
     [TXT_AUTOSAVE_PLAYED] = {"In the file being played", "Dans le fichier en cours", "In der gespielten Datei",

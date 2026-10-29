@@ -243,6 +243,29 @@ int khdays_mods_find(const char *relative, char *path, int size)
     (void)size;
     return 0;
 }
+/* no mods' characters */
+int khdays_characters_speaker_sound(const char *game, char *path, int size, char *name, int name_size)
+{
+    (void)game;
+    (void)path;
+    (void)size;
+    (void)name;
+    (void)name_size;
+    return 0;
+}
+int khdays_characters_have_sounds(void)
+{
+    return 0;
+}
+int khdays_characters_sound_file(int index, char *path, int size, char *name, int name_size)
+{
+    (void)index;
+    (void)path;
+    (void)size;
+    (void)name;
+    (void)name_size;
+    return 0;
+}
 struct KhdaysRomReader {
     int unused;
 };

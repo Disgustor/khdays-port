@@ -7,6 +7,8 @@
 #include "../screens/ui_text.h"
 #include "../../runtime/scripts/queue.h"
 #include "../../runtime/scripts/view.h"
+#include "../../runtime/plugins/plugins.h"
+#include "../../runtime/plugins/shown.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -571,20 +573,87 @@ static void mods_take(void)
     }
 }
 
+/* The native plugins as the game's thread last showed them (runtime/plugins/shown.h), and their rows' words. */
+static KhdaysPluginsShown plugins_view;
+static char (*plugin_heads)[160], (*plugin_lines)[400];
+
+static void plugins_take(void)
+{
+    if (!khdays_plugins_shown(&plugins_view)) {
+        return;
+    }
+    free(plugin_heads);
+    free(plugin_lines);
+    plugin_heads = calloc((size_t)plugins_view.count + 1, sizeof(*plugin_heads));
+    plugin_lines = calloc((size_t)plugins_view.count + 1, sizeof(*plugin_lines));
+    if (plugin_heads == NULL || plugin_lines == NULL) {
+        khdays_plugins_shown_free(&plugins_view);
+        return;
+    }
+    for (int i = 0; i < plugins_view.count; ++i) {
+        const KhdaysPluginShown *v = &plugins_view.plugins[i];
+        if (v->author[0] != '\0') {
+            snprintf(plugin_heads[i], sizeof(plugin_heads[i]), "%s %s -- %s", v->name, v->version, v->author);
+        } else {
+            snprintf(plugin_heads[i], sizeof(plugin_heads[i]), "%s %s", v->name, v->version);
+        }
+        switch (v->state) {
+        case KHDAYS_PLUGIN_STARTED:
+            snprintf(plugin_lines[i], sizeof(plugin_lines[i]), "%s", khdays_text(TXT_PLUGIN_RUNNING));
+            break;
+        case KHDAYS_PLUGIN_STOPPED:
+            snprintf(plugin_lines[i], sizeof(plugin_lines[i]), "%s", khdays_text(TXT_PLUGIN_STOPPED));
+            break;
+        case KHDAYS_PLUGIN_WAITING:
+            snprintf(plugin_lines[i], sizeof(plugin_lines[i]), "%s",
+                     khdays_text(plugins_view.safe_mode ? TXT_PLUGIN_SAFE_MODE : TXT_PLUGIN_WAITING));
+            break;
+        default:
+            snprintf(plugin_lines[i], sizeof(plugin_lines[i]),
+                     khdays_text(v->state == KHDAYS_PLUGIN_FAILED ? TXT_PLUGIN_FAILED : TXT_PLUGIN_REFUSED), v->why);
+            break;
+        }
+    }
+}
+
 int khdays_model_section_shown(int section)
 {
     if (section != KHDAYS_SECTION_MODS) {
         return section >= 0 && section < KHDAYS_SECTION_COUNT;
     }
     mods_take();
-    return mods_view.count > 0;
+    plugins_take();
+    return mods_view.count > 0 || plugins_view.count > 0;
 }
 
-static void build_mods(Builder *b)
+/* Native code, and what became of each plugin as the game started: the switch is read at the next start. */
+static void build_native_code(Builder *b, KhdaysProfile *w)
+{
+    KhdaysRow *r;
+    plugins_take();
+    if (plugins_view.count == 0 || plugin_heads == NULL) {
+        return;
+    }
+    r = add_switch(b, KHDAYS_SET_NATIVE_CODE, TXT_NATIVE_CODE, &w->mods.native_code, 1,
+                   khdays_text(TXT_NATIVE_CODE_NOTE));
+    r->apply = KHDAYS_APPLY_NEXT;
+    r->takes = TXT_TAKES_NEXT_START;
+    for (int i = 0; i < plugins_view.count; ++i) {
+        r = add(b, KHDAYS_ROW_HEADING, KHDAYS_SET_PLUGIN_HEADING, plugin_heads[i]);
+        r->layer = i;
+        r = add(b, KHDAYS_ROW_LINE, KHDAYS_SET_PLUGIN_STATE, plugin_lines[i]);
+        r->layer = i;
+    }
+}
+
+static void build_mods(Builder *b, KhdaysProfile *w)
 {
     const int language = khdays_ui_language();
     mods_take();
-    add(b, KHDAYS_ROW_LINE, KHDAYS_SET_MOD_NOTE, khdays_text(TXT_MOD_ORDER_NOTE));
+    build_native_code(b, w);
+    if (mods_view.count > 0 || b->count == 0) {
+        add(b, KHDAYS_ROW_LINE, KHDAYS_SET_MOD_NOTE, khdays_text(TXT_MOD_ORDER_NOTE));
+    }
     for (int i = 0; i < mods_view.count && mod_enabled != NULL; ++i) {
         const KhdaysModView *v = &mods_view.mods[i];
         KhdaysRow *r = add(b, KHDAYS_ROW_HEADING, KHDAYS_SET_MOD_HEADING, mod_heads[i]);
@@ -722,7 +791,7 @@ int khdays_model_rows_into(int section, KhdaysProfile *work, const KhdaysModelCo
     case KHDAYS_SECTION_MULTIPLAYER: build_multiplayer(&b, work); break;
     case KHDAYS_SECTION_LANGUAGE: build_language(&b, work); break;
     case KHDAYS_SECTION_GENERAL: build_general(&b, work); break;
-    case KHDAYS_SECTION_MODS: build_mods(&b); break;
+    case KHDAYS_SECTION_MODS: build_mods(&b, work); break;
     default: break;
     }
     return b.count;

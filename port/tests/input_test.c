@@ -12,6 +12,8 @@
 #include "../runtime/input/sequencers.h"
 #include "../runtime/scripts/queue.h"
 #include "../runtime/scripts/view.h"
+#include "../runtime/plugins/plugins.h"
+#include "../runtime/plugins/shown.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -1085,6 +1087,55 @@ static void test_settings_layout(void)
 /* The Mods section with two mods the game showed (runtime/scripts/view.h): it appears, a mod turned off,
  * a toggle, a choice, a number and a button asked of the game's thread, a mod moved later; gone again
  * with no mod. */
+/* Mods with native plugins alone: the section shows, its native code switch (with its warning) changes the
+ * settings, each plugin's state is told; safe mode said as such; gone again with no plugin. */
+static void test_settings_native_code(void)
+{
+    static KhdaysRow rows[KHDAYS_MODEL_ROWS_MAX];
+    const KhdaysModelContext context = {1, 0, 0, NULL};
+    KhdaysProfile p;
+    KhdaysPluginShown plugins[2] = {
+        {"Spinner", "1.0", "khdays-port", "", KHDAYS_PLUGIN_WAITING},
+        {"Broken", "2", "", "its library cannot be loaded (none)", KHDAYS_PLUGIN_REFUSED},
+    };
+    KhdaysPluginsShown shown = {0, 0, plugins, 2};
+    int n, lines = 0;
+    CHECK(!khdays_model_section_shown(KHDAYS_SECTION_MODS));
+    khdays_plugins_shown_set(&shown);
+    CHECK(khdays_model_section_shown(KHDAYS_SECTION_MODS));
+    khdays_profile_default(&p);
+    CHECK(p.mods.native_code == 0);
+    n = khdays_model_rows(KHDAYS_SECTION_MODS, &p, &context, rows);
+    CHECK(n == 5 && rows[0].id == KHDAYS_SET_NATIVE_CODE && rows[0].kind == KHDAYS_ROW_SWITCH);
+    CHECK(rows[0].note == khdays_text(TXT_NATIVE_CODE_NOTE) && rows[0].takes == TXT_TAKES_NEXT_START);
+    CHECK(strcmp(rows[1].label, "Spinner 1.0 -- khdays-port") == 0 && strcmp(rows[3].label, "Broken 2") == 0);
+    for (int i = 0; i < n; ++i) {
+        if (rows[i].id == KHDAYS_SET_PLUGIN_STATE) {
+            ++lines;
+            CHECK(i != 2 || strcmp(rows[i].label, khdays_text(TXT_PLUGIN_WAITING)) == 0);
+            CHECK(i != 4 || strstr(rows[i].label, "its library cannot be loaded (none)") != NULL);
+        }
+    }
+    CHECK(lines == 2);
+    khdays_settings_open(&p);
+    khdays_settings_draw(screen, NULL);
+    to_section(KHDAYS_SECTION_MODS);
+    shot("2-native-code");
+    to_row(KHDAYS_SET_NATIVE_CODE, -1);
+    key(SDL_SCANCODE_RETURN);
+    CHECK(khdays_settings_profile()->mods.native_code == 1);
+    khdays_settings_draw(screen, NULL);
+    CHECK(key(SDL_SCANCODE_ESCAPE) == 0 && key(SDL_SCANCODE_ESCAPE) == 1);
+    /* safe mode: the plugins wait for it, not for the setting */
+    shown.safe_mode = 1;
+    khdays_plugins_shown_set(&shown);
+    khdays_model_rows(KHDAYS_SECTION_MODS, &p, &context, rows);
+    CHECK(strcmp(rows[2].label, khdays_text(TXT_PLUGIN_SAFE_MODE)) == 0);
+    shown.count = 0;
+    khdays_plugins_shown_set(&shown);
+    CHECK(!khdays_model_section_shown(KHDAYS_SECTION_MODS));
+}
+
 static void test_settings_mods(void)
 {
     KhdaysProfile p;
@@ -1184,6 +1235,7 @@ static void test_settings_mods(void)
     v.count = 0;
     khdays_scripts_view_set(&v);
     CHECK(!khdays_model_section_shown(KHDAYS_SECTION_MODS));
+    test_settings_native_code();
 }
 
 static void test_settings_screen(void)

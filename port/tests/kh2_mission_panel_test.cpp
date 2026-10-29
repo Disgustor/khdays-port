@@ -2,6 +2,8 @@
 #include "../ui/kh2_mission_panel.cpp"
 #include <fstream>
 #include <iostream>
+#include <random>
+#include <string>
 namespace {
 std::vector<std::vector<unsigned>> test_images;
 KhdaysSituationInputs test_context{};
@@ -11,6 +13,7 @@ bool test_font_observing = false, test_font_available = false;
 int test_uploads = 0, test_cells = 0;
 unsigned test_epoch = 1, test_tick = 0;
 std::filesystem::path test_config;
+std::filesystem::path temp_config; // this run's own: ctest runs the test's four ways at once
 void check(bool ok, const char *why)
 {
     if (!ok)
@@ -79,7 +82,9 @@ void setup()
     store(0x021000a8u, 1);
     store(0x021000b8u, 0x02102000u);
     std::memcpy(KHDAYS_W(0x02102000), u"Destroy the shadow globs", 48);
-    test_config = std::filesystem::temp_directory_path() / "khdays-mission-panel-test.json";
+    temp_config = std::filesystem::temp_directory_path() /
+                  ("khdays-mission-panel-test-" + std::to_string(std::random_device{}()) + ".json");
+    test_config = temp_config;
     std::ofstream(test_config) << R"({"mission_panel":{"enabled":true}})";
     config = ui::load_mission_panel_config(test_config);
     tried = true;
@@ -570,12 +575,14 @@ int main(int argc, char **argv)
             check(owns, "mod asset did not draw");
         } else
             tests();
-        std::filesystem::remove(std::filesystem::temp_directory_path() / "khdays-mission-panel-test.json");
+        std::filesystem::remove(temp_config);
         delete[] khdays_window;
         std::cout << "Mission panel ownership, fonts, counter packing and transitions passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
+        std::error_code ec;
+        std::filesystem::remove(temp_config, ec);
         return 1;
     }
 }

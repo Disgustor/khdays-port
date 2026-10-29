@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace studio {
 
@@ -540,8 +541,6 @@ enum class S {
     chars_new,
     chars_key,
     chars_name,
-    chars_base,
-    chars_base_help,
     chars_create,
     chars_created,
     chars_save,
@@ -642,6 +641,33 @@ enum class S {
     mmap_remove,
     mmap_spot_wave,
     mmap_spot_badge,
+    world_tt,
+    world_aw,
+    world_he,
+    world_al,
+    world_eh,
+    world_nm,
+    world_zz,
+    world_pp,
+    world_bb,
+    world_tw,
+    world_unshipped,
+    mission_category,
+    mission_category_help,
+    mission_world,
+    mission_room,
+    mission_unlock,
+    mission_unlock_start,
+    mission_unlock_game,
+    mission_unlock_mod,
+    mission_unlock_other,
+    mission_level,
+    mission_time,
+    mission_name_field,
+    mission_objective_field,
+    mission_description_field,
+    chars_moves_like,
+    chars_moves_like_help,
     count
 };
 
@@ -661,5 +687,14 @@ Language language_from_code(std::string_view code, Language fallback);
 // The system's language among the five (SDL_GetPreferredLocales), English
 // otherwise.
 Language system_language();
+
+// The game's mission worlds in its own table's order (Ov002_GetWorldName's; a mission's list category is its place
+// in it): tt aw he al eh nm hb zz pp bb tw pi.
+const std::vector<std::string>& world_codes();
+// A world's name by its code; the code itself for one of no known name ("hb (not in the game)" for those the game
+// does not ship).
+std::string world_name(Language language, std::string_view code);
+// A game character a new one moves like, by its name in a description (roxas ...), as the game writes it (Roxas).
+std::string character_display_name(std::string_view base);
 
 }  // namespace studio

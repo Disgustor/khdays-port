@@ -11,7 +11,9 @@
 #include "core/missions/mission_db.h"
 #include "core/missions/mission_edit.h"
 #include "core/missions/missions.h"
+#include "core/missions/mission_names.h"
 #include "core/missions/mod_missions.h"
+#include "core/characters/character_files.h"
 #include "core/rooms/room_collision.h"
 #include "core/rooms/worlds.h"
 #include "core/files/paths.h"
@@ -1020,11 +1022,100 @@ void choose_new_mission(int i) {
 // A text of the chosen language: a line, or several for the longer ones.
 void language_text(const char* label, std::vector<std::string>& texts, bool lines) {
     std::string& t = texts[static_cast<std::size_t>(nm.language)];
-    const std::string id = std::string(label) + "##" + std::to_string(nm.language);
-    if (lines)
+    ImGui::TextUnformatted(label);  // above its field: the field takes the width
+    const std::string id = std::string("##") + label + std::to_string(nm.language);
+    if (lines) {
         ImGui::InputTextMultiline(id.c_str(), &t, ImVec2(-1, 4 * ImGui::GetTextLineHeightWithSpacing()));
-    else
+    } else {
+        ImGui::SetNextItemWidth(-1);
         ImGui::InputText(id.c_str(), &t);
+    }
+}
+
+// The game's missions by name in the window's language, read once per language.
+const std::map<int, GameMissionName>& mission_names(Language language) {
+    static std::map<Language, std::map<int, GameMissionName>> read;
+    auto found = read.find(language);
+    if (found == read.end())
+        found = read.emplace(language, game_mission_names(nitrofs(), language_code(language))).first;
+    return found->second;
+}
+
+// A world as the lists show it: its name and code.
+std::string world_label(Language language, const std::string& code) {
+    const std::string name = world_name(language, code);
+    return name == code ? code : name + "  (" + code + ")";
+}
+
+// When a mission opens: from the start, after one of the game's missions (by its number), or after one of this
+// mod's (by its identity); anything else written is kept as it is.
+void draw_unlock(App& app, const Mod& m, ModMission& e) {
+    const auto lang = app.language;
+    const std::string id = mod_id_of(m.dir);
+    const std::string after = e.unlock.rfind("cleared ", 0) == 0 ? e.unlock.substr(8) : std::string();
+    const bool numbered = !after.empty() && after.find_first_not_of("0123456789") == std::string::npos;
+    const bool ours = !after.empty() && after.rfind(id + "/", 0) == 0;
+    int how = e.unlock == "start" || e.unlock.empty() ? 0 : numbered ? 1 : ours ? 2 : 3;
+    const std::string other = fmt(lang, S::mission_unlock_other, {e.unlock});
+    const char* const hows[] = {tr(lang, S::mission_unlock_start), tr(lang, S::mission_unlock_game),
+                                tr(lang, S::mission_unlock_mod), other.c_str()};
+    ImGui::SetNextItemWidth(22 * ImGui::GetFontSize());
+    if (ImGui::Combo(tr(lang, S::mission_unlock), &how, hows, how == 3 ? 4 : 3)) {
+        if (how == 0)
+            e.unlock = "start";
+        else if (how == 1) {
+            // the first of Mission Mode's list
+            const GameMissionName* first = nullptr;
+            for (const auto& [file, g] : mission_names(lang))
+                if (g.mission_mode && (first == nullptr || g.shown < first->shown))
+                    first = &g;
+            e.unlock = "cleared " + std::to_string(first != nullptr ? first->number : 1);
+        } else if (how == 2)
+            for (const auto& other_mission : nm.missions)
+                if (other_mission.key != e.key) {
+                    e.unlock = "cleared " + id + "/" + other_mission.key;
+                    break;
+                }
+    }
+    if (how == 1) {
+        // the game's Mission Mode missions by number, with their names and worlds
+        const int number = std::atoi(after.c_str());
+        std::string shown = std::to_string(number);
+        std::vector<const GameMissionName*> listed;
+        for (const auto& [file, g] : mission_names(lang)) {
+            if (!g.mission_mode)
+                continue;
+            listed.push_back(&g);
+            if (g.number == number)
+                shown = std::to_string(g.shown) + ": " + g.name;
+        }
+        std::sort(listed.begin(), listed.end(), [](const auto* a, const auto* b) { return a->shown < b->shown; });
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::BeginCombo("##unlockgame", shown.c_str())) {
+            for (const GameMissionName* g : listed) {
+                const std::string category =
+                    g->category >= 0 && g->category < static_cast<int>(world_codes().size())
+                        ? world_name(lang, world_codes()[static_cast<std::size_t>(g->category)])
+                        : std::string();
+                const std::string label = std::to_string(g->shown) + ": " + g->name + "  -  " + category;
+                if (ImGui::Selectable(label.c_str(), g->number == number))
+                    e.unlock = "cleared " + std::to_string(g->number);
+            }
+            ImGui::EndCombo();
+        }
+    } else if (how == 2) {
+        const std::string key = ours ? after.substr(id.size() + 1) : std::string();
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::BeginCombo("##unlockmod", key.c_str())) {
+            for (const auto& other_mission : nm.missions)
+                if (other_mission.key != e.key &&
+                    ImGui::Selectable(other_mission.key.c_str(), other_mission.key == key))
+                    e.unlock = "cleared " + id + "/" + other_mission.key;
+            ImGui::EndCombo();
+        }
+    }
 }
 
 // A new mission: its key, its world and room (the world's rooms counted when it is chosen), the game mission it
@@ -1049,10 +1140,10 @@ void draw_new_mission_form(App& app, const Mod& m) {
     ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
     ImGui::InputTextWithHint("##newmissionkey", tr(lang, S::mw_new_key), &key);
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(6 * ImGui::GetFontSize());
-    if (ImGui::BeginCombo(tr(lang, S::mw_new_world), world.c_str())) {
-        for (const char* w : {"tt", "aw", "he", "al", "eh", "nm", "zz", "pp", "bb", "tw"})
-            if (ImGui::Selectable(w, world == w))
+    ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo(tr(lang, S::mw_new_world), world_label(lang, world).c_str())) {
+        for (const auto& w : world_codes())
+            if (w != "hb" && w != "pi" && ImGui::Selectable(world_label(lang, w).c_str(), world == w))
                 world = w;
         ImGui::EndCombo();
     }
@@ -1186,31 +1277,41 @@ void draw_new_missions(App& app) {
         ImGui::SameLine();
         ImGui::TextDisabled("%s", tr(lang, S::new_missions_default));
     }
-    language_text("name", e.name, false);
-    language_text("objective", e.objective, true);
-    language_text("description", e.description, true);
+    language_text(tr(lang, S::mission_name_field), e.name, false);
+    language_text(tr(lang, S::mission_objective_field), e.objective, true);
+    language_text(tr(lang, S::mission_description_field), e.description, true);
     ImGui::Separator();
-    // where it is listed, played and when it opens
-    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
-    ImGui::SliderInt("category", &e.category, 0, 11);
-    ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
-    if (ImGui::BeginCombo("world", e.world.c_str())) {
-        for (const char* w : {"tt", "aw", "he", "al", "eh", "nm", "zz", "pp", "bb", "tw"})
-            if (ImGui::Selectable(w, e.world == w))
+    // where it is played, where it is listed, and when it opens
+    const auto& codes = world_codes();
+    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo(tr(lang, S::mission_world), world_label(lang, e.world).c_str())) {
+        for (const auto& w : codes)
+            if (w != "hb" && w != "pi" && ImGui::Selectable(world_label(lang, w).c_str(), e.world == w))
                 e.world = w;
         ImGui::EndCombo();
     }
     ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
-    ImGui::InputInt("room", &e.room);
+    ImGui::InputInt(tr(lang, S::mission_room), &e.room);
     e.room = std::clamp(e.room, 0, 254);
+    const std::string listed = e.category >= 0 && e.category < static_cast<int>(codes.size())
+                                   ? world_name(lang, codes[static_cast<std::size_t>(e.category)])
+                                   : std::to_string(e.category);
+    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
+    if (ImGui::BeginCombo(tr(lang, S::mission_category), listed.c_str())) {
+        for (std::size_t c = 0; c < codes.size(); ++c)
+            if (ImGui::Selectable(world_name(lang, codes[c]).c_str(), e.category == static_cast<int>(c)))
+                e.category = static_cast<int>(c);
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", tr(lang, S::mission_category_help));
     ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
-    ImGui::InputInt("level", &e.level);
+    ImGui::InputInt(tr(lang, S::mission_level), &e.level);
     e.level = std::clamp(e.level, 0, 120);
     ImGui::SetNextItemWidth(8 * ImGui::GetFontSize());
-    ImGui::InputInt("time (ms)", &e.time_ms, 1000, 10000);
+    ImGui::InputInt(tr(lang, S::mission_time), &e.time_ms, 1000, 10000);
     e.time_ms = std::max(e.time_ms, 0);
-    ImGui::SetNextItemWidth(16 * ImGui::GetFontSize());
-    ImGui::InputText("unlock", &e.unlock);
+    draw_unlock(app, *m, e);
     ImGui::EndTabItem();
     ImGui::EndTabBar();
 }

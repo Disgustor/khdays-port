@@ -466,9 +466,10 @@ void draw_preview(App& app, const Mod& m, ImVec2 size) {
     if (hovered && ImGui::GetIO().MouseWheel != 0.0f)
         v.distance *= std::pow(0.9f, ImGui::GetIO().MouseWheel);
     // the names under it: the game's on the left, the character's on the right
-    const std::string left =
-        v.base_ok ? fmt(app.language, S::chars_preview_base, {v.base_for, v.shown_game.empty() ? "-" : v.shown_game})
-                  : v.base_error;
+    const std::string left = v.base_ok
+                                 ? fmt(app.language, S::chars_preview_base,
+                                       {character_display_name(v.base_for), v.shown_game.empty() ? "-" : v.shown_game})
+                                 : v.base_error;
     const std::string right = !v.have_model
                                   ? std::string()
                                   : fmt(app.language, S::chars_preview_character,
@@ -584,17 +585,18 @@ void draw_character_tab(App& app, const Mod& m) {
     draw_text_field(tr(lang, S::chars_name), "name");
     draw_text_field(tr(lang, S::chars_weapon), "weapon");
     ImGui::Separator();
-    // what it plays as
+    // whose moves it takes: a new character, never one of the game's replaced
     const std::string base = v.ini.get("character", "base");
     ImGui::SetNextItemWidth(12 * ImGui::GetFontSize());
-    if (ImGui::BeginCombo(tr(lang, S::chars_base), base.c_str())) {
+    if (ImGui::BeginCombo(tr(lang, S::chars_moves_like), character_display_name(base).c_str())) {
         for (const auto& b : character_bases())
-            if (ImGui::Selectable(b.c_str(), b == base))
+            if (ImGui::Selectable(character_display_name(b).c_str(), b == base))
                 v.ini.set("character", "base", b);
         ImGui::EndCombo();
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", tr(lang, S::chars_base_help));
+    ImGui::PushTextWrapPos(0);
+    ImGui::TextDisabled("%s", tr(lang, S::chars_moves_like_help));
+    ImGui::PopTextWrapPos();
     const bool with_base = v.ini.get("character", "locked") == "base";
     int locked = with_base ? 1 : 0;
     const char* const lockings[] = {tr(lang, S::chars_locked_no), tr(lang, S::chars_locked_base)};
@@ -997,10 +999,11 @@ void draw_list(App& app, const Mod& m) {
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##newname", tr(lang, S::chars_name), &v.new_name);
     const auto& bases = character_bases();
+    ImGui::TextDisabled("%s", tr(lang, S::chars_moves_like));
     ImGui::SetNextItemWidth(-1);
-    if (ImGui::BeginCombo("##newbase", bases[static_cast<std::size_t>(v.new_base)].c_str())) {
+    if (ImGui::BeginCombo("##newbase", character_display_name(bases[static_cast<std::size_t>(v.new_base)]).c_str())) {
         for (std::size_t b = 0; b < bases.size(); ++b)
-            if (ImGui::Selectable(bases[b].c_str(), static_cast<int>(b) == v.new_base))
+            if (ImGui::Selectable(character_display_name(bases[b]).c_str(), static_cast<int>(b) == v.new_base))
                 v.new_base = static_cast<int>(b);
         ImGui::EndCombo();
     }

@@ -149,6 +149,7 @@ add_library(khdays-studio-core STATIC
     core/missions/mission_db.cpp
     core/missions/missions.cpp
     core/missions/mission_edit.cpp
+    core/missions/mission_names.cpp
     core/missions/mission_build.cpp
     core/missions/mod_missions.cpp
     core/missions/enemy_names.cpp

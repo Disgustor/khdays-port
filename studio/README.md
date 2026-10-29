@@ -42,6 +42,12 @@ removed -- says how it went over the window: a green notice that goes after a
 few seconds, or a red one with the reason that stays until you close it. The
 last one stays in the line at the bottom too.
 
+What the studio knows is shown by its name beside its code: the mission worlds
+(`wd_tt` - Twilight Town, in the tool's language), the game's characters'
+folders (`ba/ch/ro` - Roxas), and each mission file with the name the game's
+own list gives it, read from the player's copy (nothing of it is kept but in
+memory).
+
 "Themes" (top right) chooses the studio's colour palette, in the colours of
 KH1's, KH2's, KH3's, Days' or Melody of Memory's menus (MoM's unless another
 is chosen). It changes at once and is kept in the settings.
@@ -377,8 +383,11 @@ is chosen). It changes at once and is kept in the settings.
     many, its facing, a chest's contents, an emblem's badge) or remove it.
     **Save the places** writes them all at once when the mission builds as the
     game will build it. **Words and settings** holds its name, objective and
-    description in each language, its world, room, level, time and when it
-    opens.
+    description in each language; the world it is played in and its room; the
+    world tab of Mission Mode's list it is listed under (`category`); its
+    enemies' level and the time limit the list shows; and when it opens
+    (`unlock`): from the start, after one of the game's missions (chosen by
+    its number and name), or after another of the mod's.
 
 Sound loops and old-format mods come next.
 

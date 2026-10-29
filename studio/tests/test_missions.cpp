@@ -9,6 +9,7 @@
 #include "core/missions/mission_build.h"
 #include "core/missions/mission_edit.h"
 #include "core/missions/missions.h"
+#include "core/missions/mission_names.h"
 #include "core/missions/mod_missions.h"
 
 #include <cmath>
@@ -844,4 +845,35 @@ TEST(a_new_missions_places_read_and_saved_at_once) {
     spots.push_back(wave);
     CHECK(!studio::set_mod_mission_spots(nitrofs, mod, "map", spots, &why) && why.find("build") != std::string::npos);
     CHECK(file_bytes(txt) == after);
+}
+
+TEST(the_games_missions_named_from_its_list) {
+    // a made-up list: two rows of file 0101 (the story's, then Mission Mode's) and one of 0102
+    auto record = [](int file, int number, int category, int shown, int kind, const std::u16string& name) {
+        std::string r(0x30, '\0');
+        auto put16 = [&r](std::size_t at, int v) {
+            r[at] = static_cast<char>(v & 0xff);
+            r[at + 1] = static_cast<char>((v >> 8) & 0xff);
+        };
+        put16(2, file);
+        put16(4, number);
+        put16(0xa, category);
+        put16(0xe, shown);
+        r[0x23] = static_cast<char>(kind);
+        for (const char16_t c : name + u'\0') {
+            r += static_cast<char>(c & 0xff);
+            r += static_cast<char>(c >> 8);
+        }
+        put16(0, static_cast<int>(r.size()));
+        return r;
+    };
+    const std::string list = std::string("\x03\0", 2) + record(101, 7, 0, 3, 0, u"Story row") +
+                             record(101, 7, 0, 5, 4, u"Colección") + record(102, 8, 9, 6, 0, u"Other");
+    const auto root = studio_test::scratch("mission_names");
+    studio_test::write(root / "decompressed" / "UI" / "cm" / "msl_es.msi", list);
+    const auto names = studio::game_mission_names(root / "nitrofs", "es");
+    CHECK(names.size() == 2);
+    CHECK(names.at(101).mission_mode && names.at(101).shown == 5 && names.at(101).name == "Colección");
+    CHECK(!names.at(102).mission_mode && names.at(102).number == 8 && names.at(102).category == 9);
+    CHECK(studio::game_mission_names(root / "nitrofs", "fr").empty());  // no list: none
 }

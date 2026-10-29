@@ -683,7 +683,10 @@ void draw_mission_map(App& app, const Mod& m, const std::string& key, const std:
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("##mapchosen", ImVec2(0, room_size.y), ImGuiChildFlags_Borders);
-    draw_chosen(app);
+    {
+        WrappedTexts wrap_chosen;
+        draw_chosen(app);
+    }
     ImGui::EndChild();
 }
 

@@ -980,6 +980,7 @@ void draw_more_tab(App& app) {
 
 void draw_list(App& app, const Mod& m) {
     const auto lang = app.language;
+    WrappedTexts wrap;
     if (v.keys.empty())
         ImGui::TextWrapped("%s", tr(lang, S::chars_none));
     for (std::size_t i = 0; i < v.keys.size(); ++i) {
@@ -994,8 +995,9 @@ void draw_list(App& app, const Mod& m) {
     }
     ImGui::Separator();
     ImGui::TextUnformatted(tr(lang, S::chars_new));
+    ImGui::TextDisabled("%s", tr(lang, S::chars_key));
     ImGui::SetNextItemWidth(-1);
-    ImGui::InputTextWithHint("##newkey", tr(lang, S::chars_key), &v.new_key);
+    ImGui::InputText("##newkey", &v.new_key);
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##newname", tr(lang, S::chars_name), &v.new_name);
     const auto& bases = character_bases();
@@ -1116,7 +1118,7 @@ void draw_characters(App& app, bool* open) {
     // the tabs on the left half, the preview on the right
     const float half = ImGui::GetContentRegionAvail().x * 0.58f;
     ImGui::BeginChild("##tabs", ImVec2(half, 0));
-    if (ImGui::BeginTabBar("##charactertabs")) {
+    if (WrappedTexts wrap; ImGui::BeginTabBar("##charactertabs")) {
         if (ImGui::BeginTabItem(tr(lang, S::chars_tab_character))) {
             v.tab = Tab::character;
             draw_character_tab(app, *m);
@@ -1143,7 +1145,10 @@ void draw_characters(App& app, bool* open) {
     ImGui::SameLine();
     ImGui::BeginChild("##preview");
     const ImVec2 room = ImGui::GetContentRegionAvail();
-    draw_preview(app, *m, ImVec2(room.x, room.y - 3 * ImGui::GetFrameHeightWithSpacing()));
+    {
+        WrappedTexts wrap;
+        draw_preview(app, *m, ImVec2(room.x, room.y - 4 * ImGui::GetFrameHeightWithSpacing()));
+    }
     ImGui::EndChild();
     ImGui::EndChild();
 

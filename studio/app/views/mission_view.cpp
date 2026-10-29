@@ -1137,8 +1137,9 @@ void draw_new_mission_form(App& app, const Mod& m) {
         const auto numbers = mission_numbers(nitrofs());
         template_file = numbers.empty() ? 0 : numbers.front();
     }
+    ImGui::TextDisabled("%s", tr(lang, S::mw_new_key));
     ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
-    ImGui::InputTextWithHint("##newmissionkey", tr(lang, S::mw_new_key), &key);
+    ImGui::InputText("##newmissionkey", &key);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(14 * ImGui::GetFontSize());
     if (ImGui::BeginCombo(tr(lang, S::mw_new_world), world_label(lang, world).c_str())) {
@@ -1171,6 +1172,7 @@ void draw_new_mission_form(App& app, const Mod& m) {
 
 void draw_new_missions(App& app) {
     const auto lang = app.language;
+    WrappedTexts wrap;
     const Mod* m = app.current_mod();
     if (m == nullptr) {
         ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.35f, 1), "%s", tr(lang, S::choose_mod_first));

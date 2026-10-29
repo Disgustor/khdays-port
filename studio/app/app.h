@@ -240,4 +240,14 @@ void same_line_if_room(float width);
 float button_width(const char* label);
 float check_width(const char* label);
 
+// Texts from here to the end of the scope wrap at the window's right edge, never cut there (a child window keeps
+// its own: each takes one of these).
+class WrappedTexts {
+public:
+    WrappedTexts();
+    ~WrappedTexts();
+    WrappedTexts(const WrappedTexts&) = delete;
+    WrappedTexts& operator=(const WrappedTexts&) = delete;
+};
+
 }  // namespace studio

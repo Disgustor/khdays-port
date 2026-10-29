@@ -1085,6 +1085,10 @@ static void test_content_mods(void)
     frames(1);
     CHECK(khdays_mods_count() == 4 && khdays_scripts_mod_count() == 1);
     CHECK(strcmp(khdays_mods_at(0)->folder, "S") == 0 && khdays_mods_at(0)->scripted);
+    /* what the game reads: the mods on as it started, S alone (Looks off, the other two off by hand) */
+    khdays_mods_start();
+    CHECK(khdays_mods_started_count() == 1 && khdays_mods_started_has("S") && !khdays_mods_started_has("Looks"));
+    CHECK(strcmp(khdays_mods_started_folder(0), "S") == 0 && khdays_mods_started_folder(1) == NULL);
     e = khdays_mods_by_folder("Looks");
     CHECK(e != NULL && !e->scripted && !e->on && !e->ignored && !khdays_mods_active(e));
     e = khdays_mods_by_folder("Ignored");
@@ -1103,6 +1107,8 @@ static void test_content_mods(void)
     frames(1);
     e = khdays_mods_by_folder("Looks");
     CHECK(e != NULL && khdays_mods_active(e) && strcmp(khdays_mods_at(0)->folder, "Looks") == 0);
+    /* its files at the next start: the start's list is as it was */
+    CHECK(khdays_mods_started_count() == 1 && !khdays_mods_started_has("Looks"));
     CHECK(khdays_scripts_mod_count() == 1 && mod_by_folder("S")->state == KHDAYS_MOD_LOADED);
     snprintf(path, sizeof(path), "%s/saves/mods/order.ini", root);
     order = khdays_folders_read(path, NULL);
@@ -1112,6 +1118,14 @@ static void test_content_mods(void)
     CHECK(khdays_scripts_view(&view) && view.count == 4 && view.mods[0].enabled &&
           view.mods[0].state == KHDAYS_MOD_LOADED && strcmp(view.mods[0].folder, "Looks") == 0);
     khdays_scripts_view_free(&view);
+    end_case();
+
+    /* a native plugin's mod alone (no scripts/, its mod.ini naming the SDK): listed, not a scripted mod */
+    begin_case("native_only");
+    put("mods/Native/mod.ini", "id = test.native\nname = Native\nversion = 1\nsdk = 1\n");
+    start();
+    frames(1);
+    CHECK(khdays_mods_count() == 1 && !khdays_mods_at(0)->scripted && khdays_scripts_mod_count() == 0);
     end_case();
 
     /* content mods alone: no scripted mod, the page's asks still taken */
